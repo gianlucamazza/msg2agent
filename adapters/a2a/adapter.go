@@ -16,26 +16,32 @@ import (
 
 // A2A protocol message types
 const (
-	A2AMessageSend      = "message/send"
-	A2AMessageStream    = "message/stream"
-	A2ATasksGet         = "tasks/get"
-	A2ATasksCancel      = "tasks/cancel"
-	A2ATasksResubscribe = "tasks/resubscribe"
+	A2AMessageSend          = "message/send"
+	A2AMessageStream        = "message/stream"
+	A2ATasksGet             = "tasks/get"
+	A2ATasksList            = "tasks/list"
+	A2ATasksCancel          = "tasks/cancel"
+	A2ATasksResubscribe     = "tasks/resubscribe"
+	A2AGetExtendedAgentCard = "agent/getExtendedAgentCard"
 )
 
 // AgentCard represents an A2A Agent Card.
 type AgentCard struct {
-	Name               string       `json:"name"`
-	Description        string       `json:"description,omitempty"`
-	URL                string       `json:"url"`
-	Provider           *Provider    `json:"provider,omitempty"`
-	Version            string       `json:"version"`
-	DocumentationURL   string       `json:"documentationUrl,omitempty"`
-	Capabilities       Capabilities `json:"capabilities"`
-	Authentication     *AuthConfig  `json:"authentication,omitempty"`
-	DefaultInputModes  []string     `json:"defaultInputModes,omitempty"`
-	DefaultOutputModes []string     `json:"defaultOutputModes,omitempty"`
-	Skills             []Skill      `json:"skills,omitempty"`
+	AgentID            string                    `json:"agentId"`
+	Name               string                    `json:"name"`
+	Description        string                    `json:"description,omitempty"`
+	URL                string                    `json:"url"`
+	Provider           *Provider                 `json:"provider,omitempty"`
+	Version            string                    `json:"version"`
+	ProtocolVersions   []string                  `json:"protocolVersions"`
+	DocumentationURL   string                    `json:"documentationUrl,omitempty"`
+	Capabilities       Capabilities              `json:"capabilities"`
+	SecuritySchemes    map[string]SecurityScheme `json:"securitySchemes,omitempty"`
+	Security           []map[string][]string     `json:"security,omitempty"`
+	Authentication     *AuthConfig               `json:"authentication,omitempty"`
+	DefaultInputModes  []string                  `json:"defaultInputModes,omitempty"`
+	DefaultOutputModes []string                  `json:"defaultOutputModes,omitempty"`
+	Skills             []Skill                   `json:"skills,omitempty"`
 }
 
 // Provider describes the agent provider.
@@ -54,6 +60,34 @@ type Capabilities struct {
 // AuthConfig describes authentication configuration.
 type AuthConfig struct {
 	Schemes []string `json:"schemes"`
+}
+
+// SecurityScheme describes a security scheme per OpenAPI 3.0 spec.
+type SecurityScheme struct {
+	Type             string      `json:"type"` // oauth2, apiKey, http
+	Description      string      `json:"description,omitempty"`
+	Scheme           string      `json:"scheme,omitempty"`           // bearer (for type=http)
+	BearerFormat     string      `json:"bearerFormat,omitempty"`     // JWT
+	In               string      `json:"in,omitempty"`               // header, query (for apiKey)
+	Name             string      `json:"name,omitempty"`             // header/query param name (for apiKey)
+	Flows            *OAuthFlows `json:"flows,omitempty"`            // OAuth2 flows
+	OpenIDConnectURL string      `json:"openIdConnectUrl,omitempty"` // OpenID Connect URL
+}
+
+// OAuthFlows describes OAuth2 flows.
+type OAuthFlows struct {
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+	Implicit          *OAuthFlow `json:"implicit,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"`
+}
+
+// OAuthFlow describes a single OAuth2 flow.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"`
+	RefreshURL       string            `json:"refreshUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes"`
 }
 
 // Skill describes an agent skill.
@@ -155,22 +189,99 @@ func NewAdapter() *Adapter {
 	return &Adapter{}
 }
 
+// AgentCardConfig provides configuration for generating an AgentCard.
+type AgentCardConfig struct {
+	// BaseURL is the public URL where the agent is accessible
+	BaseURL string
+
+	// OAuth2 configuration (optional)
+	OAuth2Enabled  bool
+	OAuth2AuthURL  string
+	OAuth2TokenURL string
+	OAuth2Scopes   map[string]string
+
+	// Provider information (optional)
+	ProviderOrganization string
+	ProviderURL          string
+
+	// Documentation URL (optional)
+	DocumentationURL string
+}
+
+// DefaultAgentCardConfig returns a config with Google OAuth2 defaults for Gemini Enterprise.
+func DefaultAgentCardConfig() AgentCardConfig {
+	return AgentCardConfig{
+		OAuth2Enabled:  true,
+		OAuth2AuthURL:  "https://accounts.google.com/o/oauth2/auth",
+		OAuth2TokenURL: "https://oauth2.googleapis.com/token",
+		OAuth2Scopes: map[string]string{
+			"openid":  "OpenID Connect",
+			"email":   "Email address",
+			"profile": "User profile",
+		},
+	}
+}
+
 // ToA2AAgentCard converts a registry.Agent to an A2A AgentCard.
 func (a *Adapter) ToA2AAgentCard(agent *registry.Agent) *AgentCard {
+	return a.ToA2AAgentCardWithConfig(agent, AgentCardConfig{})
+}
+
+// ToA2AAgentCardWithConfig converts a registry.Agent to an A2A AgentCard with custom config.
+func (a *Adapter) ToA2AAgentCardWithConfig(agent *registry.Agent, cfg AgentCardConfig) *AgentCard {
 	card := &AgentCard{
-		Name:    agent.DisplayName,
-		Version: "1.0.0",
+		AgentID:          agent.DID,
+		Name:             agent.DisplayName,
+		Version:          "1.0.0",
+		ProtocolVersions: []string{"1.0"},
 		Capabilities: Capabilities{
-			Streaming:         true,
-			PushNotifications: false,
+			Streaming:              true,
+			PushNotifications:      false,
+			StateTransitionHistory: true,
 		},
 		DefaultInputModes:  []string{"text"},
 		DefaultOutputModes: []string{"text"},
 	}
 
-	// Add endpoint URL
-	if len(agent.Endpoints) > 0 {
+	// Set URL from config or endpoint
+	if cfg.BaseURL != "" {
+		card.URL = cfg.BaseURL
+	} else if len(agent.Endpoints) > 0 {
 		card.URL = agent.Endpoints[0].URL
+	}
+
+	// Set documentation URL
+	if cfg.DocumentationURL != "" {
+		card.DocumentationURL = cfg.DocumentationURL
+	}
+
+	// Set provider if configured
+	if cfg.ProviderOrganization != "" {
+		card.Provider = &Provider{
+			Organization: cfg.ProviderOrganization,
+			URL:          cfg.ProviderURL,
+		}
+	}
+
+	// Configure OAuth2 security scheme if enabled
+	if cfg.OAuth2Enabled {
+		card.SecuritySchemes = map[string]SecurityScheme{
+			"oauth2": {
+				Type:        "oauth2",
+				Description: "OAuth 2.0 authorization code flow",
+				Flows: &OAuthFlows{
+					AuthorizationCode: &OAuthFlow{
+						AuthorizationURL: cfg.OAuth2AuthURL,
+						TokenURL:         cfg.OAuth2TokenURL,
+						Scopes:           cfg.OAuth2Scopes,
+					},
+				},
+			},
+		}
+		// Reference the security scheme
+		card.Security = []map[string][]string{
+			{"oauth2": {"openid"}},
+		}
 	}
 
 	// Convert capabilities to skills

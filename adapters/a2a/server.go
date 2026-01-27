@@ -263,6 +263,99 @@ func (s *TaskStore) GetTask(id string) (*Task, error) {
 	return task, nil
 }
 
+// TaskListFilter defines filters for listing tasks.
+type TaskListFilter struct {
+	SessionID string   // Filter by session ID (contextId in A2A spec)
+	Status    []string // Filter by status (state)
+}
+
+// TaskListResult contains the result of listing tasks.
+type TaskListResult struct {
+	Tasks      []*Task `json:"tasks"`
+	NextCursor string  `json:"nextCursor,omitempty"`
+	Total      int     `json:"total"`
+}
+
+// ListTasks returns tasks matching the filter with pagination.
+func (s *TaskStore) ListTasks(filter TaskListFilter, cursor string, limit int) (*TaskListResult, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	// Collect matching tasks
+	var matching []*Task
+	for _, task := range s.tasks {
+		// Apply session filter
+		if filter.SessionID != "" && task.SessionID != filter.SessionID {
+			continue
+		}
+
+		// Apply status filter
+		if len(filter.Status) > 0 {
+			found := false
+			for _, status := range filter.Status {
+				if task.Status.State == status {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		matching = append(matching, task)
+	}
+
+	// Sort by creation (task ID contains timestamp from UUIDv7)
+	// For simplicity, sort by ID string which gives chronological order for UUIDs
+	sortTasksByID(matching)
+
+	// Apply cursor-based pagination
+	startIdx := 0
+	if cursor != "" {
+		for i, task := range matching {
+			if task.ID == cursor {
+				startIdx = i + 1
+				break
+			}
+		}
+	}
+
+	// Slice results
+	endIdx := startIdx + limit
+	if endIdx > len(matching) {
+		endIdx = len(matching)
+	}
+
+	result := &TaskListResult{
+		Tasks: matching[startIdx:endIdx],
+		Total: len(matching),
+	}
+
+	// Set next cursor if there are more results
+	if endIdx < len(matching) {
+		result.NextCursor = matching[endIdx-1].ID
+	}
+
+	return result, nil
+}
+
+// sortTasksByID sorts tasks by ID (chronological for UUIDs).
+func sortTasksByID(tasks []*Task) {
+	for i := 1; i < len(tasks); i++ {
+		for j := i; j > 0 && tasks[j].ID < tasks[j-1].ID; j-- {
+			tasks[j], tasks[j-1] = tasks[j-1], tasks[j]
+		}
+	}
+}
+
 // UpdateTaskStatus updates a task's status.
 // Refreshes the task TTL on each update.
 func (s *TaskStore) UpdateTaskStatus(id string, state string, message *Message) error {
@@ -475,10 +568,14 @@ func (s *Server) HandleRequest(ctx context.Context, data []byte) ([]byte, error)
 		result, handleErr = s.handleMessageSend(ctx, req.Params)
 	case A2ATasksGet:
 		result, handleErr = s.handleTasksGet(ctx, req.Params)
+	case A2ATasksList:
+		result, handleErr = s.handleTasksList(ctx, req.Params)
 	case A2ATasksCancel:
 		result, handleErr = s.handleTasksCancel(ctx, req.Params)
 	case A2ATasksResubscribe:
 		result, handleErr = s.handleTasksResubscribe(ctx, req.Params)
+	case A2AGetExtendedAgentCard:
+		result, handleErr = s.handleGetExtendedAgentCard(ctx, req.Params)
 	default:
 		return s.errorResponse(req.ID, ErrCodeMethodNotFound, "method not found: "+req.Method)
 	}
@@ -597,6 +694,104 @@ func (s *Server) handleTasksCancel(_ context.Context, params json.RawMessage) (*
 		ID:     task.ID,
 		Status: task.Status,
 	}, nil
+}
+
+// TasksListParams are the params for tasks/list.
+type TasksListParams struct {
+	ContextID string   `json:"contextId,omitempty"` // A2A uses contextId (maps to sessionId)
+	SessionID string   `json:"sessionId,omitempty"` // Alternative name
+	Status    []string `json:"status,omitempty"`    // Filter by status
+	Cursor    string   `json:"cursor,omitempty"`    // Pagination cursor
+	Limit     int      `json:"limit,omitempty"`     // Max results (default 10, max 100)
+}
+
+// TasksListResponse is the result of tasks/list.
+type TasksListResponse struct {
+	Tasks      []TaskSummary `json:"tasks"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+	Total      int           `json:"total"`
+}
+
+// TaskSummary is a brief summary of a task for listing.
+type TaskSummary struct {
+	ID        string     `json:"id"`
+	SessionID string     `json:"sessionId,omitempty"`
+	Status    TaskStatus `json:"status"`
+}
+
+// handleTasksList processes a tasks/list request.
+func (s *Server) handleTasksList(_ context.Context, params json.RawMessage) (*TasksListResponse, error) {
+	var p TasksListParams
+	if err := json.Unmarshal(params, &p); err != nil {
+		return nil, err
+	}
+
+	// Use contextId if provided, fallback to sessionId
+	sessionID := p.ContextID
+	if sessionID == "" {
+		sessionID = p.SessionID
+	}
+
+	filter := TaskListFilter{
+		SessionID: sessionID,
+		Status:    p.Status,
+	}
+
+	result, err := s.store.ListTasks(filter, p.Cursor, p.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response format with summaries
+	response := &TasksListResponse{
+		Tasks:      make([]TaskSummary, len(result.Tasks)),
+		NextCursor: result.NextCursor,
+		Total:      result.Total,
+	}
+
+	for i, task := range result.Tasks {
+		response.Tasks[i] = TaskSummary{
+			ID:        task.ID,
+			SessionID: task.SessionID,
+			Status:    task.Status,
+		}
+	}
+
+	return response, nil
+}
+
+// ExtendedAgentCardParams are the params for agent/getExtendedAgentCard.
+type ExtendedAgentCardParams struct {
+	// No params needed for now
+}
+
+// ExtendedAgentCardResponse is the result of agent/getExtendedAgentCard.
+type ExtendedAgentCardResponse struct {
+	AgentCard
+	AuthenticationRequired bool `json:"authenticationRequired"`
+}
+
+// handleGetExtendedAgentCard processes agent/getExtendedAgentCard request.
+func (s *Server) handleGetExtendedAgentCard(_ context.Context, _ json.RawMessage) (*ExtendedAgentCardResponse, error) {
+	// Build extended agent card
+	// Note: In production, this would get the actual agent info from config
+	card := &ExtendedAgentCardResponse{
+		AgentCard: AgentCard{
+			Name:             "A2A Agent",
+			Version:          "1.0.0",
+			ProtocolVersions: []string{"1.0"},
+			Capabilities: Capabilities{
+				Streaming:              true,
+				PushNotifications:      false,
+				StateTransitionHistory: true,
+			},
+			DefaultInputModes:  []string{"text"},
+			DefaultOutputModes: []string{"text"},
+		},
+		AuthenticationRequired: true,
+	}
+
+	return card, nil
 }
 
 // StartStream starts a streaming response for a task.

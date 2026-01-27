@@ -1279,3 +1279,233 @@ func TestSessionLastActivityUpdatedOnTask(t *testing.T) {
 		t.Error("LastActivityAt should be updated on new task")
 	}
 }
+
+// --- tasks/list Tests ---
+
+// TestTaskStoreListTasks tests basic listing of tasks.
+func TestTaskStoreListTasks(t *testing.T) {
+	store := NewTaskStore()
+	defer store.Stop()
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+
+	// Create some tasks
+	store.CreateTask("session-1", msg)
+	store.CreateTask("session-1", msg)
+	store.CreateTask("session-2", msg)
+
+	// List all tasks
+	result, err := store.ListTasks(TaskListFilter{}, "", 10)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if result.Total != 3 {
+		t.Errorf("Total = %d, want 3", result.Total)
+	}
+	if len(result.Tasks) != 3 {
+		t.Errorf("Tasks count = %d, want 3", len(result.Tasks))
+	}
+}
+
+// TestTaskStoreListTasksBySession tests filtering by session.
+func TestTaskStoreListTasksBySession(t *testing.T) {
+	store := NewTaskStore()
+	defer store.Stop()
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+
+	// Create tasks in different sessions
+	store.CreateTask("session-1", msg)
+	store.CreateTask("session-1", msg)
+	store.CreateTask("session-2", msg)
+
+	// List tasks for session-1 only
+	result, err := store.ListTasks(TaskListFilter{SessionID: "session-1"}, "", 10)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if result.Total != 2 {
+		t.Errorf("Total = %d, want 2", result.Total)
+	}
+	for _, task := range result.Tasks {
+		if task.SessionID != "session-1" {
+			t.Errorf("Task sessionID = %q, want session-1", task.SessionID)
+		}
+	}
+}
+
+// TestTaskStoreListTasksByStatus tests filtering by status.
+func TestTaskStoreListTasksByStatus(t *testing.T) {
+	store := NewTaskStore()
+	defer store.Stop()
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+
+	// Create tasks with different statuses
+	task1 := store.CreateTask("session-1", msg)
+	task2 := store.CreateTask("session-1", msg)
+	_ = store.CreateTask("session-1", msg) // stays in submitted state
+
+	store.UpdateTaskStatus(task1.ID, TaskStateCompleted, nil)
+	store.UpdateTaskStatus(task2.ID, TaskStateFailed, nil)
+
+	// List only completed tasks
+	result, err := store.ListTasks(TaskListFilter{Status: []string{TaskStateCompleted}}, "", 10)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if result.Total != 1 {
+		t.Errorf("Total = %d, want 1", result.Total)
+	}
+
+	// List completed and failed tasks
+	result, err = store.ListTasks(TaskListFilter{Status: []string{TaskStateCompleted, TaskStateFailed}}, "", 10)
+	if err != nil {
+		t.Fatalf("ListTasks failed: %v", err)
+	}
+
+	if result.Total != 2 {
+		t.Errorf("Total = %d, want 2", result.Total)
+	}
+}
+
+// TestTaskStoreListTasksPagination tests pagination.
+func TestTaskStoreListTasksPagination(t *testing.T) {
+	store := NewTaskStore()
+	defer store.Stop()
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+
+	// Create 5 tasks
+	for i := 0; i < 5; i++ {
+		store.CreateTask("session-1", msg)
+	}
+
+	// Get first page (limit 2)
+	result1, err := store.ListTasks(TaskListFilter{}, "", 2)
+	if err != nil {
+		t.Fatalf("ListTasks page 1 failed: %v", err)
+	}
+
+	if len(result1.Tasks) != 2 {
+		t.Errorf("Page 1 tasks = %d, want 2", len(result1.Tasks))
+	}
+	if result1.Total != 5 {
+		t.Errorf("Total = %d, want 5", result1.Total)
+	}
+	if result1.NextCursor == "" {
+		t.Error("NextCursor should be set for pagination")
+	}
+
+	// Get second page using cursor
+	result2, err := store.ListTasks(TaskListFilter{}, result1.NextCursor, 2)
+	if err != nil {
+		t.Fatalf("ListTasks page 2 failed: %v", err)
+	}
+
+	if len(result2.Tasks) != 2 {
+		t.Errorf("Page 2 tasks = %d, want 2", len(result2.Tasks))
+	}
+
+	// Tasks should be different from page 1
+	for _, t1 := range result1.Tasks {
+		for _, t2 := range result2.Tasks {
+			if t1.ID == t2.ID {
+				t.Errorf("Task %s appears in both pages", t1.ID)
+			}
+		}
+	}
+}
+
+// TestServerHandleTasksList tests the tasks/list JSON-RPC method.
+func TestServerHandleTasksList(t *testing.T) {
+	server := NewServer(nil)
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+	server.store.CreateTask("session-1", msg)
+	server.store.CreateTask("session-1", msg)
+
+	params := TasksListParams{SessionID: "session-1", Limit: 10}
+	paramsJSON, _ := json.Marshal(params)
+	req, _ := protocol.NewRequest("1", A2ATasksList, json.RawMessage(paramsJSON))
+	reqData, _ := protocol.Encode(req)
+
+	respData, err := server.HandleRequest(context.Background(), reqData)
+	if err != nil {
+		t.Fatalf("HandleRequest failed: %v", err)
+	}
+
+	resp, _ := protocol.DecodeResponse(respData)
+	if resp.IsError() {
+		t.Fatalf("response is error: %v", resp.Error)
+	}
+
+	var result TasksListResponse
+	resp.ParseResult(&result)
+
+	if result.Total != 2 {
+		t.Errorf("Total = %d, want 2", result.Total)
+	}
+	if len(result.Tasks) != 2 {
+		t.Errorf("Tasks count = %d, want 2", len(result.Tasks))
+	}
+}
+
+// TestServerHandleTasksListWithContextID tests tasks/list with contextId parameter.
+func TestServerHandleTasksListWithContextID(t *testing.T) {
+	server := NewServer(nil)
+
+	msg := &Message{Role: "user", Parts: []Part{{Type: "text", Text: "test"}}}
+	server.store.CreateTask("ctx-123", msg)
+	server.store.CreateTask("ctx-456", msg)
+
+	// Use contextId instead of sessionId
+	params := TasksListParams{ContextID: "ctx-123", Limit: 10}
+	paramsJSON, _ := json.Marshal(params)
+	req, _ := protocol.NewRequest("1", A2ATasksList, json.RawMessage(paramsJSON))
+	reqData, _ := protocol.Encode(req)
+
+	respData, _ := server.HandleRequest(context.Background(), reqData)
+	resp, _ := protocol.DecodeResponse(respData)
+
+	var result TasksListResponse
+	resp.ParseResult(&result)
+
+	if result.Total != 1 {
+		t.Errorf("Total = %d, want 1 (filtered by contextId)", result.Total)
+	}
+}
+
+// TestServerHandleGetExtendedAgentCard tests agent/getExtendedAgentCard method.
+func TestServerHandleGetExtendedAgentCard(t *testing.T) {
+	server := NewServer(nil)
+
+	req, _ := protocol.NewRequest("1", A2AGetExtendedAgentCard, json.RawMessage("{}"))
+	reqData, _ := protocol.Encode(req)
+
+	respData, err := server.HandleRequest(context.Background(), reqData)
+	if err != nil {
+		t.Fatalf("HandleRequest failed: %v", err)
+	}
+
+	resp, _ := protocol.DecodeResponse(respData)
+	if resp.IsError() {
+		t.Fatalf("response is error: %v", resp.Error)
+	}
+
+	var result ExtendedAgentCardResponse
+	resp.ParseResult(&result)
+
+	if result.Name == "" {
+		t.Error("Name should be set")
+	}
+	if !result.AuthenticationRequired {
+		t.Error("AuthenticationRequired should be true")
+	}
+	if len(result.ProtocolVersions) == 0 {
+		t.Error("ProtocolVersions should be set")
+	}
+}

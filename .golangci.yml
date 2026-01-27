@@ -1,0 +1,158 @@
+# golangci-lint configuration v2
+# https://golangci-lint.run/docs/configuration/
+
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: false  # Don't lint test files
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - misspell
+    - ineffassign
+    - unconvert
+    - unused
+    - gosec
+    - revive
+    # noctx disabled: local SQLite operations don't need context cancellation
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        - (io.Closer).Close
+        - (net.Conn).Close
+        - (*os.File).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow  # The if err := ...; err != nil pattern is idiomatic Go
+
+    misspell:
+      locale: US
+
+    gosec:
+      excludes:
+        - G104  # Unhandled errors (covered by errcheck)
+        - G304  # File path from variable (needed for CLI)
+      severity: medium
+      confidence: medium
+
+    revive:
+      enable-all-rules: true
+      rules:
+        # Disable noisy/strict rules
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: var-naming
+          disabled: true
+        - name: blank-imports
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+        - name: unused-receiver
+          disabled: true
+        - name: empty-block
+          disabled: true
+        - name: redefines-builtin-id
+          disabled: true
+        - name: add-constant
+          disabled: true
+        - name: cognitive-complexity
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: line-length-limit
+          disabled: true
+        - name: argument-limit
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: file-header
+          disabled: true
+        - name: banned-characters
+          disabled: true
+        - name: comments-density
+          disabled: true
+        - name: confusing-naming
+          disabled: true
+        - name: confusing-results
+          disabled: true
+        - name: flag-parameter
+          disabled: true
+        - name: function-result-limit
+          disabled: true
+        - name: import-alias-naming
+          disabled: true
+        - name: unchecked-type-assertion
+          disabled: true
+        - name: unhandled-error
+          disabled: true
+        - name: use-any
+          disabled: true
+        - name: import-shadowing
+          disabled: true
+        - name: early-return
+          disabled: true
+        - name: enforce-switch-style
+          disabled: true
+        - name: identical-switch-branches
+          disabled: true
+        - name: deep-exit
+          disabled: true
+        - name: nested-structs
+          disabled: true
+        - name: unsecure-url-scheme
+          disabled: true  # Allow http for local development
+        - name: unnecessary-format
+          disabled: true
+        - name: use-errors-new
+          disabled: true  # fmt.Errorf is common pattern
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: github.com/gianluca/msg2agent
+
+issues:
+  exclude-dirs:
+    - test
+
+  # Exclude noctx for local SQLite operations (don't need context cancellation)
+  exclude-rules:
+    - path: "pkg/conversation/sqlite\\.go"
+      linters:
+        - noctx
+    - path: "pkg/queue/sqlite\\.go"
+      linters:
+        - noctx
+    - path: "pkg/registry/sqlite\\.go"
+      linters:
+        - noctx
+    - path: "pkg/transport/websocket\\.go"
+      linters:
+        - noctx
+      text: "net.Listen"
+
+  max-issues-per-linter: 50
+  max-same-issues: 5

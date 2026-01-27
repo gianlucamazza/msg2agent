@@ -1,0 +1,47 @@
+# msg2agent Docker Compose - TLS Override
+#
+# Usage:
+#   ./scripts/setup-certs.sh                                  # Generate certs first
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# This override enables TLS for all services.
+# Certificates must be generated first using scripts/setup-certs.sh
+
+services:
+  relay:
+    ports:
+      - "${RELAY_PORT:-8443}:8080"
+    environment:
+      MSG2AGENT_TLS: "true"
+      MSG2AGENT_TLS_CERT: "/certs/server.crt"
+      MSG2AGENT_TLS_KEY: "/certs/server.key"
+    volumes:
+      - ./testdata/certs:/certs:ro
+
+  alice:
+    ports:
+      - "${ALICE_HTTP_PORT:-8444}:8081"
+      - "${ALICE_P2P_PORT:-8445}:8082"
+    environment:
+      MSG2AGENT_RELAY: "wss://relay:8080"
+      MSG2AGENT_TLS: "true"
+      MSG2AGENT_HTTP_TLS: "true"
+      MSG2AGENT_TLS_CERT: "/certs/server.crt"
+      MSG2AGENT_TLS_KEY: "/certs/server.key"
+      MSG2AGENT_TLS_SKIP_VERIFY: "true"
+    volumes:
+      - ./testdata/certs:/certs:ro
+
+  bob:
+    ports:
+      - "${BOB_HTTP_PORT:-8446}:8081"
+      - "${BOB_P2P_PORT:-8447}:8082"
+    environment:
+      MSG2AGENT_RELAY: "wss://relay:8080"
+      MSG2AGENT_TLS: "true"
+      MSG2AGENT_HTTP_TLS: "true"
+      MSG2AGENT_TLS_CERT: "/certs/server.crt"
+      MSG2AGENT_TLS_KEY: "/certs/server.key"
+      MSG2AGENT_TLS_SKIP_VERIFY: "true"
+    volumes:
+      - ./testdata/certs:/certs:ro

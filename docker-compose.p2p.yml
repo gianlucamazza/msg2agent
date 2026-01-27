@@ -1,0 +1,70 @@
+# msg2agent Docker Compose - P2P Direct Mode (No Relay)
+#
+# Usage:
+#   docker compose -f docker-compose.p2p.yml up -d
+#
+# This configuration runs agents in P2P mode without a relay hub.
+# Agents communicate directly via WebSocket connections.
+
+services:
+  # Agent Alice - Listening for P2P connections
+  alice:
+    image: msg2agent-agent:latest
+    build:
+      context: .
+      target: agent
+    ports:
+      - "${ALICE_HTTP_PORT:-8081}:8081"
+      - "${ALICE_P2P_PORT:-8082}:8082"
+      - "${ALICE_METRICS_PORT:-9091}:9090"
+    environment:
+      MSG2AGENT_NAME: "alice"
+      MSG2AGENT_DOMAIN: "alice.local"
+      MSG2AGENT_HTTP: ":8081"
+      MSG2AGENT_LISTEN: ":8082"
+      MSG2AGENT_METRICS: ":9090"
+      MSG2AGENT_LOG_LEVEL: "${LOG_LEVEL:-debug}"
+      # No MSG2AGENT_RELAY - P2P mode
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - msg2agent
+
+  # Agent Bob - Connects directly to Alice
+  bob:
+    image: msg2agent-agent:latest
+    build:
+      context: .
+      target: agent
+    ports:
+      - "${BOB_HTTP_PORT:-8083}:8081"
+      - "${BOB_P2P_PORT:-8084}:8082"
+      - "${BOB_METRICS_PORT:-9092}:9090"
+    environment:
+      MSG2AGENT_NAME: "bob"
+      MSG2AGENT_DOMAIN: "bob.local"
+      MSG2AGENT_HTTP: ":8081"
+      MSG2AGENT_LISTEN: ":8082"
+      MSG2AGENT_METRICS: ":9090"
+      MSG2AGENT_LOG_LEVEL: "${LOG_LEVEL:-debug}"
+      # No MSG2AGENT_RELAY - P2P mode
+      # Bob will connect to Alice via script or application logic
+    depends_on:
+      alice:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - msg2agent
+
+networks:
+  msg2agent:
+    driver: bridge

@@ -1,0 +1,68 @@
+# msg2agent Docker Compose - Observability Stack Override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# This override adds:
+#   - Prometheus for metrics collection
+#   - Jaeger for distributed tracing
+#
+# Access:
+#   - Prometheus: http://localhost:9090
+#   - Jaeger UI:  http://localhost:16686
+
+services:
+  relay:
+    environment:
+      MSG2AGENT_OTLP_ENDPOINT: "http://jaeger:4318"
+
+  alice:
+    environment:
+      MSG2AGENT_OTLP_ENDPOINT: "http://jaeger:4318"
+
+  bob:
+    environment:
+      MSG2AGENT_OTLP_ENDPOINT: "http://jaeger:4318"
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./testdata/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - msg2agent
+    restart: unless-stopped
+
+  # Jaeger - Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"    # Jaeger UI
+      - "${JAEGER_OTLP_PORT:-4318}:4318"    # OTLP HTTP receiver
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - msg2agent
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+    driver: local

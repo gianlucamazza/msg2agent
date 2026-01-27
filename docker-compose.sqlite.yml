@@ -1,0 +1,19 @@
+# msg2agent Docker Compose - SQLite Persistence Override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.sqlite.yml up -d
+#
+# This override adds SQLite persistence for the relay hub.
+# Data is stored in a named volume for persistence across restarts.
+
+services:
+  relay:
+    environment:
+      MSG2AGENT_STORE: "sqlite"
+      MSG2AGENT_STORE_FILE: "/data/relay.db"
+    volumes:
+      - relay-data:/data
+
+volumes:
+  relay-data:
+    driver: local

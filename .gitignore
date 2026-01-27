@@ -1,0 +1,47 @@
+# Binaries
+/agent
+/relay
+/mcp-server
+/build/
+/dist/
+
+# Test artifacts
+*.out
+coverage.*
+coverage/
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Secrets and credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+!test/testdata/*.pem
+!test/testdata/*.key
+!test/testdata/*.crt
+credentials.json
+secrets.yaml
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+relay-agents.json
+
+# Temporary files
+tmp/
+*.log
+*.tmp
+
+# Go
+vendor/

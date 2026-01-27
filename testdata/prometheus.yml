@@ -1,0 +1,76 @@
+# Prometheus Configuration for msg2agent
+#
+# This configuration scrapes metrics from:
+#   - Relay hub
+#   - Agent instances (alice, bob)
+#   - Prometheus itself
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  external_labels:
+    environment: development
+    project: msg2agent
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files (optional)
+# rule_files:
+#   - "alerts/*.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: prometheus
+
+  # Relay Hub
+  - job_name: 'relay'
+    static_configs:
+      - targets: ['relay:8080']
+        labels:
+          service: relay
+    metrics_path: /metrics
+    scheme: http
+
+  # Agent Alice
+  - job_name: 'alice'
+    static_configs:
+      - targets: ['alice:9090']
+        labels:
+          service: agent
+          agent_name: alice
+    metrics_path: /metrics
+    scheme: http
+
+  # Agent Bob
+  - job_name: 'bob'
+    static_configs:
+      - targets: ['bob:9090']
+        labels:
+          service: agent
+          agent_name: bob
+    metrics_path: /metrics
+    scheme: http
+
+  # Docker service discovery (optional, for dynamic agents)
+  # Uncomment if running many agents dynamically
+  # - job_name: 'docker-agents'
+  #   docker_sd_configs:
+  #     - host: unix:///var/run/docker.sock
+  #       filters:
+  #         - name: label
+  #           values: ['msg2agent.agent=true']
+  #   relabel_configs:
+  #     - source_labels: [__meta_docker_container_name]
+  #       target_label: agent_name
+  #     - source_labels: [__meta_docker_container_label_msg2agent_agent]
+  #       target_label: service

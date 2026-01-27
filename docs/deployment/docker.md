@@ -79,7 +79,7 @@ services:
         condition: service_healthy
     environment:
       - MSG2AGENT_NAME=alice
-      - MSG2AGENT_DOMAIN=example.com
+      - MSG2AGENT_DOMAIN=msg2agent.xyz
       - MSG2AGENT_RELAY=ws://relay:8080
       - MSG2AGENT_HTTP=:8081
       - MSG2AGENT_METRICS=:9090
@@ -94,7 +94,7 @@ services:
         condition: service_healthy
     environment:
       - MSG2AGENT_NAME=bob
-      - MSG2AGENT_DOMAIN=example.com
+      - MSG2AGENT_DOMAIN=msg2agent.xyz
       - MSG2AGENT_RELAY=ws://relay:8080
       - MSG2AGENT_HTTP=:8081
       - MSG2AGENT_METRICS=:9090

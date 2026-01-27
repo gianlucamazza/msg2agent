@@ -57,11 +57,11 @@ Using certbot:
 sudo apt install certbot
 
 # Obtain certificate
-sudo certbot certonly --standalone -d relay.example.com
+sudo certbot certonly --standalone -d relay.msg2agent.xyz
 
 # Certificates are saved to:
-# /etc/letsencrypt/live/relay.example.com/fullchain.pem
-# /etc/letsencrypt/live/relay.example.com/privkey.pem
+# /etc/letsencrypt/live/relay.msg2agent.xyz/fullchain.pem
+# /etc/letsencrypt/live/relay.msg2agent.xyz/privkey.pem
 ```
 
 ## Relay TLS Configuration
@@ -131,7 +131,7 @@ When connecting to a TLS-enabled relay:
 
 ```bash
 # With certificate verification
-./agent -name alice -relay wss://relay.example.com:8443
+./agent -name alice -relay wss://relay.msg2agent.xyz:8443
 
 # Skip verification (development only!)
 ./agent -name alice \

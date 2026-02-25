@@ -319,7 +319,7 @@ func (v *OAuth2Validator) getJWKS() (*JWKS, error) {
 		return nil, fmt.Errorf("%w: %v", ErrJWKSFetchFailed, err)
 	}
 
-	resp, err := v.client.Do(req)
+	resp, err := v.client.Do(req) //nolint:gosec // URL from trusted configuration
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrJWKSFetchFailed, err)
 	}

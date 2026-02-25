@@ -274,12 +274,12 @@ func (h *AgentHandler) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 
 	respData, err := h.server.HandleRequest(r.Context(), reqData)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(respData) // Error handling not possible after headers sent
+	_, _ = w.Write(respData) //nolint:gosec // JSON-RPC response from internal handler, not user-tainted
 }
 
 // handleWebSocket handles WebSocket connections for streaming.

@@ -76,7 +76,7 @@ func (c *SSEClient) Connect(ctx context.Context) error {
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Connection", "keep-alive")
 
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req) //nolint:gosec // URL from trusted configuration
 	if err != nil {
 		return err
 	}

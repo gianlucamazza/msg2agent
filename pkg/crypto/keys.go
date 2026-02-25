@@ -26,7 +26,7 @@ const (
 // KeyPair holds a public and private key pair.
 type KeyPair struct {
 	PublicKey  []byte
-	PrivateKey []byte
+	PrivateKey []byte //nolint:gosec // intentional: crypto key material struct
 }
 
 // SigningKeyPair is an Ed25519 key pair for digital signatures.

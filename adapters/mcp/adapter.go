@@ -250,7 +250,7 @@ func (s *MCPServer) sendMessageHandler(ctx context.Context, request mcp.CallTool
 		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
-	output, err := json.MarshalIndent(json.RawMessage(resp.RawBody()), "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", pkgmcp.ErrEncodingFailed.Error(), err)), nil
 	}

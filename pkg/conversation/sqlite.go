@@ -330,7 +330,7 @@ func (s *SQLiteStore) ListThreads(filter ThreadFilter) ([]*Thread, error) {
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
 	if filter.Offset > 0 {
-		query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		query += fmt.Sprintf(" OFFSET %d", filter.Offset) //nolint:gosec // integer formatting, safe
 	}
 
 	rows, err := s.db.Query(query, args...)
@@ -530,7 +530,7 @@ func (s *SQLiteStore) GetMessages(filter MessageFilter) ([]*StoredMessage, error
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
 	if filter.Offset > 0 {
-		query += fmt.Sprintf(" OFFSET %d", filter.Offset)
+		query += fmt.Sprintf(" OFFSET %d", filter.Offset) //nolint:gosec // integer formatting, safe
 	}
 
 	rows, err := s.db.Query(query, args...)

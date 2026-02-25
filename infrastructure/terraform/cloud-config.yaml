@@ -1,0 +1,119 @@
+#cloud-config
+
+write_files:
+- path: /etc/systemd/system/format-disk.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Format persistent disk if needed
+    Before=docker.service mount-disk.service
+
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    StandardOutput=tty
+    TTYPath=/dev/ttyS0
+    ExecStartPre=/bin/sh -c 'echo "DEBUG: Listing disks"; ls -l /dev/disk/by-id'
+    ExecStart=/bin/bash -c 'if ! blkid /dev/disk/by-id/google-msg2agent-data; then echo "DEBUG: Formatting disk"; mkfs.ext4 -m 0 -F -E lazy_itable_init=0,lazy_journal_init=0,discard /dev/disk/by-id/google-msg2agent-data; fi'
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /etc/systemd/system/mount-disk.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Mount persistent disk
+    Requires=format-disk.service
+    After=format-disk.service
+    Before=docker.service
+
+    [Service]
+    Type=oneshot
+    RemainAfterExit=yes
+    StandardOutput=tty
+    TTYPath=/dev/ttyS0
+    ExecStartPre=/bin/sh -c 'echo "DEBUG: Mounting disk"'
+    ExecStart=/bin/mkdir -p /var/lib/msg2agent
+    ExecStart=/bin/mount -o discard,defaults /dev/disk/by-id/google-msg2agent-data /var/lib/msg2agent
+    ExecStart=/bin/chmod 777 /var/lib/msg2agent
+    ExecStartPost=/bin/sh -c 'echo "DEBUG: Mount success"'
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /etc/systemd/system/relay.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Relay Service
+    After=network-online.target docker.service mount-disk.service
+    Requires=docker.service mount-disk.service
+
+    [Service]
+    TimeoutStartSec=0
+    Restart=always
+    StandardOutput=tty
+    TTYPath=/dev/ttyS0
+    Environment="HOME=/var/lib/msg2agent/home"
+    ExecStartPre=/bin/mkdir -p /var/lib/msg2agent/home
+    ExecStartPre=-/usr/bin/docker rm -f relay
+    ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=europe-west1-docker.pkg.dev
+    # Runs on port 8080 (host network)
+    ExecStart=/usr/bin/docker run --rm --name relay \
+      --network host \
+      -v /var/lib/msg2agent:/data \
+      -e MSG2AGENT_STORE=sqlite \
+      -e MSG2AGENT_STORE_FILE=/data/relay.db \
+      -e MSG2AGENT_LOG_LEVEL=debug \
+      -e MSG2AGENT_RELAY_ADDR=:8080 \
+      ${relay_image}
+    ExecStop=/usr/bin/docker stop relay
+    ExecStopPost=/bin/sh -c 'echo "DEBUG: Relay Service Stopped. Logs:"; docker logs relay'
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /etc/systemd/system/agent.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Agent Service (A2A Endpoint)
+    After=relay.service
+    Requires=relay.service
+
+    [Service]
+    TimeoutStartSec=0
+    Restart=always
+    StandardOutput=tty
+    TTYPath=/dev/ttyS0
+    Environment="HOME=/var/lib/msg2agent/home"
+    ExecStartPre=/bin/mkdir -p /var/lib/msg2agent/home
+    ExecStartPre=-/usr/bin/docker rm -f agent
+    ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=europe-west1-docker.pkg.dev
+    # Runs on port 8081 (host network), connects to Relay on localhost:8080
+    ExecStart=/usr/bin/docker run --rm --name agent \
+      --network host \
+      -e MSG2AGENT_NAME="msg2agent" \
+      -e MSG2AGENT_DOMAIN="msg2agent.xyz" \
+      -e MSG2AGENT_HTTP=":8081" \
+      -e MSG2AGENT_RELAY="ws://localhost:8080" \
+      -e MSG2AGENT_LOG_LEVEL=debug \
+      ${agent_image}
+    ExecStop=/usr/bin/docker stop agent
+    ExecStopPost=/bin/sh -c 'echo "DEBUG: Agent Service Stopped. Logs:"; docker logs agent'
+
+    [Install]
+    WantedBy=multi-user.target
+
+runcmd:
+- ls -l /dev/disk/by-id > /dev/console
+- systemctl daemon-reload
+- systemctl enable --now format-disk.service
+- systemctl enable --now mount-disk.service
+- systemctl enable --now relay.service
+- systemctl enable --now agent.service

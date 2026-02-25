@@ -1,0 +1,31 @@
+#cloud-config
+write_files:
+- path: /etc/systemd/system/relay.service
+  permissions: 0644
+  owner: root
+  content: |
+    [Unit]
+    Description=Relay Service
+    After=network-online.target docker.service
+    Requires=docker.service
+
+    [Service]
+    TimeoutStartSec=0
+    Restart=always
+    ExecStartPre=-/usr/bin/docker rm -f relay
+    ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=europe-west1-docker.pkg.dev
+    ExecStart=/usr/bin/docker run --rm --name relay \
+      -p 80:8080 \
+      -v /var/lib/msg2agent:/data \
+      -e MSG2AGENT_STORE=sqlite \
+      -e MSG2AGENT_STORE_FILE=/data/relay.db \
+      europe-west1-docker.pkg.dev/message2agent/msg2agent-repo/relay:latest
+    ExecStop=/usr/bin/docker stop relay
+
+    [Install]
+    WantedBy=multi-user.target
+
+runcmd:
+- mkdir -p /var/lib/msg2agent
+- systemctl daemon-reload
+- systemctl start relay

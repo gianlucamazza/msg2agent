@@ -45,3 +45,9 @@ tmp/
 
 # Go
 vendor/
+
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/terraform.tfstate
+infrastructure/terraform/terraform.tfstate.backup
+infrastructure/terraform/*.log

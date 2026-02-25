@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/gianluca/msg2agent/adapters/a2a"
 	"github.com/gianluca/msg2agent/pkg/agent"
 	"github.com/gianluca/msg2agent/pkg/config"
 	"github.com/gianluca/msg2agent/pkg/registry"
@@ -307,16 +308,41 @@ func main() {
 	if httpAddress != "" {
 		mux := http.NewServeMux()
 
-		// Agent card endpoint
-		mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"name":    a.Record().DisplayName,
-				"did":     a.DID(),
-				"version": "1.0.0",
-			})
+		// Initialize A2A Integration
+		// Create a bridge for local method handling
+		bridgeStore := registry.NewMemoryStore()
+		bridge := a2a.NewAgentBridge(bridgeStore)
+
+		// Register local methods to the bridge
+		bridge.RegisterMethod("echo", func(ctx context.Context, params json.RawMessage) (any, error) {
+			return "echo: " + string(params), nil
 		})
+
+		// Create router that wraps the agent for P2P communication
+		router := a2a.NewAgentRouter(a, a2a.WithRouterLocalHandlers(bridge))
+
+		// Create A2A HTTP Handler
+		a2aHandler := a2a.NewAgentHandler(
+			router.TaskHandler(),
+			a2a.WithAgentInfo(&a2a.AgentInfo{
+				DID:         a.DID(),
+				Name:        a.Record().DisplayName,
+				Description: "Gemini Enterprise A2A Agent",
+				Skills: []a2a.Skill{
+					{
+						Name:        "chat",
+						Description: "Chat capability",
+					},
+				},
+			}),
+		)
+
+		// Register A2A endpoints
+		// 1. Agent Card at root
+		mux.HandleFunc("/.well-known/agent.json", a2aHandler.ServeHTTP)
+
+		// 2. A2A API endpoint (Gemini communicates here)
+		mux.Handle("/api/v1/", http.StripPrefix("/api/v1", a2aHandler))
 
 		// Health check
 		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {

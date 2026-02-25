@@ -494,9 +494,11 @@ func TestSSEConcurrentWrites(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 10 {
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			_ = writer.WriteData([]byte("message"))
-		})
+		}()
 	}
 	wg.Wait()
 

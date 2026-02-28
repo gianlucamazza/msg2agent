@@ -38,3 +38,8 @@ variable "service_account_id" {
   type        = string
   default     = "msg2agent-relay-sa"
 }
+
+variable "github_repo" {
+  description = "GitHub repository (owner/repo) for Workload Identity Federation"
+  type        = string
+}

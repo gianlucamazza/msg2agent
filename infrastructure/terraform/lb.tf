@@ -35,6 +35,17 @@ resource "google_compute_url_map" "default" {
   default_service = google_compute_backend_service.relay_backend.id
 }
 
+# HTTP → HTTPS Redirect URL Map
+resource "google_compute_url_map" "http_redirect" {
+  name = "msg2agent-http-redirect"
+
+  default_url_redirect {
+    https_redirect         = true
+    strip_query            = false
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+  }
+}
+
 # Managed SSL Certificate
 resource "google_compute_managed_ssl_certificate" "default" {
   name = "msg2agent-ssl-cert"
@@ -47,7 +58,7 @@ resource "google_compute_managed_ssl_certificate" "default" {
 # HTTP Proxy (Redirect URL Map - usually we'd have a separate one for HTTPS redirect)
 resource "google_compute_target_http_proxy" "default" {
   name    = "msg2agent-http-proxy"
-  url_map = google_compute_url_map.default.id
+  url_map = google_compute_url_map.http_redirect.id
 }
 
 resource "google_compute_global_forwarding_rule" "http" {

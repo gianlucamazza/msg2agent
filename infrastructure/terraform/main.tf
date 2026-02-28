@@ -6,6 +6,11 @@ terraform {
     }
   }
   required_version = ">= 1.0"
+
+  backend "gcs" {
+    bucket = "msg2agent-tfstate"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {

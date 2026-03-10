@@ -111,48 +111,9 @@ linters:
           disabled: true
         - name: early-return
           disabled: true
-        - name: enforce-switch-style
-          disabled: true
-        - name: identical-switch-branches
-          disabled: true
         - name: deep-exit
           disabled: true
         - name: nested-structs
           disabled: true
-        - name: unsecure-url-scheme
-          disabled: true  # Allow http for local development
-        - name: unnecessary-format
-          disabled: true
         - name: use-errors-new
-          disabled: true  # fmt.Errorf is common pattern
-
-formatters:
-  enable:
-    - gofmt
-    - goimports
-  settings:
-    goimports:
-      local-prefixes: github.com/gianluca/msg2agent
-
-issues:
-  exclude-dirs:
-    - test
-
-  # Exclude noctx for local SQLite operations (don't need context cancellation)
-  exclude-rules:
-    - path: "pkg/conversation/sqlite\\.go"
-      linters:
-        - noctx
-    - path: "pkg/queue/sqlite\\.go"
-      linters:
-        - noctx
-    - path: "pkg/registry/sqlite\\.go"
-      linters:
-        - noctx
-    - path: "pkg/transport/websocket\\.go"
-      linters:
-        - noctx
-      text: "net.Listen"
-
-  max-issues-per-linter: 50
-  max-same-issues: 5
+          disabled: true

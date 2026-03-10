@@ -273,3 +273,43 @@ trigger:
     - tag
   ref:
     - refs/tags/v*
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+# Pipeline: manual
+# Trigger:  manual (API/cli) o custom webhook
+# Goal:     Build e deploy manuale per testing
+# ──────────────────────────────────────────────────────────────────────────────
+kind: pipeline
+type: docker
+name: manual
+
+platform:
+  os: linux
+  arch: arm64
+
+clone:
+  depth: 1
+
+steps:
+  - name: lint
+    image: golangci/golangci-lint:v1.64-alpine
+    commands:
+      - golangci-lint run --timeout=5m ./...
+
+  - name: test-unit
+    image: golang:1.24-alpine
+    commands:
+      - apk add --no-cache git make
+      - go mod download
+      - go test -v -race ./pkg/... ./cmd/...
+
+  - name: build
+    image: golang:1.24-alpine
+    commands:
+      - apk add --no-cache git make
+      - make build
+
+trigger:
+  event:
+    - custom

@@ -3,10 +3,6 @@ kind: pipeline
 type: docker
 name: pull-request
 
-platform:
-  os: linux
-  arch: arm64
-
 clone:
   depth: 1
 
@@ -37,10 +33,6 @@ trigger:
 kind: pipeline
 type: docker
 name: main
-
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1
@@ -152,115 +144,7 @@ trigger:
 ---
 kind: pipeline
 type: docker
-name: release
-
-platform:
-  os: linux
-  arch: arm64
-
-clone:
-  depth: 1
-
-steps:
-  - name: docker-build-push-relay
-    image: plugins/docker
-    settings:
-      daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-relay
-      dockerfile: Dockerfile
-      target: relay
-      tags:
-        - ${DRONE_TAG}
-        - latest-release
-      username:
-        from_secret: REGISTRY_USERNAME
-      password:
-        from_secret: REGISTRY_PASSWORD
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-
-  - name: docker-build-push-agent
-    image: plugins/docker
-    settings:
-      daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-agent
-      dockerfile: Dockerfile
-      target: agent
-      tags:
-        - ${DRONE_TAG}
-        - latest-release
-      username:
-        from_secret: REGISTRY_USERNAME
-      password:
-        from_secret: REGISTRY_PASSWORD
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-
-  - name: docker-build-push-mcp
-    image: plugins/docker
-    settings:
-      daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server
-      dockerfile: Dockerfile
-      target: mcp-server
-      tags:
-        - ${DRONE_TAG}
-        - latest-release
-      username:
-        from_secret: REGISTRY_USERNAME
-      password:
-        from_secret: REGISTRY_PASSWORD
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-
-  - name: deploy
-    image: docker:cli
-    environment:
-      REGISTRY_USERNAME:
-        from_secret: REGISTRY_USERNAME
-      REGISTRY_PASSWORD:
-        from_secret: REGISTRY_PASSWORD
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-      - name: opt_services
-        path: /opt/services
-    commands:
-      - apk add --no-cache bash
-      - echo "$REGISTRY_PASSWORD" | docker login registry.home.gianlucamazza.it -u "$REGISTRY_USERNAME" --password-stdin
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-relay:${DRONE_TAG}
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-agent:${DRONE_TAG}
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:${DRONE_TAG}
-      - TAG=${DRONE_TAG} docker compose -f /opt/services/msg2agent/docker-compose.yml up -d --no-build
-
-volumes:
-  - name: docker_sock
-    host:
-      path: /var/run/docker.sock
-  - name: opt_services
-    host:
-      path: /opt/services
-
-trigger:
-  event:
-    - tag
-  ref:
-    - refs/tags/v*
-
----
-kind: pipeline
-type: docker
 name: manual
-
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1

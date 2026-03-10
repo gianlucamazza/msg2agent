@@ -10,7 +10,6 @@ name: pull-request
 
 platform:
   os: linux
-  os: linux
   arch: arm64
 
 clone:
@@ -51,7 +50,6 @@ name: main
 
 platform:
   os: linux
-  os: linux
   arch: arm64
 
 clone:
@@ -72,7 +70,6 @@ steps:
 
   - name: docker-build-push-relay
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -92,7 +89,6 @@ steps:
 
   - name: docker-build-push-agent
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -112,7 +108,6 @@ steps:
 
   - name: docker-build-push-mcp
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -176,7 +171,6 @@ name: release
 
 platform:
   os: linux
-  os: linux
   arch: arm64
 
 clone:
@@ -185,7 +179,6 @@ clone:
 steps:
   - name: docker-build-push-relay
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -205,7 +198,6 @@ steps:
 
   - name: docker-build-push-agent
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -225,7 +217,6 @@ steps:
 
   - name: docker-build-push-mcp
     image: plugins/docker
-    privileged: false
     settings:
       daemon_off: true
       registry: registry.home.gianlucamazza.it
@@ -280,15 +271,14 @@ trigger:
 ---
 # ──────────────────────────────────────────────────────────────────────────────
 # Pipeline: manual
-# Trigger:  manual (API/cli) o custom webhook
-# Goal:     Build e deploy manuale per testing
+# Trigger:  trigger manuale via API/CLI
+# Goal:     Build locale per testing senza push al registry
 # ──────────────────────────────────────────────────────────────────────────────
 kind: pipeline
 type: docker
 name: manual
 
 platform:
-  os: linux
   os: linux
   arch: arm64
 

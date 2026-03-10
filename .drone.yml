@@ -8,7 +8,7 @@ clone:
 
 steps:
   - name: lint
-    image: golangci/golangci-lint:v1.64-alpine
+    image: golangci/golangci-lint:v2.11-alpine
     commands:
       - golangci-lint run --timeout=5m ./...
 
@@ -39,7 +39,7 @@ clone:
 
 steps:
   - name: lint
-    image: golangci/golangci-lint:v1.64-alpine
+    image: golangci/golangci-lint:v2.11-alpine
     commands:
       - golangci-lint run --timeout=5m ./...
 
@@ -151,7 +151,7 @@ clone:
 
 steps:
   - name: lint
-    image: golangci/golangci-lint:v1.64-alpine
+    image: golangci/golangci-lint:v2.11-alpine
     commands:
       - golangci-lint run --timeout=5m ./...
 

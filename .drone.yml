@@ -8,9 +8,6 @@ kind: pipeline
 type: docker
 name: pull-request
 
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1
@@ -48,9 +45,6 @@ kind: pipeline
 type: docker
 name: main
 
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1
@@ -172,9 +166,6 @@ kind: pipeline
 type: docker
 name: release
 
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1
@@ -284,9 +275,6 @@ kind: pipeline
 type: docker
 name: manual
 
-platform:
-  os: linux
-  arch: arm64
 
 clone:
   depth: 1

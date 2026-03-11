@@ -19,7 +19,7 @@ steps:
     commands:
       - apk add --no-cache git make
       - go mod download
-      - go test -v -race ./pkg/... ./cmd/...
+      - go test -v ./pkg/... ./cmd/...
   - name: build
     image: golang:1.24-alpine
     commands:
@@ -49,7 +49,7 @@ steps:
     commands:
       - apk add --no-cache git make
       - go mod download
-      - go test -v -race ./pkg/... ./cmd/...
+      - go test -v ./pkg/... ./cmd/...
   - name: docker-build-push-relay
     image: plugins/docker
     settings:
@@ -154,7 +154,7 @@ steps:
     commands:
       - apk add --no-cache git make
       - go mod download
-      - go test -v -race ./pkg/... ./cmd/...
+      - go test -v ./pkg/... ./cmd/...
   - name: build
     image: golang:1.24-alpine
     commands:

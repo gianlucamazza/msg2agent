@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -240,6 +241,9 @@ func (s *MCPServer) sendMessageHandler(ctx context.Context, request mcp.CallTool
 	if err := json.Unmarshal([]byte(paramsStr), &params); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON params: %v", err)), nil
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 
 	resp, err := s.caller.Send(ctx, to, method, params)
 	if err != nil {

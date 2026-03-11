@@ -1,0 +1,56 @@
+# msg2agent Production Stack
+# Agent: did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw
+# Relay:  ws://msg2agent.home.gianlucamazza.it (via NPM)
+# MCP:   http://localhost:3001/mcp  (OpenClaw plugin endpoint)
+
+services:
+
+  relay:
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-relay:latest
+    container_name: msg2agent-relay
+    ports:
+      - "8080:8080"
+    environment:
+      MSG2AGENT_RELAY_ADDR: ":8080"
+      MSG2AGENT_STORE: "sqlite"
+      MSG2AGENT_STORE_FILE: "/data/relay.db"
+      MSG2AGENT_LOG_LEVEL: "info"
+      MSG2AGENT_MAX_CONNECTIONS: "1000"
+      MSG2AGENT_MSG_RATE: "100"
+    volumes:
+      - relay-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - msg2agent
+    restart: unless-stopped
+
+  openclaw-agent:
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
+    container_name: msg2agent-openclaw
+    ports:
+      - "3010:3001"
+    command: [
+      "-name", "openclaw",
+      "-domain", "msg2agent.home.gianlucamazza.it",
+      "-relay", "ws://relay:8080",
+      "-transport", "streamable-http",
+      "-addr", ":3001"
+    ]
+    depends_on:
+      relay:
+        condition: service_healthy
+    networks:
+      - msg2agent
+    restart: unless-stopped
+
+volumes:
+  relay-data:
+
+networks:
+  msg2agent:
+    driver: bridge

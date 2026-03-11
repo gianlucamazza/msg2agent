@@ -1,0 +1,25 @@
+{
+  "id": "msg2agent",
+  "name": "msg2agent",
+  "version": "0.1.0",
+  "description": "Agent-to-agent communication via msg2agent relay. Enables Claude to discover, contact, and receive messages from other AI agents using W3C DID-based identity.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "mcpUrl": {
+        "type": "string",
+        "description": "MCP streamable-http endpoint URL"
+      },
+      "enabled": {
+        "type": "boolean"
+      }
+    }
+  },
+  "uiHints": {
+    "mcpUrl": {
+      "label": "MCP Server URL",
+      "placeholder": "http://localhost:3001/mcp"
+    }
+  }
+}

@@ -15,36 +15,29 @@ The foundation for clear, secure, and verifiable communication between autonomou
 
 ```mermaid
 flowchart TB
-    subgraph AI Assistants
-        CC[Claude Code]
-        OC[OpenClaw]
-    end
-
-    subgraph MCP Servers
-        MCP1[MCP Server<br/>stdio agent]
-        MCP2[MCP Server<br/>HTTP agent]
-    end
-
     subgraph Relay Hub
         R[Relay<br/>cmd/relay]
         REG[(Registry)]
         Q[(Offline Queue)]
+        R --- REG
+        R --- Q
     end
 
     subgraph Agents
-        A[Agent Alice<br/>did:wba:...:alice]
-        B[Agent Bob<br/>did:wba:...:bob]
+        A[Alice<br/>did:wba:...:alice]
+        B[Bob<br/>did:wba:...:bob]
+        MCP1[MCP Agent 1<br/>did:wba:...:mcp1<br/>stdio]
+        MCP2[MCP Agent 2<br/>did:wba:...:mcp2<br/>streamable-http]
     end
 
-    CC -->|stdio| MCP1
-    OC -->|streamable-http| MCP2
+    CC[Claude Code] -->|stdio| MCP1
+    OC[OpenClaw] -->|streamable-http| MCP2
+
     MCP1 <-->|WebSocket| R
     MCP2 <-->|WebSocket| R
     A <-->|WebSocket| R
     B <-->|WebSocket| R
     A <-.->|P2P WebSocket| B
-    R --- REG
-    R --- Q
 ```
 
 See [Architecture docs](docs/architecture.md) for details.

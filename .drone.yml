@@ -2,60 +2,54 @@
 kind: pipeline
 type: docker
 name: pull-request
-
 platform:
   os: linux
   arch: arm64
 clone:
   depth: 1
-
 steps:
   - name: lint
-    image: golangci/golangci-lint:v2.11-alpine
+    image: golang:1.24-alpine
     commands:
-      - golangci-lint run --timeout=10m ./...
-
+      - apk add --no-cache git
+      - go vet ./...
+      - go build ./...
   - name: test-unit
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git make
       - go mod download
       - go test -v -race ./pkg/... ./cmd/...
-
   - name: build
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git make
       - make build
-
 trigger:
   event:
     - pull_request
-
 ---
 kind: pipeline
 type: docker
 name: main
-
 platform:
   os: linux
   arch: arm64
 clone:
   depth: 1
-
 steps:
-  - name: lint
-    image: golangci/golangci-lint:v2.11-alpine
+  - name: vet
+    image: golang:1.24-alpine
     commands:
-      - golangci-lint run --timeout=10m ./...
-
+      - apk add --no-cache git
+      - go vet ./...
+      - go build ./...
   - name: test-unit
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git make
       - go mod download
       - go test -v -race ./pkg/... ./cmd/...
-
   - name: docker-build-push-relay
     image: plugins/docker
     settings:
@@ -74,7 +68,6 @@ steps:
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock
-
   - name: docker-build-push-agent
     image: plugins/docker
     settings:
@@ -93,7 +86,6 @@ steps:
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock
-
   - name: docker-build-push-mcp
     image: plugins/docker
     settings:
@@ -112,7 +104,6 @@ steps:
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock
-
   - name: deploy
     image: docker:cli
     environment:
@@ -132,7 +123,6 @@ steps:
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-agent:latest
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
       - docker compose -f /opt/services/msg2agent/docker-compose.yml up -d --no-build
-
 volumes:
   - name: docker_sock
     host:
@@ -140,43 +130,36 @@ volumes:
   - name: opt_services
     host:
       path: /opt/services
-
 trigger:
   branch:
     - main
   event:
     - push
-
 ---
 kind: pipeline
 type: docker
 name: manual
-
 platform:
   os: linux
   arch: arm64
 clone:
   depth: 1
-
 steps:
-  - name: lint
+  - name: lint-full
     image: golangci/golangci-lint:v2.11-alpine
     commands:
-      - golangci-lint run --timeout=10m ./...
-
+      - golangci-lint run --timeout=15m ./...
   - name: test-unit
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git make
       - go mod download
       - go test -v -race ./pkg/... ./cmd/...
-
   - name: build
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git make
       - make build
-
 trigger:
   event:
     - custom

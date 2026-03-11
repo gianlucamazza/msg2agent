@@ -87,6 +87,11 @@ func (s *Server) Inbox() *Inbox {
 	return s.inbox
 }
 
+// Internal returns the underlying mcp-go MCPServer for transport wiring.
+func (s *Server) Internal() *server.MCPServer {
+	return s.mcp
+}
+
 // ServeStdio starts the server on stdio
 func (s *Server) ServeStdio() error {
 	return server.ServeStdio(s.mcp)

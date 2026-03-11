@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	mcpadapter "github.com/gianluca/msg2agent/adapters/mcp"
 	"github.com/gianluca/msg2agent/pkg/agent"
@@ -89,12 +90,39 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Connect to relay
+	// Connect to relay and register with DID ownership proof
 	logger.Info("connecting to relay", "addr", *relay)
 	if err := a.Connect(ctx, *relay); err != nil {
 		logger.Error("failed to connect to relay", "error", err)
 		os.Exit(1)
 	}
+
+	// Register with relay: prove DID ownership via Ed25519 signature
+	go func() {
+		time.Sleep(500 * time.Millisecond) // allow WebSocket handshake to settle
+		timestamp := time.Now().Unix()
+		proofMessage := fmt.Sprintf("%s:%d", a.DID(), timestamp)
+		proof := a.Sign([]byte(proofMessage))
+
+		regReq := map[string]any{
+			"id":           a.Record().ID,
+			"did":          a.Record().DID,
+			"display_name": a.Record().DisplayName,
+			"public_keys":  a.Record().PublicKeys,
+			"endpoints":    a.Record().Endpoints,
+			"capabilities": a.Record().Capabilities,
+			"status":       a.Record().Status,
+			"proof":        proof,
+			"timestamp":    timestamp,
+		}
+
+		result, err := a.CallRelay(ctx, "relay.register", regReq)
+		if err != nil {
+			logger.Error("failed to register with relay", "error", err)
+			return
+		}
+		logger.Info("registered with relay", "did", a.DID(), "result", string(result))
+	}()
 
 	// Create MCP server via adapter
 	mcpServer := mcpadapter.NewMCPServer(

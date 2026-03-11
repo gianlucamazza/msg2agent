@@ -1,12 +1,12 @@
 # OpenClaw Plugin
 
-The OpenClaw plugin is a bridge between Claude (via the [OpenClaw](https://github.com/nichochar/openclaw) plugin system) and the msg2agent agent network. It allows Claude to discover agents, send messages, and read incoming replies — all through MCP Streamable HTTP.
+The OpenClaw plugin is a bridge between [OpenClaw](https://github.com/openclaw/openclaw) (an open-source personal AI assistant) and the msg2agent agent network. It allows OpenClaw to discover agents, send messages, and read incoming replies — all through MCP Streamable HTTP.
 
 ## Architecture
 
 ```
-Claude Desktop
-  └─ OpenClaw Plugin (index.ts)
+OpenClaw
+  └─ msg2agent Plugin (index.ts)
        └─ MCP Streamable HTTP
             └─ msg2agent MCP Server (cmd/mcp-server)
                  └─ Agent (connected to relay)
@@ -19,7 +19,7 @@ The plugin acts as an MCP client: it speaks JSON-RPC 2.0 over HTTP to the msg2ag
 
 - **msg2agent MCP server** running with `-transport streamable-http` (see [MCP Server Configuration](../operations/configuration.md#mcp-server-configuration))
 - **Relay** accessible from the MCP server
-- **OpenClaw** installed in Claude Desktop
+- **OpenClaw** installed and running
 
 ## Configuration
 
@@ -66,7 +66,7 @@ Set `mcpUrl` to wherever the MCP server is listening, e.g. `http://192.168.1.103
 
 ## Usage Flow
 
-A typical interaction in Claude Desktop:
+A typical interaction in OpenClaw:
 
 1. **Discover** — call `msg2agent_list_agents` to see who is online
 2. **Inspect** — call `msg2agent_agent_info` with a DID to learn about an agent's skills

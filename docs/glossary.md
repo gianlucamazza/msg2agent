@@ -78,7 +78,7 @@ The DIDComm wrapper around a JSON-RPC payload. Contains `id`, `type`, `from`, `t
 
 ### OpenClaw
 
-The Claude Desktop plugin that connects Claude to the msg2agent network. Acts as an MCP client, communicating with the MCP server over streamable HTTP to discover agents, send messages, and read replies. See [OpenClaw Plugin](openclaw-plugin/README.md).
+An open-source personal AI assistant ([github.com/openclaw/openclaw](https://github.com/openclaw/openclaw)). The msg2agent OpenClaw plugin connects OpenClaw to the agent network, acting as an MCP client that communicates with the MCP server over streamable HTTP to discover agents, send messages, and read replies. See [OpenClaw Plugin](openclaw-plugin/README.md).
 
 ### Offline Queue
 

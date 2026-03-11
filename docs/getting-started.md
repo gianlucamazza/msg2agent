@@ -148,7 +148,7 @@ go build -o mcp-server ./cmd/mcp-server
   -addr :3001
 ```
 
-The MCP endpoint will be available at `http://localhost:3001/mcp`. See [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) for all options, or the [OpenClaw Plugin guide](openclaw-plugin/README.md) for Claude Desktop integration.
+The MCP endpoint will be available at `http://localhost:3001/mcp`. See [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) for all options, or the [OpenClaw Plugin guide](openclaw-plugin/README.md) for OpenClaw integration.
 
 ## Understanding the Components
 

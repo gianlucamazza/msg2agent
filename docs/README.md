@@ -35,7 +35,7 @@ Welcome to the msg2agent documentation.
 **Integrate with the API**
 
 - [JSON-RPC API](api/jsonrpc.md) - Complete API reference
-- [OpenClaw Plugin](openclaw-plugin/README.md) - Claude plugin for msg2agent
+- [OpenClaw Plugin](openclaw-plugin/README.md) - OpenClaw plugin for msg2agent
 - [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) - MCP server flags and transports
 
 ## Documentation Index

@@ -245,10 +245,10 @@ Integration with AI assistants:
 - Resources: `msg2agent://inbox`, `msg2agent://tasks` for inbox and task state
 - Inbox: incoming messages are buffered and accessible via tools and resources
 
-The [OpenClaw plugin](openclaw-plugin/README.md) is the reference MCP client for Claude Desktop:
+The [OpenClaw plugin](openclaw-plugin/README.md) is the reference MCP client integration:
 
 ```
-Claude → OpenClaw Plugin → MCP HTTP → MCP Server → Agent → Relay → Network
+OpenClaw → msg2agent Plugin → MCP HTTP → MCP Server → Agent → Relay → Network
 ```
 
 ## Supporting Components

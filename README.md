@@ -57,7 +57,7 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 | [Deployment](docs/deployment/)                        | Docker, Kubernetes, TLS setup           |
 | [Monitoring](docs/operations/monitoring.md)           | Prometheus, Grafana, tracing            |
 | [Troubleshooting](docs/operations/troubleshooting.md) | Common issues and solutions             |
-| [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | Claude Desktop integration via MCP      |
+| [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | OpenClaw integration via MCP            |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |
 
 ## Project Structure

@@ -209,7 +209,15 @@ func main() {
 
 	// Register catch-all handler for incoming messages
 	a.RegisterMethod("*", func(ctx context.Context, params json.RawMessage) (any, error) {
-		mcpServer.HandleIncomingMessage("unknown", "*", params)
+		from := agent.MessageFrom(ctx)
+		method := agent.MessageMethod(ctx)
+		if from == "" {
+			from = "unknown"
+		}
+		if method == "" {
+			method = "*"
+		}
+		mcpServer.HandleIncomingMessage(from, method, params)
 		return map[string]string{"status": "received"}, nil
 	})
 

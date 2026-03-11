@@ -1311,7 +1311,9 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 	}
 
 	// Execute handler
-	result, err := handler(a.ctx, msg.Body)
+	hctx := context.WithValue(a.ctx, ctxKeyFrom, msg.From)
+	hctx = context.WithValue(hctx, ctxKeyMethod, msg.Method)
+	result, err := handler(hctx, msg.Body)
 	if err != nil {
 		a.sendErrorToSender(t, req, &msg, protocol.CodeInternalError, err.Error())
 		return

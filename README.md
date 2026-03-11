@@ -16,12 +16,13 @@ The foundation for clear, secure, and verifiable communication between autonomou
 ```mermaid
 flowchart TB
     subgraph AI Assistants
-        CC[Claude Code<br/>stdio]
-        OC[OpenClaw<br/>HTTP]
+        CC[Claude Code]
+        OC[OpenClaw]
     end
 
-    subgraph MCP Server
-        MCP[MCP Server<br/>cmd/mcp-server]
+    subgraph MCP Servers
+        MCP1[MCP Server<br/>stdio agent]
+        MCP2[MCP Server<br/>HTTP agent]
     end
 
     subgraph Relay Hub
@@ -35,9 +36,10 @@ flowchart TB
         B[Agent Bob<br/>did:wba:...:bob]
     end
 
-    CC -->|stdio| MCP
-    OC -->|streamable-http| MCP
-    MCP <-->|WebSocket| R
+    CC -->|stdio| MCP1
+    OC -->|streamable-http| MCP2
+    MCP1 <-->|WebSocket| R
+    MCP2 <-->|WebSocket| R
     A <-->|WebSocket| R
     B <-->|WebSocket| R
     A <-.->|P2P WebSocket| B

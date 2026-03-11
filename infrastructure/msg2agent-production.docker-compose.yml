@@ -1,7 +1,7 @@
 # msg2agent Production Stack
 # Agent: did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw
 # Relay:  ws://msg2agent.home.gianlucamazza.it (via NPM)
-# MCP:   http://localhost:3001/mcp  (OpenClaw plugin endpoint)
+# MCP:   http://localhost:3010/mcp  (OpenClaw plugin endpoint)
 
 services:
 

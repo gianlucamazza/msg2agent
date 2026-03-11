@@ -253,8 +253,8 @@ func (s *SQLiteStore) Put(agent *Agent) error {
 	_, err = s.db.Exec(`
 		INSERT INTO agents (id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(id) DO UPDATE SET
-			did = excluded.did,
+		ON CONFLICT(did) DO UPDATE SET
+			id = excluded.id,
 			display_name = excluded.display_name,
 			public_keys = excluded.public_keys,
 			endpoints = excluded.endpoints,

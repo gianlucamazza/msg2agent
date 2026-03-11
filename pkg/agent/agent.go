@@ -1232,6 +1232,7 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 	// Parse message from params
 	var msg messaging.Message
 	if err := req.ParseParams(&msg); err != nil {
+		// Can't parse message, so no routing info available — send raw error
 		a.sendErrorResponse(t, req.ID, protocol.CodeInvalidParams, "invalid params")
 		return
 	}
@@ -1245,14 +1246,14 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 	// Verify message signature
 	if err := a.verifyMessageSignature(&msg); err != nil {
 		a.logger.Warn("signature verification failed", "from", msg.From, "error", err)
-		a.sendErrorResponse(t, req.ID, protocol.CodeSignatureInvalid, "signature verification failed")
+		a.sendErrorToSender(t, req, &msg, protocol.CodeSignatureInvalid, "signature verification failed")
 		return
 	}
 
 	// Decrypt message body if encrypted
 	if err := a.decryptMessageBody(&msg); err != nil {
 		a.logger.Warn("message decryption failed", "from", msg.From, "error", err)
-		a.sendErrorResponse(t, req.ID, protocol.CodeDecryptionFailed, "decryption failed")
+		a.sendErrorToSender(t, req, &msg, protocol.CodeDecryptionFailed, "decryption failed")
 		return
 	}
 
@@ -1264,24 +1265,27 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 
 	// Check ACL
 	if err := a.acl.CheckAccess(a.record, msg.From, msg.Method); err != nil {
-		a.sendErrorResponse(t, req.ID, protocol.CodeAccessDenied, "access denied")
+		a.sendErrorToSender(t, req, &msg, protocol.CodeAccessDenied, "access denied")
 		return
 	}
 
-	// Find handler
+	// Find handler (fall back to wildcard if exact match not found)
 	a.mu.RLock()
 	handler, exists := a.handlers[msg.Method]
+	if !exists {
+		handler, exists = a.handlers["*"]
+	}
 	a.mu.RUnlock()
 
 	if !exists {
-		a.sendErrorResponse(t, req.ID, protocol.CodeMethodNotFound, "method not found")
+		a.sendErrorToSender(t, req, &msg, protocol.CodeMethodNotFound, "method not found")
 		return
 	}
 
 	// Execute handler
 	result, err := handler(a.ctx, msg.Body)
 	if err != nil {
-		a.sendErrorResponse(t, req.ID, protocol.CodeInternalError, err.Error())
+		a.sendErrorToSender(t, req, &msg, protocol.CodeInternalError, err.Error())
 		return
 	}
 
@@ -1393,6 +1397,35 @@ func (a *Agent) handleResponse(resp *protocol.JSONRPCResponse) {
 }
 
 // sendErrorResponse sends an error response.
+// sendErrorToSender sends an error response, routing through relay if needed.
+func (a *Agent) sendErrorToSender(t transport.Transport, req *protocol.JSONRPCRequest, msg *messaging.Message, code int, errMsg string) {
+	a.mu.RLock()
+	relayT, hasRelay := a.peers[a.relayAddr]
+	isRelay := hasRelay && t == relayT
+	a.mu.RUnlock()
+
+	if isRelay && msg != nil {
+		// Send as routable error message through relay
+		errResp, err := messaging.NewErrorResponse(msg, code, errMsg)
+		if err != nil {
+			a.logger.Error("failed to create error response", "error", err)
+			return
+		}
+
+		// Sign the response
+		msgBytes, _ := json.Marshal(errResp)
+		errResp.Signature = a.identity.Sign(msgBytes)
+
+		// Send through relay
+		if err := a.sendMessage(errResp); err != nil {
+			a.logger.Error("failed to send error via relay", "error", err)
+		}
+	} else {
+		// Direct P2P: send raw JSON-RPC error response
+		a.sendErrorResponse(t, req.ID, code, errMsg)
+	}
+}
+
 func (a *Agent) sendErrorResponse(t transport.Transport, id any, code int, message string) {
 	resp := protocol.NewErrorResponse(id, code, message, nil)
 	data, _ := protocol.Encode(resp)

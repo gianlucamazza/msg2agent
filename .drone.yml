@@ -163,3 +163,4 @@ steps:
 trigger:
   event:
     - custom
+# CI: go vet pipeline (lightweight)

@@ -1271,13 +1271,17 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 	}
 
 	// Handle response/error messages BEFORE signature verification.
-	// Responses are authenticated by correlationID (random UUID), not signature.
+	// Responses are authenticated by their correlationID (a random UUID tied to
+	// the original pending request), not by the sender's signature. Verifying
+	// signatures on responses would require the peer to already be in our local
+	// registry, which is not guaranteed — and sending back an error on a failed
+	// verification would cause an infinite error-response loop.
 	if msg.IsResponse() || msg.IsError() {
 		a.handleMessageResponse(&msg)
 		return
 	}
 
-	// Verify message signature
+	// Verify message signature (only for new requests/notifications)
 	if err := a.verifyMessageSignature(&msg); err != nil {
 		a.logger.Warn("signature verification failed", "from", msg.From, "error", err)
 		a.sendErrorToSender(t, req, &msg, protocol.CodeSignatureInvalid, "signature verification failed")

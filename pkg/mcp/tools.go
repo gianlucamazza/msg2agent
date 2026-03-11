@@ -342,10 +342,10 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 		taskParams["sessionId"] = sessionID
 	}
 
-	// Call the target agent's tasks/send method
-	resp, err := s.caller.Send(ctx, agentDID, "tasks/send", taskParams)
+	// Call the target agent's message/send method (A2A protocol)
+	resp, err := s.caller.Send(ctx, agentDID, "message/send", taskParams)
 	if err != nil {
-		s.logger.Error("tasks/send failed", "error", err)
+		s.logger.Error("message/send failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to submit task: %v", err)), nil
 	}
 
@@ -468,10 +468,10 @@ func (s *Server) sendTaskInputHandler(ctx context.Context, request mcp.CallToolR
 		},
 	}
 
-	// Call the target agent's tasks/sendSubscribe or tasks/send method
-	resp, err := s.caller.Send(ctx, agentDID, "tasks/send", inputParams)
+	// Call the target agent's message/send method with task ID for continuation
+	resp, err := s.caller.Send(ctx, agentDID, "message/send", inputParams)
 	if err != nil {
-		s.logger.Error("tasks/send (input) failed", "error", err)
+		s.logger.Error("message/send (input) failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to send task input: %v", err)), nil
 	}
 

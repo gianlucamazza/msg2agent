@@ -167,6 +167,55 @@ Get task status.
 }
 ```
 
+### tasks/list
+
+List tasks, optionally filtered by session or status.
+
+**Request:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tasks/list",
+  "params": {
+    "sessionId": "optional-session-id",
+    "status": ["working", "completed"],
+    "cursor": "",
+    "limit": 10
+  },
+  "id": "5"
+}
+```
+
+**Params:**
+
+| Name      | Type     | Required | Description                                    |
+| --------- | -------- | -------- | ---------------------------------------------- |
+| sessionId | string   | no       | Filter by session (also accepts `contextId`)   |
+| status    | string[] | no       | Filter by status (e.g. `working`, `completed`) |
+| cursor    | string   | no       | Pagination cursor from previous response       |
+| limit     | int      | no       | Max results per page (default 10, max 100)     |
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tasks": [
+      {
+        "id": "task-uuid",
+        "sessionId": "session-uuid",
+        "status": { "state": "completed" }
+      }
+    ],
+    "nextCursor": "",
+    "total": 1
+  },
+  "id": "5"
+}
+```
+
 ### tasks/cancel
 
 Cancel a running task.
@@ -369,6 +418,29 @@ Discover registered agents, optionally filtered by capability.
 ```
 
 **Response:** Returns an array of registered agent records.
+
+### relay.lookup
+
+Look up a single agent by DID.
+
+**Request:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "relay.lookup",
+  "params": { "did": "did:wba:example.com:agent:alice" },
+  "id": "3"
+}
+```
+
+**Params:**
+
+| Name | Type   | Required | Description          |
+| ---- | ------ | -------- | -------------------- |
+| did  | string | yes      | The DID of the agent |
+
+**Response:** Returns the agent record, or an error if not found.
 
 ### Presence Methods
 

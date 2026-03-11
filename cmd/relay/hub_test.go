@@ -465,6 +465,78 @@ func TestHandleDiscoverWithCapability(t *testing.T) {
 	}
 }
 
+func TestHandleLookup(t *testing.T) {
+	hub := testHub()
+
+	alice := registry.NewAgent("did:wba:example.com:agent:alice", "Alice")
+	hub.store.Put(alice)
+
+	client := testClient(hub, "lookup-test", "")
+	hub.Register(client)
+
+	req, _ := protocol.NewRequest("1", "relay.lookup", map[string]string{"did": "did:wba:example.com:agent:alice"})
+	client.handleLookup(req)
+
+	select {
+	case data := <-client.SendCh:
+		var resp protocol.JSONRPCResponse
+		json.Unmarshal(data, &resp)
+		if resp.Error != nil {
+			t.Errorf("unexpected error: %v", resp.Error)
+		}
+
+		var result registry.Agent
+		json.Unmarshal(resp.Result, &result)
+		if result.DID != "did:wba:example.com:agent:alice" {
+			t.Errorf("got DID %s, want did:wba:example.com:agent:alice", result.DID)
+		}
+	default:
+		t.Error("should have received response")
+	}
+}
+
+func TestHandleLookupNotFound(t *testing.T) {
+	hub := testHub()
+
+	client := testClient(hub, "lookup-notfound-test", "")
+	hub.Register(client)
+
+	req, _ := protocol.NewRequest("1", "relay.lookup", map[string]string{"did": "did:wba:example.com:agent:unknown"})
+	client.handleLookup(req)
+
+	select {
+	case data := <-client.SendCh:
+		var resp protocol.JSONRPCResponse
+		json.Unmarshal(data, &resp)
+		if resp.Error == nil {
+			t.Error("expected error for unknown agent")
+		}
+	default:
+		t.Error("should have received response")
+	}
+}
+
+func TestHandleLookupMissingDID(t *testing.T) {
+	hub := testHub()
+
+	client := testClient(hub, "lookup-missing-test", "")
+	hub.Register(client)
+
+	req, _ := protocol.NewRequest("1", "relay.lookup", nil)
+	client.handleLookup(req)
+
+	select {
+	case data := <-client.SendCh:
+		var resp protocol.JSONRPCResponse
+		json.Unmarshal(data, &resp)
+		if resp.Error == nil {
+			t.Error("expected error for missing DID")
+		}
+	default:
+		t.Error("should have received response")
+	}
+}
+
 func TestHandleMessageRouting(t *testing.T) {
 	hub := testHub()
 

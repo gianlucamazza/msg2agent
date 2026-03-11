@@ -590,6 +590,9 @@ func (c *Client) handleMessage(data []byte) {
 	case "relay.discover":
 		c.handleDiscover(req)
 		return
+	case "relay.lookup":
+		c.handleLookup(req)
+		return
 	case "relay.presence.update":
 		c.handlePresenceUpdate(req)
 		return
@@ -830,6 +833,25 @@ func (c *Client) handleDiscover(req *protocol.JSONRPCRequest) {
 
 	recordDiscovery()
 	c.sendResult(req.ID, agents)
+}
+
+// handleLookup handles looking up a single agent by DID.
+func (c *Client) handleLookup(req *protocol.JSONRPCRequest) {
+	var query struct {
+		DID string `json:"did"`
+	}
+	if err := req.ParseParams(&query); err != nil || query.DID == "" {
+		c.sendError(req.ID, protocol.CodeInvalidParams, "missing 'did' parameter")
+		return
+	}
+
+	agent, err := c.hub.store.GetByDID(query.DID)
+	if err != nil {
+		c.sendError(req.ID, protocol.CodeInternalError, err.Error())
+		return
+	}
+
+	c.sendResult(req.ID, agent)
 }
 
 func (c *Client) sendResult(id any, result any) {

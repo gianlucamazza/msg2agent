@@ -1154,6 +1154,20 @@ func (a *Agent) handleNotification(req *protocol.JSONRPCRequest) {
 		a.handlePresenceNotification(req)
 	case "relay.typing":
 		a.handleTypingNotification(req)
+	case "discovery.announce":
+		var msg registry.DiscoveryMessage
+		if err := json.Unmarshal(req.Params, &msg); err != nil {
+			a.logger.Debug("failed to parse discovery.announce", "error", err)
+			return
+		}
+		if msg.Agent == nil || msg.Agent.DID == a.DID() {
+			return
+		}
+		if err := a.store.Put(msg.Agent); err != nil {
+			a.logger.Warn("failed to store discovered agent", "did", msg.Agent.DID, "error", err)
+			return
+		}
+		a.logger.Debug("discovered peer via relay announce", "did", msg.Agent.DID)
 	default:
 		// Parse as a regular message notification
 		var msg messaging.Message

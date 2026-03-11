@@ -25,6 +25,7 @@ The foundation for clear, secure, and verifiable communication between autonomou
 ```bash
 go build -o relay ./cmd/relay
 go build -o agent ./cmd/agent
+go build -o mcp-server ./cmd/mcp-server
 ```
 
 ### Run
@@ -38,6 +39,9 @@ go build -o agent ./cmd/agent
 
 # Terminal 3: Start second agent
 ./agent -name bob -relay ws://localhost:8080
+
+# Terminal 4 (optional): Start MCP server for Claude Desktop / OpenClaw
+./mcp-server -name my-agent -relay ws://localhost:8080 -transport streamable-http -addr :3001
 ```
 
 See the [Getting Started Guide](docs/getting-started.md) for a complete walkthrough.
@@ -53,6 +57,7 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 | [Deployment](docs/deployment/)                        | Docker, Kubernetes, TLS setup           |
 | [Monitoring](docs/operations/monitoring.md)           | Prometheus, Grafana, tracing            |
 | [Troubleshooting](docs/operations/troubleshooting.md) | Common issues and solutions             |
+| [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | Claude Desktop integration via MCP      |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |
 
 ## Project Structure

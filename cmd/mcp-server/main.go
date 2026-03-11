@@ -123,6 +123,48 @@ func main() {
 		logger.Info("registered with relay", "result", string(result))
 	}
 
+	// Discover existing peers for signature verification
+	{
+		discoverResult, err := a.CallRelay(ctx, "relay.discover", nil)
+		if err != nil {
+			logger.Warn("failed to discover peers", "error", err)
+		} else {
+			var peers []struct {
+				DID         string `json:"did"`
+				DisplayName string `json:"display_name"`
+				PublicKeys  []struct {
+					ID      string `json:"id"`
+					Type    string `json:"type"`
+					Key     string `json:"key"`
+					Purpose string `json:"purpose"`
+				} `json:"public_keys"`
+			}
+			if err := json.Unmarshal(discoverResult, &peers); err != nil {
+				logger.Warn("failed to parse discovered peers", "error", err)
+			} else {
+				for _, peer := range peers {
+					if peer.DID == a.DID() {
+						continue
+					}
+					var peerKeys []registry.PeerKey
+					for _, k := range peer.PublicKeys {
+						peerKeys = append(peerKeys, registry.PeerKey{
+							ID:      k.ID,
+							Type:    k.Type,
+							Key:     k.Key,
+							Purpose: k.Purpose,
+						})
+					}
+					if err := a.Discovery().AddPeer(peer.DID, peer.DisplayName, peerKeys); err != nil {
+						logger.Debug("failed to add peer", "did", peer.DID, "error", err)
+					} else {
+						logger.Info("discovered peer", "did", peer.DID, "name", peer.DisplayName)
+					}
+				}
+			}
+		}
+	}
+
 	// Create MCP server via adapter
 	mcpServer := mcpadapter.NewMCPServer(
 		&agentBridge{a: a},

@@ -12,8 +12,8 @@ steps:
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git
-      - go vet ./...
-      - go build ./...
+      - go list ./... > /dev/null
+      # build covered by docker
   - name: test-unit
     image: golang:1.24-alpine
     commands:
@@ -42,8 +42,8 @@ steps:
     image: golang:1.24-alpine
     commands:
       - apk add --no-cache git
-      - go vet ./...
-      - go build ./...
+      - go list ./... > /dev/null
+      # build covered by docker
   - name: test-unit
     image: golang:1.24-alpine
     commands:

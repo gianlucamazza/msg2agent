@@ -8,11 +8,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	mcpadapter "github.com/gianluca/msg2agent/adapters/mcp"
 	"github.com/gianluca/msg2agent/pkg/agent"
+	"github.com/gianluca/msg2agent/pkg/identity"
 	"github.com/gianluca/msg2agent/pkg/messaging"
 	"github.com/gianluca/msg2agent/pkg/registry"
 )
@@ -49,6 +51,7 @@ func main() {
 	relay := flag.String("relay", "ws://localhost:8080", "Relay hub address")
 	transport := flag.String("transport", "stdio", "MCP transport: stdio, sse, streamable-http")
 	addr := flag.String("addr", ":8081", "Listen address for SSE/HTTP transports")
+	identFile := flag.String("identity-file", "", "Path to identity key file for persistence")
 	flag.Parse()
 
 	// Validate transport flag
@@ -66,6 +69,32 @@ func main() {
 	})
 	logger := slog.New(handler)
 
+	// Load or create persistent identity
+	keyPath := *identFile
+	if keyPath == "" {
+		home, _ := os.UserHomeDir()
+		keyPath = filepath.Join(home, ".msg2agent", *name+".key")
+	}
+
+	var ident *identity.Identity
+	if existing, err := identity.LoadFromFile(keyPath, *domain, *name); err == nil {
+		ident = existing
+		logger.Info("loaded identity from file", "path", keyPath)
+	} else {
+		ident, err = identity.NewIdentity(*domain, *name)
+		if err != nil {
+			logger.Error("failed to create identity", "error", err)
+			os.Exit(1)
+		}
+		if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+			logger.Warn("failed to create identity directory", "error", err)
+		} else if err := identity.SaveToFile(ident, keyPath); err != nil {
+			logger.Warn("failed to save identity", "error", err)
+		} else {
+			logger.Info("created new identity", "path", keyPath)
+		}
+	}
+
 	// Create agent
 	cfg := agent.Config{
 		Domain:      *domain,
@@ -73,6 +102,7 @@ func main() {
 		DisplayName: *name,
 		RelayAddr:   *relay,
 		Logger:      logger,
+		Identity:    ident,
 	}
 
 	a, err := agent.New(cfg)

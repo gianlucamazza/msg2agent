@@ -120,14 +120,24 @@ type Config struct {
 
 	// TLS configuration for relay connection
 	TLSSkipVerify bool // Skip TLS certificate verification (for testing)
+
+	// Identity allows passing a pre-built identity (e.g. loaded from disk).
+	// If nil, a new ephemeral identity is generated.
+	Identity *identity.Identity
 }
 
 // New creates a new agent with the given configuration.
 func New(cfg Config) (*Agent, error) {
-	// Generate identity
-	ident, err := identity.NewIdentity(cfg.Domain, cfg.AgentID)
-	if err != nil {
-		return nil, err
+	// Use provided identity or generate a new one
+	var ident *identity.Identity
+	if cfg.Identity != nil {
+		ident = cfg.Identity
+	} else {
+		var err error
+		ident, err = identity.NewIdentity(cfg.Domain, cfg.AgentID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create agent record

@@ -2,13 +2,16 @@
 package identity
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	ssi "github.com/nuts-foundation/go-did"
 	"github.com/nuts-foundation/go-did/did"
+	"golang.org/x/crypto/curve25519"
 
 	"github.com/gianluca/msg2agent/pkg/crypto"
 )
@@ -54,6 +57,81 @@ func NewIdentity(domain, agentID string) (*Identity, error) {
 	identity.Document = identity.buildDocument()
 
 	return identity, nil
+}
+
+// serializedIdentity is the on-disk format for identity keys.
+type serializedIdentity struct {
+	SigningPrivateKey    []byte `json:"signing_private_key"`
+	EncryptionPrivateKey []byte `json:"encryption_private_key"`
+}
+
+// SaveToFile persists the identity's private keys to a file.
+func SaveToFile(ident *Identity, path string) error {
+	data, err := json.Marshal(serializedIdentity{
+		SigningPrivateKey:    ident.Keys.Signing.PrivateKey,
+		EncryptionPrivateKey: ident.Keys.Encryption.PrivateKey,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal identity: %w", err)
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
+// LoadFromFile loads an identity from a persisted key file.
+func LoadFromFile(path, domain, agentID string) (*Identity, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read identity file: %w", err)
+	}
+
+	var s serializedIdentity
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal identity: %w", err)
+	}
+
+	// Reconstruct Ed25519 public key (private key is seed||pub, 64 bytes)
+	if len(s.SigningPrivateKey) != crypto.Ed25519PrivateKeySize {
+		return nil, fmt.Errorf("invalid signing key size: %d", len(s.SigningPrivateKey))
+	}
+	signingPub := s.SigningPrivateKey[32:]
+
+	// Reconstruct X25519 public key
+	if len(s.EncryptionPrivateKey) != crypto.X25519KeySize {
+		return nil, fmt.Errorf("invalid encryption key size: %d", len(s.EncryptionPrivateKey))
+	}
+	encryptionPub, err := curve25519.X25519(s.EncryptionPrivateKey, curve25519.Basepoint)
+	if err != nil {
+		return nil, fmt.Errorf("failed to derive encryption public key: %w", err)
+	}
+
+	keys := &crypto.AgentKeys{
+		Signing: &crypto.SigningKeyPair{
+			KeyPair: crypto.KeyPair{
+				PublicKey:  signingPub,
+				PrivateKey: s.SigningPrivateKey,
+			},
+		},
+		Encryption: &crypto.EncryptionKeyPair{
+			KeyPair: crypto.KeyPair{
+				PublicKey:  encryptionPub,
+				PrivateKey: s.EncryptionPrivateKey,
+			},
+		},
+	}
+
+	didStr := fmt.Sprintf("did:%s:%s:agent:%s", MethodWBA, domain, agentID)
+	d, err := did.ParseDID(didStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DID: %w", err)
+	}
+
+	ident := &Identity{
+		DID:  *d,
+		Keys: keys,
+	}
+	ident.Document = ident.buildDocument()
+
+	return ident, nil
 }
 
 // ParseDID parses a DID string.

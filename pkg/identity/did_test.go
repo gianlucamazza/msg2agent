@@ -1,6 +1,9 @@
 package identity
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -422,6 +425,69 @@ func TestNewIdentitySameDomainAgent(t *testing.T) {
 	// But keys should still be different (randomly generated)
 	if string(id1.SigningPublicKey()) == string(id2.SigningPublicKey()) {
 		t.Error("keys should be unique even for same DID string")
+	}
+}
+
+// TestSaveLoadRoundTrip tests that saving and loading an identity preserves keys.
+func TestSaveLoadRoundTrip(t *testing.T) {
+	original, err := NewIdentity("example.com", "persist-test")
+	if err != nil {
+		t.Fatalf("NewIdentity failed: %v", err)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.key")
+
+	if err := SaveToFile(original, path); err != nil {
+		t.Fatalf("SaveToFile failed: %v", err)
+	}
+
+	// Check file permissions
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("file permissions = %o, want 0600", perm)
+	}
+
+	loaded, err := LoadFromFile(path, "example.com", "persist-test")
+	if err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+
+	// DID should match
+	if original.DID.String() != loaded.DID.String() {
+		t.Errorf("DID mismatch: %s vs %s", original.DID.String(), loaded.DID.String())
+	}
+
+	// Keys should match
+	if !bytes.Equal(original.Keys.Signing.PrivateKey, loaded.Keys.Signing.PrivateKey) {
+		t.Error("signing private key mismatch")
+	}
+	if !bytes.Equal(original.Keys.Signing.PublicKey, loaded.Keys.Signing.PublicKey) {
+		t.Error("signing public key mismatch")
+	}
+	if !bytes.Equal(original.Keys.Encryption.PrivateKey, loaded.Keys.Encryption.PrivateKey) {
+		t.Error("encryption private key mismatch")
+	}
+	if !bytes.Equal(original.Keys.Encryption.PublicKey, loaded.Keys.Encryption.PublicKey) {
+		t.Error("encryption public key mismatch")
+	}
+
+	// Signing should work with loaded identity
+	data := []byte("test message")
+	sig := loaded.Sign(data)
+	if !original.Keys.Signing.Verify(data, sig) {
+		t.Error("signature from loaded identity failed verification")
+	}
+}
+
+// TestLoadFromFileNotFound tests loading from a non-existent file.
+func TestLoadFromFileNotFound(t *testing.T) {
+	_, err := LoadFromFile("/nonexistent/path.key", "example.com", "test")
+	if err == nil {
+		t.Error("LoadFromFile should fail for non-existent file")
 	}
 }
 

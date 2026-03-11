@@ -1165,6 +1165,9 @@ func (a *Agent) handleNotification(req *protocol.JSONRPCRequest) {
 		// Find handler for notification method
 		a.mu.RLock()
 		handler, exists := a.handlers[msg.Method]
+		if !exists {
+			handler, exists = a.handlers["*"]
+		}
 		a.mu.RUnlock()
 
 		if exists {

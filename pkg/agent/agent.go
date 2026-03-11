@@ -1246,6 +1246,13 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 		return // Silently ignore duplicates
 	}
 
+	// Handle response/error messages BEFORE signature verification.
+	// Responses are authenticated by correlationID (random UUID), not signature.
+	if msg.IsResponse() || msg.IsError() {
+		a.handleMessageResponse(&msg)
+		return
+	}
+
 	// Verify message signature
 	if err := a.verifyMessageSignature(&msg); err != nil {
 		a.logger.Warn("signature verification failed", "from", msg.From, "error", err)
@@ -1257,12 +1264,6 @@ func (a *Agent) handleRequest(t transport.Transport, req *protocol.JSONRPCReques
 	if err := a.decryptMessageBody(&msg); err != nil {
 		a.logger.Warn("message decryption failed", "from", msg.From, "error", err)
 		a.sendErrorToSender(t, req, &msg, protocol.CodeDecryptionFailed, "decryption failed")
-		return
-	}
-
-	// Handle response messages (responses routed through relay)
-	if msg.IsResponse() || msg.IsError() {
-		a.handleMessageResponse(&msg)
 		return
 	}
 

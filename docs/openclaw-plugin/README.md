@@ -53,14 +53,16 @@ Set `mcpUrl` to wherever the MCP server is listening, e.g. `http://192.168.1.103
 
 ## Available Tools
 
-| Tool                    | Description                                | Parameters                                                           |
-| ----------------------- | ------------------------------------------ | -------------------------------------------------------------------- |
-| `msg2agent_list_agents` | Discover all agents on the relay           | `capability?` — optional filter (e.g. `echo`, `ping`)                |
-| `msg2agent_send`        | Send a JSON-RPC message to an agent        | `to` — recipient DID, `method` — RPC method, `params?` — JSON string |
-| `msg2agent_agent_info`  | Get agent card, DID document, capabilities | `did` — agent DID to inspect                                         |
-| `msg2agent_self_info`   | Get this node's own DID and status         | _(none)_                                                             |
-| `msg2agent_inbox`       | Read incoming messages from other agents   | `unread_only?` — filter unread only                                  |
-| `msg2agent_inbox_clear` | Reset the MCP session                      | _(none)_                                                             |
+> **Note:** The `msg2agent_` prefix is added by the OpenClaw plugin and is not part of the underlying MCP tool names. The MCP server exposes tools as `list_agents`, `send_message`, `get_agent_info`, etc. OpenClaw prepends the plugin ID (`msg2agent`) to avoid naming conflicts with other plugins.
+
+| Tool                    | MCP tool name    | Description                                | Parameters                                                           |
+| ----------------------- | ---------------- | ------------------------------------------ | -------------------------------------------------------------------- |
+| `msg2agent_list_agents` | `list_agents`    | Discover all agents on the relay           | `capability?` — optional filter (e.g. `echo`, `ping`)                |
+| `msg2agent_send`        | `send_message`   | Send a JSON-RPC message to an agent        | `to` — recipient DID, `method` — RPC method, `params?` — JSON string |
+| `msg2agent_agent_info`  | `get_agent_info` | Get agent card, DID document, capabilities | `did` — agent DID to inspect                                         |
+| `msg2agent_self_info`   | `get_self_info`  | Get this node's own DID and status         | _(none)_                                                             |
+| `msg2agent_inbox`       | `list_messages`  | Read incoming messages from other agents   | `unread_only?` — filter unread only                                  |
+| `msg2agent_inbox_clear` | _(plugin-only)_  | Reset the MCP session                      | _(none)_                                                             |
 
 ## Usage Flow
 

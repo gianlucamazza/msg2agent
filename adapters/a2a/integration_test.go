@@ -397,7 +397,7 @@ func TestWithArtifacts(t *testing.T) {
 	}
 }
 
-// mockAgent implements AgentCaller for testing.
+// mockAgent implements MessageSender for testing.
 type mockAgent struct {
 	did       string
 	responses map[string]*mockResponse

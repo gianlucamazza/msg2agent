@@ -176,7 +176,7 @@ const X25519KeyAgreementKey2019 = ssi.KeyType("X25519KeyAgreementKey2019")
 // buildDocument builds a DID Document for the identity.
 func (i *Identity) buildDocument() *did.Document {
 	doc := &did.Document{
-		Context: []interface{}{did.DIDContextV1URI()},
+		Context: []any{did.DIDContextV1URI()},
 		ID:      i.DID,
 	}
 

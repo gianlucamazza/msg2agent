@@ -171,7 +171,9 @@ type RelayHub struct {
 	clients     map[string]*Client
 	mu          sync.RWMutex
 	logger      *slog.Logger
-	connections atomic.Int32 // current connection count
+	connections atomic.Int32       // current connection count
+	ctx         context.Context    // Hub-level context, canceled on Stop
+	ctxCancel   context.CancelFunc // Cancel function for hub context
 	stopCh      chan struct{}
 	wg          sync.WaitGroup // Track background goroutines for clean shutdown
 }
@@ -193,6 +195,9 @@ type Client struct {
 	lastActivity time.Time
 	mu           sync.Mutex
 
+	// Stopped flag to prevent sends on closed channel
+	stopped atomic.Bool
+
 	// Context for cancellation
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -205,13 +210,16 @@ func NewRelayHub(config RelayConfig, logger *slog.Logger) *RelayHub {
 
 // NewRelayHubWithStore creates a new relay hub with a custom store.
 func NewRelayHubWithStore(config RelayConfig, store registry.Store, queueStore queue.Store, logger *slog.Logger) *RelayHub {
+	ctx, ctxCancel := context.WithCancel(context.Background())
 	hub := &RelayHub{
-		config:  config,
-		store:   store,
-		queue:   queueStore,
-		clients: make(map[string]*Client),
-		logger:  logger,
-		stopCh:  make(chan struct{}),
+		config:    config,
+		store:     store,
+		queue:     queueStore,
+		clients:   make(map[string]*Client),
+		logger:    logger,
+		ctx:       ctx,
+		ctxCancel: ctxCancel,
+		stopCh:    make(chan struct{}),
 	}
 
 	// Create default queue store if enabled and none provided
@@ -260,6 +268,7 @@ func (h *RelayHub) queueCleanupLoop() {
 
 // Stop gracefully stops the relay hub.
 func (h *RelayHub) Stop() {
+	h.ctxCancel() // Cancel hub context, propagates to all client contexts
 	close(h.stopCh)
 
 	// Close all client connections to unblock writePump goroutines
@@ -269,7 +278,8 @@ func (h *RelayHub) Stop() {
 	closed := make(map[*Client]bool)
 	for _, client := range h.clients {
 		if !closed[client] {
-			close(client.SendCh) // This will cause writePump to exit
+			client.stopped.Store(true) // Prevent new sends before closing
+			close(client.SendCh)       // This will cause writePump to exit
 			closed[client] = true
 		}
 	}
@@ -439,6 +449,9 @@ func (h *RelayHub) Broadcast(senderID string, data []byte) {
 	for _, client := range h.clients {
 		if client.ID != senderID && !seen[client] {
 			seen[client] = true
+			if client.stopped.Load() {
+				continue
+			}
 			select {
 			case client.SendCh <- data:
 			default:
@@ -475,8 +488,8 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	h.connections.Add(1)
 	recordConnectionAccepted()
 
-	// Create client context that's canceled when connection closes or hub stops
-	ctx, cancel := context.WithCancel(context.Background())
+	// Create client context derived from hub context, canceled when connection closes or hub stops
+	ctx, cancel := context.WithCancel(h.ctx)
 
 	client := &Client{
 		ID:              uuid.New().String(),

@@ -231,6 +231,3 @@ func (m *AgentMetrics) RecordTaskCompleted(state string) {
 func (m *AgentMetrics) RecordTaskDuration(state string, seconds float64) {
 	m.TaskDuration.WithLabelValues(state).Observe(seconds)
 }
-
-// DefaultAgentMetrics returns metrics with the default "agent" namespace.
-var DefaultAgentMetrics = NewAgentMetrics("agent")

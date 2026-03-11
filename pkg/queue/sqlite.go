@@ -203,7 +203,10 @@ func (s *SQLiteStore) Dequeue(recipientDID string, limit int) ([]*QueuedMessage,
 
 	// Delete retrieved messages
 	for _, id := range ids {
-		_, _ = s.db.Exec("DELETE FROM message_queue WHERE id = ?", id)
+		if _, err := s.db.Exec("DELETE FROM message_queue WHERE id = ?", id); err != nil {
+			s.logger.Error("failed to delete dequeued message", "id", id, "error", err)
+			return messages, fmt.Errorf("failed to delete dequeued message %s: %w", id, err)
+		}
 	}
 
 	return messages, rows.Err()

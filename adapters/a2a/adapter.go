@@ -423,9 +423,10 @@ type SendMessageResult struct {
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
-// AgentCaller is an interface for calling remote agents.
-// This abstracts the agent.Agent dependency for testing.
-type AgentCaller interface {
+// MessageSender is an interface for sending messages to remote agents.
+// This is a narrower interface than mcp.MessageSender, focused on direct
+// message exchange with *messaging.Message responses.
+type MessageSender interface {
 	// DID returns the agent's DID.
 	DID() string
 	// Send sends a message to another agent and waits for response.
@@ -435,14 +436,14 @@ type AgentCaller interface {
 // Handler wraps an A2A-compatible handler.
 type Handler struct {
 	adapter *Adapter
-	agent   AgentCaller
+	agent   MessageSender
 }
 
 // HandlerOption configures a Handler.
 type HandlerOption func(*Handler)
 
 // WithAgent sets the agent for remote message routing.
-func WithAgent(agent AgentCaller) HandlerOption {
+func WithAgent(agent MessageSender) HandlerOption {
 	return func(h *Handler) {
 		h.agent = agent
 	}

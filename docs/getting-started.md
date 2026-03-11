@@ -96,18 +96,23 @@ Connect to the relay and send a JSON-RPC message:
 wscat -c ws://localhost:8080
 ```
 
-Send a ping to verify connection:
+Discover registered agents to verify connection:
 
 ```json
-{ "jsonrpc": "2.0", "method": "ping", "id": "1" }
+{ "jsonrpc": "2.0", "method": "relay.discover", "id": "1" }
 ```
 
-Expected response:
+Expected response (array of registered agents):
 
 ```json
 {
   "jsonrpc": "2.0",
-  "result": { "pong": true, "timestamp": 1706180400 },
+  "result": [
+    {
+      "did": "did:wba:localhost:agent:alice",
+      "display_name": "alice"
+    }
+  ],
   "id": "1"
 }
 ```

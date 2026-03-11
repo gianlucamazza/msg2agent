@@ -362,6 +362,49 @@ Get agent information (agent card).
 }
 ```
 
+### agent/getExtendedAgentCard
+
+Get extended agent card information, including authentication requirements and full capabilities. This extends the standard agent card with additional metadata.
+
+**Request:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "agent/getExtendedAgentCard",
+  "params": {},
+  "id": "9"
+}
+```
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "name": "A2A Agent",
+    "version": "1.0.0",
+    "protocolVersions": ["1.0"],
+    "capabilities": {
+      "streaming": true,
+      "pushNotifications": false,
+      "stateTransitionHistory": true
+    },
+    "defaultInputModes": ["text"],
+    "defaultOutputModes": ["text"],
+    "authenticationRequired": true
+  },
+  "id": "9"
+}
+```
+
+The response includes all fields from the standard `AgentCard` plus:
+
+| Field                  | Type    | Description                        |
+| ---------------------- | ------- | ---------------------------------- |
+| authenticationRequired | boolean | Whether authentication is required |
+
 ## Relay Methods
 
 These methods are handled by the relay hub over the WebSocket connection.

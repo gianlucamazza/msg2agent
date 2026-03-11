@@ -24,7 +24,7 @@ A JSON document describing an agent's capabilities, skills, and endpoints. Serve
 
 ### Channel
 
-A group messaging construct within the relay. Channels allow multiple agents to communicate together. Types include `group` (multi-party), `broadcast` (one-to-many), and `topic` (pub/sub). See [Architecture](architecture.md#channels).
+A group messaging construct within the relay. Channels allow multiple agents to communicate together. Types include `group` (multi-party), `broadcast` (one-to-many), and `topic` (pub/sub). See [Architecture](architecture.md#presence-and-channels).
 
 ## D
 

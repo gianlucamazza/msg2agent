@@ -96,14 +96,14 @@ func TestRecordTask(t *testing.T) {
 	m.RecordTaskDuration("completed", 5.5)
 }
 
-func TestDefaultAgentMetrics(t *testing.T) {
-	// Default metrics should be available
-	if DefaultAgentMetrics == nil {
-		t.Error("DefaultAgentMetrics should not be nil")
+func TestNewAgentMetricsCreation(t *testing.T) {
+	m := NewAgentMetrics("test_creation")
+	if m == nil {
+		t.Error("NewAgentMetrics should not return nil")
 	}
 
 	// Should be usable without panic
-	DefaultAgentMetrics.RecordMessageSent("test", "test-did")
+	m.RecordMessageSent("test", "test-did")
 }
 
 func TestLabelConstants(t *testing.T) {

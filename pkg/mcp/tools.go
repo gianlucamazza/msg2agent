@@ -12,10 +12,10 @@ import (
 )
 
 func (s *Server) listAgentsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		// Should not happen if params are validated, but safe to handle empty
-		args = make(map[string]interface{})
+		args = make(map[string]any)
 	}
 	capability, _ := args["capability"].(string)
 
@@ -58,7 +58,7 @@ func (s *Server) listAgentsHandler(ctx context.Context, request mcp.CallToolRequ
 }
 
 func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -93,7 +93,7 @@ func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolReq
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid params: %v", err)), nil
 	}
 
-	var params interface{}
+	var params any
 	if err := json.Unmarshal([]byte(paramsStr), &params); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON params: %v", err)), nil
 	}
@@ -122,7 +122,7 @@ func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolReq
 }
 
 func (s *Server) getAgentInfoHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -169,7 +169,7 @@ func (s *Server) getAgentInfoHandler(ctx context.Context, request mcp.CallToolRe
 }
 
 func (s *Server) getTaskStatusHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -216,7 +216,7 @@ func (s *Server) getTaskStatusHandler(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) queryCapabilitiesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -296,7 +296,7 @@ func (s *Server) getSelfInfoHandler(ctx context.Context, request mcp.CallToolReq
 }
 
 func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -319,7 +319,7 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid message: %v", err)), nil
 	}
 
-	var message interface{}
+	var message any
 	if err := json.Unmarshal([]byte(messageStr), &message); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON message: %v", err)), nil
 	}
@@ -330,10 +330,10 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 	s.logger.Info("handling submit_task", "agent_did", agentDID, "session_id", sessionID)
 
 	// Build the task/send params
-	taskParams := map[string]interface{}{
-		"message": map[string]interface{}{
+	taskParams := map[string]any{
+		"message": map[string]any{
 			"role": "user",
-			"parts": []map[string]interface{}{
+			"parts": []map[string]any{
 				{"text": message},
 			},
 		},
@@ -354,7 +354,7 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 	}
 
 	// Store task locally for tracking
-	var taskResp map[string]interface{}
+	var taskResp map[string]any
 	if err := json.Unmarshal(resp.RawBody(), &taskResp); err == nil {
 		if taskID, ok := taskResp["id"].(string); ok {
 			s.trackTask(taskID, agentDID)
@@ -370,7 +370,7 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 }
 
 func (s *Server) cancelTaskHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -418,7 +418,7 @@ func (s *Server) cancelTaskHandler(ctx context.Context, request mcp.CallToolRequ
 }
 
 func (s *Server) sendTaskInputHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -450,7 +450,7 @@ func (s *Server) sendTaskInputHandler(ctx context.Context, request mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid message: %v", err)), nil
 	}
 
-	var message interface{}
+	var message any
 	if err := json.Unmarshal([]byte(messageStr), &message); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON message: %v", err)), nil
 	}
@@ -458,11 +458,11 @@ func (s *Server) sendTaskInputHandler(ctx context.Context, request mcp.CallToolR
 	s.logger.Info("handling send_task_input", "task_id", taskID, "agent_did", agentDID)
 
 	// Build input params per A2A spec
-	inputParams := map[string]interface{}{
+	inputParams := map[string]any{
 		"id": taskID,
-		"message": map[string]interface{}{
+		"message": map[string]any{
 			"role": "user",
-			"parts": []map[string]interface{}{
+			"parts": []map[string]any{
 				{"text": message},
 			},
 		},
@@ -501,7 +501,7 @@ func (s *Server) listTasksHandler(ctx context.Context, request mcp.CallToolReque
 }
 
 func (s *Server) listMessagesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, _ := request.Params.Arguments.(map[string]interface{})
+	args, _ := request.Params.Arguments.(map[string]any)
 	unreadOnly, _ := args["unread_only"].(bool)
 
 	s.logger.Info("handling list_messages", "unread_only", unreadOnly)
@@ -516,7 +516,7 @@ func (s *Server) listMessagesHandler(ctx context.Context, request mcp.CallToolRe
 }
 
 func (s *Server) readMessageHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -543,7 +543,7 @@ func (s *Server) readMessageHandler(ctx context.Context, request mcp.CallToolReq
 }
 
 func (s *Server) deleteMessageHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, ok := request.Params.Arguments.(map[string]interface{})
+	args, ok := request.Params.Arguments.(map[string]any)
 	if !ok {
 		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
 	}
@@ -564,7 +564,7 @@ func (s *Server) deleteMessageHandler(ctx context.Context, request mcp.CallToolR
 }
 
 func (s *Server) messageCountHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	args, _ := request.Params.Arguments.(map[string]interface{})
+	args, _ := request.Params.Arguments.(map[string]any)
 	unreadOnly, _ := args["unread_only"].(bool)
 
 	s.logger.Info("handling message_count", "unread_only", unreadOnly)

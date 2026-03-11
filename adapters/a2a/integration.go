@@ -187,11 +187,11 @@ func WithArtifacts(msg *Message, artifacts ...Artifact) (*Message, []Artifact, e
 	return msg, artifacts, nil
 }
 
-// AgentRouter wraps an AgentCaller to provide A2A TaskHandler functionality.
+// AgentRouter wraps an MessageSender to provide A2A TaskHandler functionality.
 // It can route messages to remote agents via the agent system while also
 // supporting local method handlers.
 type AgentRouter struct {
-	agent      AgentCaller
+	agent      MessageSender
 	bridge     *AgentBridge
 	adapter    *Adapter
 	a2aHandler *Handler
@@ -209,7 +209,7 @@ func WithRouterLocalHandlers(bridge *AgentBridge) AgentRouterOption {
 
 // NewAgentRouter creates a new AgentRouter that routes A2A messages
 // through the agent system.
-func NewAgentRouter(agent AgentCaller, opts ...AgentRouterOption) *AgentRouter {
+func NewAgentRouter(agent MessageSender, opts ...AgentRouterOption) *AgentRouter {
 	r := &AgentRouter{
 		agent:      agent,
 		adapter:    NewAdapter(),

@@ -271,14 +271,22 @@ func (s *MCPServer) getAgentInfoHandler(ctx context.Context, request mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid DID: %v", err)), nil
 	}
 
-	result, err := s.caller.CallRelay(ctx, "relay.lookup", map[string]string{"did": did})
+	result, err := s.caller.CallRelay(ctx, "relay.discover", map[string]string{})
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to lookup agent: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to discover agents: %v", err)), nil
+	}
+
+	var agents []*registry.Agent
+	if err := json.Unmarshal(result, &agents); err != nil {
+		return mcp.NewToolResultError("Failed to parse agent list"), nil
 	}
 
 	var agent *registry.Agent
-	if err := json.Unmarshal(result, &agent); err != nil {
-		return mcp.NewToolResultError("Failed to parse agent info"), nil
+	for _, a := range agents {
+		if a.DID == did {
+			agent = a
+			break
+		}
 	}
 	if agent == nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Agent not found: %s", did)), nil

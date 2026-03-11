@@ -248,14 +248,15 @@ func TestGetAgentInfoHandler(t *testing.T) {
 			{Name: "chat", Description: "Chat capability"},
 		},
 	}
-	agentJSON, _ := json.Marshal(testAgent)
+	agents := []*registry.Agent{testAgent}
+	agentsJSON, _ := json.Marshal(agents)
 
 	caller := newMockCaller()
 	caller.callRelay = func(ctx context.Context, method string, params any) (json.RawMessage, error) {
-		if method != "relay.lookup" {
-			t.Errorf("expected relay.lookup, got %s", method)
+		if method != "relay.discover" {
+			t.Errorf("expected relay.discover, got %s", method)
 		}
-		return agentJSON, nil
+		return agentsJSON, nil
 	}
 
 	srv := NewMCPServer(caller, ServerConfig{}, testLogger())

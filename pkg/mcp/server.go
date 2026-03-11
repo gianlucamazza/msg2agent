@@ -6,8 +6,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-
-	"github.com/gianluca/msg2agent/pkg/agent"
 )
 
 // TrackedTask represents a task being tracked locally.
@@ -19,7 +17,7 @@ type TrackedTask struct {
 
 // Server is the MCP server implementation
 type Server struct {
-	agent  *agent.Agent
+	caller AgentCaller
 	mcp    *server.MCPServer
 	logger *slog.Logger
 
@@ -32,9 +30,9 @@ type Server struct {
 }
 
 // NewServer creates a new MCP server
-func NewServer(a *agent.Agent, logger *slog.Logger) *Server {
+func NewServer(caller AgentCaller, logger *slog.Logger) *Server {
 	s := &Server{
-		agent:  a,
+		caller: caller,
 		mcp:    server.NewMCPServer("msg2agent-mcp", "0.1.0"),
 		logger: logger,
 		tasks:  make(map[string]*TrackedTask),
@@ -160,4 +158,25 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(mcp.NewTool("list_tasks",
 		mcp.WithDescription("List all locally tracked A2A tasks."),
 	), s.listTasksHandler)
+
+	// Inbox tools
+	s.mcp.AddTool(mcp.NewTool("list_messages",
+		mcp.WithDescription("List messages in the inbox. Optionally filter by unread only."),
+		mcp.WithBoolean("unread_only", mcp.Description("If true, only return unread messages")),
+	), s.listMessagesHandler)
+
+	s.mcp.AddTool(mcp.NewTool("read_message",
+		mcp.WithDescription("Read a specific message by ID. Marks the message as read."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("ID of the message to read")),
+	), s.readMessageHandler)
+
+	s.mcp.AddTool(mcp.NewTool("delete_message",
+		mcp.WithDescription("Delete a message from the inbox by ID."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("ID of the message to delete")),
+	), s.deleteMessageHandler)
+
+	s.mcp.AddTool(mcp.NewTool("message_count",
+		mcp.WithDescription("Get the count of messages in the inbox."),
+		mcp.WithBoolean("unread_only", mcp.Description("If true, only count unread messages")),
+	), s.messageCountHandler)
 }

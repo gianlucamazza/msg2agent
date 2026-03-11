@@ -26,19 +26,11 @@ const (
 	TransportStreamableHTTP TransportType = "streamable-http"
 )
 
-// AgentCaller abstracts the agent methods used by the MCP server.
-type AgentCaller interface {
-	DID() string
-	Send(ctx context.Context, to, method string, params any) (AgentMessage, error)
-	CallRelay(ctx context.Context, method string, params any) (json.RawMessage, error)
-	Record() *registry.Agent
-}
+// AgentCaller is an alias for pkgmcp.AgentCaller.
+type AgentCaller = pkgmcp.AgentCaller
 
-// AgentMessage is the response interface returned by Send.
-type AgentMessage interface {
-	IsError() bool
-	RawBody() json.RawMessage
-}
+// AgentMessage is an alias for pkgmcp.AgentMessage.
+type AgentMessage = pkgmcp.AgentMessage
 
 // ServerConfig holds configuration for the MCP server.
 type ServerConfig struct {

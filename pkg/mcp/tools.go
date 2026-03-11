@@ -35,7 +35,7 @@ func (s *Server) listAgentsHandler(ctx context.Context, request mcp.CallToolRequ
 	}
 
 	// Use CallRelay to send a raw JSON-RPC request to the relay
-	result, err := s.agent.CallRelay(ctx, "relay.discover", params)
+	result, err := s.caller.CallRelay(ctx, "relay.discover", params)
 	if err != nil {
 		s.logger.Error("relay.discover failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to discover agents: %v", err)), nil
@@ -101,7 +101,7 @@ func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolReq
 	s.logger.Info("handling send_message", "to", to, "method", method)
 
 	// Use agent.Send to send a standard message
-	resp, err := s.agent.Send(ctx, to, method, params)
+	resp, err := s.caller.Send(ctx, to, method, params)
 	if err != nil {
 		s.logger.Error("send failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Send failed: %v", err)), nil
@@ -109,11 +109,11 @@ func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolReq
 
 	// Check if response is an error
 	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.Body)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
 	// Return the response body
-	output, err := json.MarshalIndent(resp.Body, "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode response", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
@@ -140,7 +140,7 @@ func (s *Server) getAgentInfoHandler(ctx context.Context, request mcp.CallToolRe
 	s.logger.Info("handling get_agent_info", "did", did)
 
 	// Query relay for agent info
-	result, err := s.agent.CallRelay(ctx, "relay.lookup", map[string]string{"did": did})
+	result, err := s.caller.CallRelay(ctx, "relay.lookup", map[string]string{"did": did})
 	if err != nil {
 		s.logger.Error("relay.lookup failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to lookup agent: %v", err)), nil
@@ -197,17 +197,17 @@ func (s *Server) getTaskStatusHandler(ctx context.Context, request mcp.CallToolR
 	s.logger.Info("handling get_task_status", "task_id", taskID, "agent_did", agentDID)
 
 	// Call the target agent's tasks/get method
-	resp, err := s.agent.Send(ctx, agentDID, "tasks/get", map[string]string{"id": taskID})
+	resp, err := s.caller.Send(ctx, agentDID, "tasks/get", map[string]string{"id": taskID})
 	if err != nil {
 		s.logger.Error("tasks/get failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get task status: %v", err)), nil
 	}
 
 	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.Body)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
-	output, err := json.MarshalIndent(resp.Body, "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode task status", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
@@ -235,7 +235,7 @@ func (s *Server) queryCapabilitiesHandler(ctx context.Context, request mcp.CallT
 	s.logger.Info("handling query_capabilities", "capabilities", capabilities)
 
 	// Discover all agents first
-	result, err := s.agent.CallRelay(ctx, "relay.discover", map[string]string{})
+	result, err := s.caller.CallRelay(ctx, "relay.discover", map[string]string{})
 	if err != nil {
 		s.logger.Error("relay.discover failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to discover agents: %v", err)), nil
@@ -280,11 +280,11 @@ func (s *Server) getSelfInfoHandler(ctx context.Context, request mcp.CallToolReq
 	s.logger.Info("handling get_self_info")
 
 	info := map[string]any{
-		"did":          s.agent.DID(),
-		"display_name": s.agent.Record().DisplayName,
-		"endpoints":    s.agent.Record().Endpoints,
-		"capabilities": s.agent.Record().Capabilities,
-		"status":       s.agent.Record().Status,
+		"did":          s.caller.DID(),
+		"display_name": s.caller.Record().DisplayName,
+		"endpoints":    s.caller.Record().Endpoints,
+		"capabilities": s.caller.Record().Capabilities,
+		"status":       s.caller.Record().Status,
 	}
 
 	output, err := json.MarshalIndent(info, "", "  ")
@@ -343,25 +343,25 @@ func (s *Server) submitTaskHandler(ctx context.Context, request mcp.CallToolRequ
 	}
 
 	// Call the target agent's tasks/send method
-	resp, err := s.agent.Send(ctx, agentDID, "tasks/send", taskParams)
+	resp, err := s.caller.Send(ctx, agentDID, "tasks/send", taskParams)
 	if err != nil {
 		s.logger.Error("tasks/send failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to submit task: %v", err)), nil
 	}
 
 	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.Body)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
 	// Store task locally for tracking
 	var taskResp map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &taskResp); err == nil {
+	if err := json.Unmarshal(resp.RawBody(), &taskResp); err == nil {
 		if taskID, ok := taskResp["id"].(string); ok {
 			s.trackTask(taskID, agentDID)
 		}
 	}
 
-	output, err := json.MarshalIndent(resp.Body, "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode task response", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
@@ -396,20 +396,20 @@ func (s *Server) cancelTaskHandler(ctx context.Context, request mcp.CallToolRequ
 	s.logger.Info("handling cancel_task", "task_id", taskID, "agent_did", agentDID)
 
 	// Call the target agent's tasks/cancel method
-	resp, err := s.agent.Send(ctx, agentDID, "tasks/cancel", map[string]string{"id": taskID})
+	resp, err := s.caller.Send(ctx, agentDID, "tasks/cancel", map[string]string{"id": taskID})
 	if err != nil {
 		s.logger.Error("tasks/cancel failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to cancel task: %v", err)), nil
 	}
 
 	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.Body)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
 	// Remove from local tracking
 	s.untrackTask(taskID)
 
-	output, err := json.MarshalIndent(resp.Body, "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode cancel response", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
@@ -469,17 +469,17 @@ func (s *Server) sendTaskInputHandler(ctx context.Context, request mcp.CallToolR
 	}
 
 	// Call the target agent's tasks/sendSubscribe or tasks/send method
-	resp, err := s.agent.Send(ctx, agentDID, "tasks/send", inputParams)
+	resp, err := s.caller.Send(ctx, agentDID, "tasks/send", inputParams)
 	if err != nil {
 		s.logger.Error("tasks/send (input) failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to send task input: %v", err)), nil
 	}
 
 	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.Body)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
 	}
 
-	output, err := json.MarshalIndent(resp.Body, "", "  ")
+	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode input response", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
@@ -495,6 +495,90 @@ func (s *Server) listTasksHandler(ctx context.Context, request mcp.CallToolReque
 	output, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
 		s.logger.Error("failed to encode tasks list", "error", err)
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
+	}
+	return mcp.NewToolResultText(string(output)), nil
+}
+
+func (s *Server) listMessagesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, _ := request.Params.Arguments.(map[string]interface{})
+	unreadOnly, _ := args["unread_only"].(bool)
+
+	s.logger.Info("handling list_messages", "unread_only", unreadOnly)
+
+	messages := s.inbox.List(unreadOnly)
+
+	output, err := json.MarshalIndent(messages, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
+	}
+	return mcp.NewToolResultText(string(output)), nil
+}
+
+func (s *Server) readMessageHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
+	}
+
+	id, ok := args["id"].(string)
+	if !ok || id == "" {
+		return mcp.NewToolResultError("Missing 'id' parameter"), nil
+	}
+
+	s.logger.Info("handling read_message", "id", id)
+
+	msg := s.inbox.Get(id)
+	if msg == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Message not found: %s", id)), nil
+	}
+
+	s.inbox.MarkRead(id)
+
+	output, err := json.MarshalIndent(msg, "", "  ")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
+	}
+	return mcp.NewToolResultText(string(output)), nil
+}
+
+func (s *Server) deleteMessageHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, ok := request.Params.Arguments.(map[string]interface{})
+	if !ok {
+		return mcp.NewToolResultError(ErrInvalidArguments.Error()), nil
+	}
+
+	id, ok := args["id"].(string)
+	if !ok || id == "" {
+		return mcp.NewToolResultError("Missing 'id' parameter"), nil
+	}
+
+	s.logger.Info("handling delete_message", "id", id)
+
+	if !s.inbox.Delete(id) {
+		return mcp.NewToolResultError(fmt.Sprintf("Message not found: %s", id)), nil
+	}
+
+	output, _ := json.Marshal(map[string]string{"status": "deleted"})
+	return mcp.NewToolResultText(string(output)), nil
+}
+
+func (s *Server) messageCountHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	args, _ := request.Params.Arguments.(map[string]interface{})
+	unreadOnly, _ := args["unread_only"].(bool)
+
+	s.logger.Info("handling message_count", "unread_only", unreadOnly)
+
+	total := s.inbox.Count(false)
+	unread := s.inbox.Count(true)
+
+	result := map[string]int{"total": total, "unread": unread}
+	if unreadOnly {
+		result = map[string]int{"count": unread}
+	}
+
+	output, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
 	}
 	return mcp.NewToolResultText(string(output)), nil

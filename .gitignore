@@ -2,8 +2,12 @@
 /agent
 /relay
 /mcp-server
+bin/
 /build/
 /dist/
+
+# Local config
+.mcp.json
 
 # Test artifacts
 *.out

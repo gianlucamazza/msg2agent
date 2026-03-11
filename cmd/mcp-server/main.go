@@ -97,11 +97,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Register with relay: prove DID ownership via Ed25519 signature
-	go func() {
-		time.Sleep(500 * time.Millisecond) // allow WebSocket handshake to settle
-		timestamp := time.Now().Unix()
-		proofMessage := fmt.Sprintf("%s:%d", a.DID(), timestamp)
+	// Register with relay (proof of DID ownership)
+	{
+		ts := time.Now().Unix()
+		proofMessage := fmt.Sprintf("%s:%d", a.DID(), ts)
 		proof := a.Sign([]byte(proofMessage))
 
 		regReq := map[string]any{
@@ -113,16 +112,16 @@ func main() {
 			"capabilities": a.Record().Capabilities,
 			"status":       a.Record().Status,
 			"proof":        proof,
-			"timestamp":    timestamp,
+			"timestamp":    ts,
 		}
 
 		result, err := a.CallRelay(ctx, "relay.register", regReq)
 		if err != nil {
 			logger.Error("failed to register with relay", "error", err)
-			return
+			os.Exit(1)
 		}
-		logger.Info("registered with relay", "did", a.DID(), "result", string(result))
-	}()
+		logger.Info("registered with relay", "result", string(result))
+	}
 
 	// Create MCP server via adapter
 	mcpServer := mcpadapter.NewMCPServer(

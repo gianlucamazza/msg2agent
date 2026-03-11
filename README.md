@@ -14,7 +14,7 @@ The foundation for clear, secure, and verifiable communication between autonomou
 ## Architecture
 
 ```mermaid
-flowchart TB
+flowchart LR
     subgraph Relay Hub
         R[Relay<br/>cmd/relay]
         REG[(Registry)]
@@ -32,12 +32,8 @@ flowchart TB
 
     CC[Claude Code] -->|stdio| MCP1
     OC[OpenClaw] -->|streamable-http| MCP2
-
-    MCP1 <-->|WebSocket| R
-    MCP2 <-->|WebSocket| R
-    A <-->|WebSocket| R
-    B <-->|WebSocket| R
-    A <-.->|P2P WebSocket| B
+    MCP1 & MCP2 & A & B <-->|WebSocket| R
+    A <-.->|P2P| B
 ```
 
 See [Architecture docs](docs/architecture.md) for details.

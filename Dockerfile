@@ -120,6 +120,11 @@ COPY --from=builder /out/mcp-server /usr/local/bin/mcp-server
 # Switch to non-root user
 USER msg2agent
 
+# Create identity directory
+RUN mkdir -p /home/msg2agent/.msg2agent
+
+VOLUME ["/home/msg2agent/.msg2agent"]
+
 # MCP server uses stdio, no ports exposed
 # No health check for stdio mode
 

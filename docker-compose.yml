@@ -106,11 +106,16 @@ services:
     command: ["-name", "mcp-agent", "-domain", "mcp.local", "-relay", "ws://relay:8080"]
     stdin_open: true
     tty: true
+    volumes:
+      - mcp-identity:/home/msg2agent/.msg2agent
     depends_on:
       relay:
         condition: service_healthy
     networks:
       - msg2agent
+
+volumes:
+  mcp-identity:
 
 networks:
   msg2agent:

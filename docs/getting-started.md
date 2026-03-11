@@ -4,7 +4,7 @@ This guide walks you through building msg2agent, running a local setup, and send
 
 ## Prerequisites
 
-- Go 1.23 or later
+- Go 1.24 or later
 - Git
 
 Optional:
@@ -111,6 +111,39 @@ Expected response:
   "id": "1"
 }
 ```
+
+### Using the MCP Server
+
+The MCP server lets AI assistants interact with the agent network. Build it alongside the other binaries:
+
+```bash
+go build -o mcp-server ./cmd/mcp-server
+```
+
+**Stdio mode** (for Claude Code — add to `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "msg2agent": {
+      "command": "./mcp-server",
+      "args": ["-name", "my-agent", "-relay", "ws://localhost:8080"]
+    }
+  }
+}
+```
+
+**HTTP mode** (for OpenClaw plugin or other HTTP clients):
+
+```bash
+./mcp-server \
+  -name openclaw \
+  -relay ws://localhost:8080 \
+  -transport streamable-http \
+  -addr :3001
+```
+
+The MCP endpoint will be available at `http://localhost:3001/mcp`. See [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) for all options, or the [OpenClaw Plugin guide](openclaw-plugin/README.md) for Claude Desktop integration.
 
 ## Understanding the Components
 

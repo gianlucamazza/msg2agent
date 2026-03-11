@@ -4,7 +4,7 @@ This guide covers setting up msg2agent for local development.
 
 ## Prerequisites
 
-- Go 1.25+
+- Go 1.24+
 - Docker and Docker Compose
 - Make
 - OpenSSL (for TLS certificate generation)

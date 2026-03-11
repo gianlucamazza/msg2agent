@@ -6,30 +6,45 @@ This guide covers setting up Prometheus and Grafana for monitoring msg2agent com
 
 ### Relay Metrics
 
-The relay exposes Prometheus metrics at `/metrics` on its main port.
+The relay exposes Prometheus metrics at `/metrics` on its main port. All relay metrics use the `relay_` prefix.
 
-| Metric                                   | Type    | Description                  |
-| ---------------------------------------- | ------- | ---------------------------- |
-| `msg2agent_relay_connections_total`      | Counter | Total WebSocket connections  |
-| `msg2agent_relay_connections_active`     | Gauge   | Currently active connections |
-| `msg2agent_relay_messages_total`         | Counter | Total messages processed     |
-| `msg2agent_relay_messages_dropped_total` | Counter | Messages dropped (no route)  |
-| `msg2agent_relay_message_bytes_total`    | Counter | Total bytes transferred      |
-| `msg2agent_relay_rate_limited_total`     | Counter | Rate-limited requests        |
+| Metric                                      | Type    | Labels   | Description                                                                |
+| ------------------------------------------- | ------- | -------- | -------------------------------------------------------------------------- |
+| `relay_connections_total`                   | Counter |          | Total WebSocket connections accepted                                       |
+| `relay_connections_current`                 | Gauge   |          | Current number of active connections                                       |
+| `relay_connections_rejected_total`          | Counter |          | Connections rejected due to limit                                          |
+| `relay_messages_routed_total`               | Counter |          | Messages successfully routed                                               |
+| `relay_messages_dropped_total`              | Counter | `reason` | Messages dropped (e.g. `recipient_not_found`, `buffer_full`, `queue_full`) |
+| `relay_messages_queued_total`               | Counter |          | Messages queued for offline delivery                                       |
+| `relay_messages_delivered_from_queue_total` | Counter |          | Queued messages delivered when recipient came online                       |
+| `relay_rate_limit_hits_total`               | Counter | `type`   | Rate limit hits (e.g. `message`, `register`, `discover`)                   |
+| `relay_registrations_total`                 | Counter |          | Agent registrations                                                        |
+| `relay_discoveries_total`                   | Counter |          | Discovery requests                                                         |
+| `relay_errors_total`                        | Counter | `type`   | Errors (e.g. `websocket_accept`, `discovery`)                              |
 
 ### Agent Metrics
 
-Agents expose metrics on a separate port (default: 9090).
+Agents expose metrics on a separate port (configured via `-metrics`). Agent metrics use a configurable namespace (default: `agent`), so metric names follow the pattern `{namespace}_metric_name`.
 
-| Metric                                        | Type      | Description                 |
-| --------------------------------------------- | --------- | --------------------------- |
-| `msg2agent_agent_messages_sent_total`         | Counter   | Messages sent (by type)     |
-| `msg2agent_agent_messages_received_total`     | Counter   | Messages received (by type) |
-| `msg2agent_agent_handler_calls_total`         | Counter   | Handler invocations         |
-| `msg2agent_agent_handler_duration_seconds`    | Histogram | Handler execution time      |
-| `msg2agent_agent_active_connections`          | Gauge     | Active peer connections     |
-| `msg2agent_agent_pending_messages`            | Gauge     | Messages awaiting delivery  |
-| `msg2agent_agent_encryption_operations_total` | Counter   | Encryption ops (by type)    |
+| Metric                          | Type      | Labels               | Description                                 |
+| ------------------------------- | --------- | -------------------- | ------------------------------------------- |
+| `{ns}_messages_sent_total`      | Counter   | `method`, `peer_did` | Messages sent                               |
+| `{ns}_messages_received_total`  | Counter   | `method`, `peer_did` | Messages received                           |
+| `{ns}_message_errors_total`     | Counter   | `reason`             | Message errors                              |
+| `{ns}_peers_connected`          | Gauge     |                      | Current number of connected peers           |
+| `{ns}_peers_total`              | Counter   |                      | Total peer connections (lifetime)           |
+| `{ns}_handler_calls_total`      | Counter   | `method`             | Handler invocations                         |
+| `{ns}_handler_duration_seconds` | Histogram | `method`             | Handler execution time                      |
+| `{ns}_handler_errors_total`     | Counter   | `method`             | Handler errors                              |
+| `{ns}_encryption_ops_total`     | Counter   | `status`             | Encryption operations (`success`/`failure`) |
+| `{ns}_decryption_ops_total`     | Counter   | `status`             | Decryption operations (`success`/`failure`) |
+| `{ns}_signature_ops_total`      | Counter   | `status`             | Signature operations (`success`/`failure`)  |
+| `{ns}_duplicates_dropped_total` | Counter   |                      | Duplicate messages dropped                  |
+| `{ns}_tasks_created_total`      | Counter   | `task_state`         | A2A tasks created                           |
+| `{ns}_tasks_completed_total`    | Counter   | `task_state`         | A2A tasks completed                         |
+| `{ns}_task_duration_seconds`    | Histogram | `task_state`         | A2A task duration                           |
+
+> **Note:** The default namespace is `agent`, so metrics appear as `agent_messages_sent_total`, etc. Custom namespaces can be set via `telemetry.NewAgentMetrics(namespace)`.
 
 ## Prometheus Configuration
 
@@ -96,7 +111,7 @@ Create a dashboard with these panels:
   "type": "stat",
   "targets": [
     {
-      "expr": "msg2agent_relay_connections_active",
+      "expr": "relay_connections_current",
       "legendFormat": "Active"
     }
   ]
@@ -111,7 +126,7 @@ Create a dashboard with these panels:
   "type": "graph",
   "targets": [
     {
-      "expr": "rate(msg2agent_relay_messages_total[5m])",
+      "expr": "rate(relay_messages_routed_total[5m])",
       "legendFormat": "Messages/s"
     }
   ]
@@ -126,7 +141,7 @@ Create a dashboard with these panels:
   "type": "graph",
   "targets": [
     {
-      "expr": "rate(msg2agent_relay_messages_dropped_total[5m])",
+      "expr": "rate(relay_messages_dropped_total[5m])",
       "legendFormat": "Dropped/s"
     }
   ]
@@ -143,7 +158,7 @@ Create a dashboard with these panels:
   "type": "graph",
   "targets": [
     {
-      "expr": "histogram_quantile(0.99, rate(msg2agent_agent_handler_duration_seconds_bucket[5m]))",
+      "expr": "histogram_quantile(0.99, rate(agent_handler_duration_seconds_bucket[5m]))",
       "legendFormat": "{{method}} p99"
     }
   ]
@@ -158,12 +173,12 @@ Create a dashboard with these panels:
   "type": "graph",
   "targets": [
     {
-      "expr": "rate(msg2agent_agent_messages_sent_total[5m])",
-      "legendFormat": "Sent {{type}}"
+      "expr": "rate(agent_messages_sent_total[5m])",
+      "legendFormat": "Sent {{method}}"
     },
     {
-      "expr": "rate(msg2agent_agent_messages_received_total[5m])",
-      "legendFormat": "Received {{type}}"
+      "expr": "rate(agent_messages_received_total[5m])",
+      "legendFormat": "Received {{method}}"
     }
   ]
 }
@@ -188,7 +203,7 @@ groups:
           description: "Relay {{ $labels.instance }} has been down for more than 1 minute."
 
       - alert: HighDropRate
-        expr: rate(msg2agent_relay_messages_dropped_total[5m]) > 10
+        expr: rate(relay_messages_dropped_total[5m]) > 10
         for: 5m
         labels:
           severity: warning
@@ -197,7 +212,7 @@ groups:
           description: "Relay dropping {{ $value }} messages/s"
 
       - alert: HighLatency
-        expr: histogram_quantile(0.99, rate(msg2agent_agent_handler_duration_seconds_bucket[5m])) > 1
+        expr: histogram_quantile(0.99, rate(agent_handler_duration_seconds_bucket[5m])) > 1
         for: 5m
         labels:
           severity: warning
@@ -206,7 +221,7 @@ groups:
           description: "Handler {{ $labels.method }} p99 latency is {{ $value }}s"
 
       - alert: ConnectionSpike
-        expr: rate(msg2agent_relay_connections_total[1m]) > 100
+        expr: rate(relay_connections_total[1m]) > 100
         for: 2m
         labels:
           severity: warning
@@ -215,7 +230,7 @@ groups:
           description: "{{ $value }} new connections/second"
 
       - alert: RateLimitTriggered
-        expr: rate(msg2agent_relay_rate_limited_total[5m]) > 0
+        expr: rate(relay_rate_limit_hits_total[5m]) > 0
         for: 1m
         labels:
           severity: info
@@ -332,36 +347,36 @@ curl http://localhost:9090/health
 
 ```promql
 # Connection rate over time
-rate(msg2agent_relay_connections_total[5m])
+rate(relay_connections_total[5m])
 
 # Peak connections in last hour
-max_over_time(msg2agent_relay_connections_active[1h])
+max_over_time(relay_connections_current[1h])
 
-# Connection churn
-rate(msg2agent_relay_connections_total[5m]) - rate(msg2agent_relay_connections_active[5m])
+# Connection churn (new connections minus current)
+rate(relay_connections_total[5m])
 ```
 
 ### Message Analysis
 
 ```promql
 # Total throughput
-sum(rate(msg2agent_relay_messages_total[5m]))
-
-# Bytes per second
-sum(rate(msg2agent_relay_message_bytes_total[5m]))
+sum(rate(relay_messages_routed_total[5m]))
 
 # Drop percentage
-100 * rate(msg2agent_relay_messages_dropped_total[5m]) / rate(msg2agent_relay_messages_total[5m])
+100 * rate(relay_messages_dropped_total[5m]) / rate(relay_messages_routed_total[5m])
+
+# Queue backlog rate
+rate(relay_messages_queued_total[5m]) - rate(relay_messages_delivered_from_queue_total[5m])
 ```
 
 ### Performance Analysis
 
 ```promql
 # Handler latency percentiles
-histogram_quantile(0.50, rate(msg2agent_agent_handler_duration_seconds_bucket[5m]))
-histogram_quantile(0.95, rate(msg2agent_agent_handler_duration_seconds_bucket[5m]))
-histogram_quantile(0.99, rate(msg2agent_agent_handler_duration_seconds_bucket[5m]))
+histogram_quantile(0.50, rate(agent_handler_duration_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(agent_handler_duration_seconds_bucket[5m]))
+histogram_quantile(0.99, rate(agent_handler_duration_seconds_bucket[5m]))
 
 # Slowest handlers
-topk(5, histogram_quantile(0.99, rate(msg2agent_agent_handler_duration_seconds_bucket[5m])))
+topk(5, histogram_quantile(0.99, rate(agent_handler_duration_seconds_bucket[5m])))
 ```

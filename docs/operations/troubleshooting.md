@@ -257,8 +257,13 @@ sqlite3 relay.db < backup.sql
 **Debugging:**
 
 ```bash
-# Profile the relay
-go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
+# Check relay metrics for high connection/message counts
+curl -s http://localhost:8080/metrics | grep relay_connections_current
+curl -s http://localhost:8080/metrics | grep relay_messages_routed_total
+
+# Note: /debug/pprof is not exposed by default.
+# To profile, build with pprof enabled or use external tools:
+# go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
 
 # Common causes:
 # - Too many connections
@@ -284,11 +289,13 @@ go tool pprof http://localhost:8080/debug/pprof/profile?seconds=30
 **Debugging:**
 
 ```bash
-# Memory profile
-go tool pprof http://localhost:8080/debug/pprof/heap
+# Check metrics for connection and queue pressure
+curl -s http://localhost:8080/metrics | grep relay_connections_current
+curl -s http://localhost:8080/metrics | grep relay_messages_queued_total
 
-# Check metrics
-curl -s http://localhost:8080/metrics | grep connections_active
+# Note: /debug/pprof is not exposed by default.
+# To profile memory, build with pprof enabled or use external tools:
+# go tool pprof http://localhost:6060/debug/pprof/heap
 ```
 
 **Solutions:**

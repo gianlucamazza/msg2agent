@@ -239,9 +239,44 @@ Google's A2A protocol for agent interoperability:
 
 Integration with AI assistants:
 
-- Exposes agent functionality as MCP tools
-- Stdio transport for CLI integration
-- Tools: `list_agents`, `send_message`, `get_agent_info`, etc.
+- Exposes agent functionality as MCP tools and resources
+- Transports: **stdio** (Claude Code CLI), **streamable-http** (OpenClaw plugin, web clients), **SSE** (streaming)
+- Tools: `list_agents`, `send_message`, `get_agent_info`, `get_self_info`, etc.
+- Resources: `msg2agent://inbox`, `msg2agent://tasks` for inbox and task state
+- Inbox: incoming messages are buffered and accessible via tools and resources
+
+The [OpenClaw plugin](openclaw-plugin/README.md) is the reference MCP client for Claude Desktop:
+
+```
+Claude → OpenClaw Plugin → MCP HTTP → MCP Server → Agent → Relay → Network
+```
+
+## Supporting Components
+
+### Offline Message Queue (`pkg/queue`)
+
+Store-and-forward for agents that are temporarily offline:
+
+- Messages are queued with a configurable TTL
+- Delivered automatically when the agent reconnects
+- Backends: in-memory (development), SQLite (production)
+- Expired messages are cleaned up periodically
+
+### Conversation Threading (`pkg/conversation`)
+
+Threaded conversation storage:
+
+- `Thread` and `Message` types for organizing conversations
+- Messages are grouped by `thread_id` with sequence ordering
+- Nested replies via `parent_id`
+- Backends: in-memory, SQLite
+
+### Presence and Channels
+
+The relay hub includes:
+
+- **Presence Manager**: tracks agent online status (`online`, `offline`, `busy`, `away`, `dnd`), supports pub/sub presence notifications and typing indicators
+- **Channel Manager**: group messaging channels with `group`, `broadcast`, and `topic` types, member management, and sender key distribution for E2E encryption
 
 ## Deployment Patterns
 

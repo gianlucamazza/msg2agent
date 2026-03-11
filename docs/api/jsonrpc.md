@@ -313,153 +313,452 @@ Get agent information (agent card).
 }
 ```
 
-## MCP Methods
+## Relay Methods
 
-The MCP adapter exposes these tools:
+These methods are handled by the relay hub over the WebSocket connection.
+
+### relay.register
+
+Register an agent with the relay. Requires DID ownership proof by default.
+
+**Request:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "relay.register",
+  "params": {
+    "id": "agent-uuid",
+    "did": "did:wba:example.com:agent:alice",
+    "display_name": "alice",
+    "public_keys": [...],
+    "endpoints": [...],
+    "capabilities": [...],
+    "proof": "<base64-signature>",
+    "timestamp": 1706180400
+  },
+  "id": "1"
+}
+```
+
+The `proof` field is a signature of `"<DID>:<timestamp>"` using the agent's Ed25519 signing key. The timestamp must be within 5 minutes of the relay's clock. Proof can be disabled with the `-skip-did-proof` flag (not recommended for production).
+
+**Response:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": { "status": "registered" },
+  "id": "1"
+}
+```
+
+### relay.discover
+
+Discover registered agents, optionally filtered by capability.
+
+**Request:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "relay.discover",
+  "params": { "capability": "chat" },
+  "id": "2"
+}
+```
+
+**Response:** Returns an array of registered agent records.
+
+### Presence Methods
+
+#### relay.presence.update
+
+Update the calling agent's presence status.
+
+**Params:**
+
+| Name        | Type   | Required | Description                                        |
+| ----------- | ------ | -------- | -------------------------------------------------- |
+| status      | string | yes      | One of: `online`, `offline`, `busy`, `away`, `dnd` |
+| status_text | string | no       | Human-readable status text (max 256 chars)         |
+
+#### relay.presence.subscribe
+
+Subscribe to presence changes for one or more agents.
+
+**Params:**
+
+| Name | Type     | Required | Description                  |
+| ---- | -------- | -------- | ---------------------------- |
+| dids | string[] | yes      | List of DIDs to subscribe to |
+
+Subscribers receive `relay.presence.update` notifications when a target's status changes.
+
+#### relay.presence.unsubscribe
+
+Unsubscribe from presence changes.
+
+**Params:**
+
+| Name | Type     | Required | Description                      |
+| ---- | -------- | -------- | -------------------------------- |
+| dids | string[] | yes      | List of DIDs to unsubscribe from |
+
+#### relay.presence.query
+
+Query current presence for one or more agents.
+
+**Params:**
+
+| Name | Type     | Required | Description           |
+| ---- | -------- | -------- | --------------------- |
+| dids | string[] | yes      | List of DIDs to query |
+
+**Response:** A map of DID to presence info (`status`, `status_text`).
+
+### Channel Methods
+
+Channels allow group messaging between agents. Channel URIs use the format `channel:domain:name`.
+
+#### relay.channel.create
+
+Create a new channel. The caller becomes the channel owner.
+
+**Params:**
+
+| Name        | Type   | Required | Description                                    |
+| ----------- | ------ | -------- | ---------------------------------------------- |
+| name        | string | yes      | Channel name (used as `channel:domain:name`)   |
+| type        | string | yes      | Channel type: `group`, `broadcast`, or `topic` |
+| description | string | no       | Human-readable description                     |
+
+**Response:** `{ "id": "channel-uuid", "name": "channel-name" }`
+
+#### relay.channel.join
+
+Join an existing channel.
+
+**Params:**
+
+| Name       | Type   | Required | Description                            |
+| ---------- | ------ | -------- | -------------------------------------- |
+| channel_id | string | no       | Channel UUID (one of id/name required) |
+| name       | string | no       | Channel name                           |
+
+#### relay.channel.leave
+
+Leave a channel. The channel owner cannot leave (must delete instead).
+
+**Params:** Same as `relay.channel.join`.
+
+#### relay.channel.list
+
+List channels the calling agent is a member of.
+
+**Response:** Array of channel info objects (`id`, `name`, `type`, `owner`, `description`, `member_count`).
+
+#### relay.channel.members
+
+List members of a channel. Only members can see the member list.
+
+**Params:** Same as `relay.channel.join`.
+
+**Response:** Array of member objects (`did`, `role`, `joined_at`).
+
+#### relay.channel.delete
+
+Delete a channel. Only the channel owner can delete.
+
+**Params:** Same as `relay.channel.join`.
+
+All members receive a `relay.channel.deleted` notification.
+
+#### relay.channel.sender_key
+
+Distribute a sender key for E2E encryption in a group channel. Each member distributes their sender key so other members can decrypt their messages.
+
+**Params:**
+
+| Name          | Type   | Required | Description                            |
+| ------------- | ------ | -------- | -------------------------------------- |
+| channel_id    | string | no       | Channel UUID (one of id/name required) |
+| name          | string | no       | Channel name                           |
+| chain_key     | bytes  | yes      | Chain key for message encryption       |
+| signature_key | bytes  | yes      | Signature key for verification         |
+
+Other members receive a `relay.channel.sender_key` notification with the sender's DID and keys.
+
+## Message Types
+
+The message envelope (`pkg/messaging/message.go`) supports these message types:
+
+| Type           | Description                    |
+| -------------- | ------------------------------ |
+| `request`      | RPC request (expects response) |
+| `response`     | RPC response                   |
+| `notification` | One-way notification           |
+| `stream`       | Streaming data                 |
+| `error`        | Error response                 |
+| `chat`         | Conversational message         |
+| `typing`       | Typing indicator               |
+| `receipt`      | Delivery/read receipt          |
+| `presence`     | Online status update           |
+| `reaction`     | Emoji reaction to a message    |
+
+### Message Envelope Fields
+
+```json
+{
+  "id": "uuid-v7",
+  "correlation_id": "uuid (for responses)",
+  "from": "did:wba:...",
+  "to": "did:wba:...",
+  "type": "request",
+  "method": "echo",
+  "body": {},
+  "signature": "<base64>",
+  "timestamp": "2025-01-25T10:00:00Z",
+  "encrypted": false,
+  "thread_id": "uuid (conversation thread)",
+  "parent_id": "uuid (for nested replies)",
+  "thread_seq_no": 1,
+  "request_ack": false
+}
+```
+
+### Threading
+
+Messages can be grouped into conversation threads:
+
+- `thread_id` groups messages in a conversation. The first message in a thread sets `thread_id` to its own `id`.
+- `parent_id` enables nested replies within a thread.
+- `thread_seq_no` provides ordering within a thread.
+
+### Delivery Acknowledgments
+
+Set `request_ack: true` to receive a `relay.ack` notification with delivery status:
+
+```json
+{
+  "message_id": "uuid",
+  "delivered": true,
+  "status": "delivered",
+  "timestamp": "2025-01-25T10:00:00Z"
+}
+```
+
+Possible statuses: `delivered`, `queued` (offline), `recipient not found`, `buffer full`, `queue failed`.
+
+## Agent REST Endpoints
+
+When the agent is started with `-http`, these additional HTTP endpoints are available:
+
+### POST /send-chat
+
+Send a chat message to another agent.
+
+**Request body:** `{ "to": "did:wba:...", "text": "Hello" }`
+
+**Response:** `{ "status": "sent", "id": "msg-uuid", "thread_id": "thread-uuid" }`
+
+### POST /send-async
+
+Fire-and-forget message with delivery acknowledgment.
+
+**Request body:** `{ "to": "did:wba:...", "method": "echo", "params": {...} }`
+
+**Response:** `{ "status": "sent", "id": "msg-uuid" }`
+
+### POST /call
+
+Synchronous RPC call to another agent.
+
+**Request body:** `{ "to": "did:wba:...", "method": "echo", "params": {...} }`
+
+**Response:** `{ "id": "msg-uuid", "result": "..." }`
+
+### POST /typing
+
+Send a typing indicator.
+
+**Request body:** `{ "to": "did:wba:...", "typing": true }`
+
+### GET /discover
+
+List all agents registered on the relay.
+
+### GET /chat-history
+
+Get the agent's chat message history.
+
+## MCP Tools
+
+The MCP server exposes these tools for AI assistant integration:
+
+### list_agents
+
+List available agents on the network.
+
+**Parameters:**
+
+| Name       | Type   | Required | Description                      |
+| ---------- | ------ | -------- | -------------------------------- |
+| capability | string | no       | Optional capability to filter by |
 
 ### send_message
 
 Send a message to another agent.
 
-**Tool Input:**
+**Parameters:**
 
-```json
-{
-  "to_did": "did:wba:example.com:agent:bob",
-  "method": "echo",
-  "params": { "message": "Hello" }
-}
-```
+| Name   | Type   | Required | Description                |
+| ------ | ------ | -------- | -------------------------- |
+| to     | string | yes      | DID of the recipient agent |
+| method | string | yes      | Method to call             |
+| params | string | yes      | JSON string of parameters  |
 
-**Tool Output:**
+### get_agent_info
 
-```json
-{
-  "result": { "echo": "Hello" },
-  "from": "did:wba:example.com:agent:bob"
-}
-```
+Get detailed information about a specific agent including capabilities and endpoints.
 
-### discover_agent
+**Parameters:**
 
-Discover an agent by DID.
+| Name | Type   | Required | Description               |
+| ---- | ------ | -------- | ------------------------- |
+| did  | string | yes      | DID of the agent to query |
 
-**Tool Input:**
+### get_self_info
 
-```json
-{
-  "did": "did:wba:example.com:agent:bob"
-}
-```
+Get information about this agent (self). No parameters.
 
-**Tool Output:**
+### query_capabilities
 
-```json
-{
-  "name": "bob",
-  "did": "did:wba:example.com:agent:bob",
-  "capabilities": ["echo", "ping"]
-}
-```
+Find agents that support specific capabilities.
 
-### list_agents
+**Parameters:**
 
-List all known agents.
+| Name         | Type   | Required | Description                                   |
+| ------------ | ------ | -------- | --------------------------------------------- |
+| capabilities | string | yes      | Comma-separated list of required capabilities |
 
-**Tool Input:**
+### submit_task
 
-```json
-{}
-```
+Submit a new A2A task to an agent. Returns the task with ID and initial status.
 
-**Tool Output:**
+**Parameters:**
 
-```json
-{
-  "agents": [
-    { "did": "did:wba:example.com:agent:alice", "name": "alice" },
-    { "did": "did:wba:example.com:agent:bob", "name": "bob" }
-  ]
-}
-```
+| Name       | Type   | Required | Description                                              |
+| ---------- | ------ | -------- | -------------------------------------------------------- |
+| agent_did  | string | yes      | DID of the target agent                                  |
+| message    | string | yes      | JSON message to send to the agent                        |
+| session_id | string | no       | Optional session ID to continue an existing conversation |
 
-### register_handler
+### get_task_status
 
-Register a method handler.
+Get the status of an A2A task by its ID.
 
-**Tool Input:**
+**Parameters:**
 
-```json
-{
-  "method": "custom_method"
-}
-```
+| Name      | Type   | Required | Description                         |
+| --------- | ------ | -------- | ----------------------------------- |
+| task_id   | string | yes      | ID of the task                      |
+| agent_did | string | yes      | DID of the agent that owns the task |
 
-**Tool Output:**
+### cancel_task
 
-```json
-{
-  "registered": true,
-  "method": "custom_method"
-}
-```
+Cancel an A2A task in progress.
 
-### get_identity
+**Parameters:**
 
-Get agent's identity information.
+| Name      | Type   | Required | Description                         |
+| --------- | ------ | -------- | ----------------------------------- |
+| task_id   | string | yes      | ID of the task to cancel            |
+| agent_did | string | yes      | DID of the agent that owns the task |
 
-**Tool Input:**
+### send_task_input
 
-```json
-{}
-```
+Send input to an A2A task that is waiting for user input.
 
-**Tool Output:**
+**Parameters:**
 
-```json
-{
-  "did": "did:wba:example.com:agent:alice",
-  "name": "alice",
-  "domain": "example.com"
-}
-```
+| Name      | Type   | Required | Description                         |
+| --------- | ------ | -------- | ----------------------------------- |
+| task_id   | string | yes      | ID of the task                      |
+| agent_did | string | yes      | DID of the agent that owns the task |
+| message   | string | yes      | JSON message with the user input    |
 
-### start_task
+### list_tasks
 
-Start an A2A task.
+List all locally tracked A2A tasks. No parameters.
 
-**Tool Input:**
+### list_messages
 
-```json
-{
-  "to_did": "did:wba:example.com:agent:bob",
-  "message": "Process this request"
-}
-```
+List messages in the inbox.
 
-**Tool Output:**
+**Parameters:**
 
-```json
-{
-  "task_id": "task-uuid",
-  "state": "submitted"
-}
-```
+| Name        | Type    | Required | Description                          |
+| ----------- | ------- | -------- | ------------------------------------ |
+| unread_only | boolean | no       | If true, only return unread messages |
+
+### read_message
+
+Read a specific message by ID. Marks the message as read.
+
+**Parameters:**
+
+| Name | Type   | Required | Description               |
+| ---- | ------ | -------- | ------------------------- |
+| id   | string | yes      | ID of the message to read |
+
+### delete_message
+
+Delete a message from the inbox by ID.
+
+**Parameters:**
+
+| Name | Type   | Required | Description                 |
+| ---- | ------ | -------- | --------------------------- |
+| id   | string | yes      | ID of the message to delete |
+
+### message_count
+
+Get the count of messages in the inbox.
+
+**Parameters:**
+
+| Name        | Type    | Required | Description                         |
+| ----------- | ------- | -------- | ----------------------------------- |
+| unread_only | boolean | no       | If true, only count unread messages |
+
+## MCP Resources
+
+The MCP server exposes these resources:
+
+| URI                      | Description                                        |
+| ------------------------ | -------------------------------------------------- |
+| `msg2agent://inbox`      | List of incoming messages from other agents        |
+| `msg2agent://tasks`      | List of A2A tasks being tracked                    |
+| `msg2agent://inbox/{id}` | Get a specific inbox message by ID (marks as read) |
+| `msg2agent://tasks/{id}` | Get details of a specific tracked task             |
 
 ## Error Codes
 
-| Code   | Message           | Description               |
-| ------ | ----------------- | ------------------------- |
-| -32700 | Parse error       | Invalid JSON              |
-| -32600 | Invalid Request   | Invalid JSON-RPC request  |
-| -32601 | Method not found  | Method doesn't exist      |
-| -32602 | Invalid params    | Invalid method parameters |
-| -32603 | Internal error    | Internal JSON-RPC error   |
-| -32000 | Agent not found   | Target agent not found    |
-| -32001 | Encryption failed | Message encryption failed |
-| -32002 | Task not found    | Task ID not found         |
-| -32003 | Task canceled     | Task was canceled         |
-| -32004 | Rate limited      | Too many requests         |
+| Code   | Message               | Description                                   |
+| ------ | --------------------- | --------------------------------------------- |
+| -32700 | Parse error           | Invalid JSON                                  |
+| -32600 | Invalid Request       | Invalid JSON-RPC request                      |
+| -32601 | Method not found      | Method doesn't exist                          |
+| -32602 | Invalid params        | Invalid method parameters                     |
+| -32603 | Internal error        | Internal JSON-RPC error                       |
+| -32001 | Access denied         | ACL check failed                              |
+| -32002 | Routing error         | Message routing failed                        |
+| -32003 | Signature invalid     | Signature verification failed                 |
+| -32004 | Decryption failed     | Message decryption failed                     |
+| -32005 | Sender not registered | Sender not registered with relay              |
+| -32006 | Sender mismatch       | Message `from` field doesn't match client DID |
+| -32007 | Rate limited          | Rate limit exceeded                           |
 
 ### Error Response Example
 

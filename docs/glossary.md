@@ -20,6 +20,12 @@ An autonomous software entity with a unique identity (DID) that can send and rec
 
 A JSON document describing an agent's capabilities, skills, and endpoints. Served at `/.well-known/agent.json`. Used for discovery in the A2A protocol.
 
+## C
+
+### Channel
+
+A group messaging construct within the relay. Channels allow multiple agents to communicate together. Types include `group` (multi-party), `broadcast` (one-to-many), and `topic` (pub/sub). See [Architecture](architecture.md#channels).
+
 ## D
 
 ### DID (Decentralized Identifier)
@@ -29,6 +35,10 @@ A W3C standard for self-sovereign identity. In msg2agent, DIDs follow the format
 ### DID Document
 
 A JSON document containing the public keys and service endpoints associated with a DID. Used to verify signatures and establish encrypted connections.
+
+### DID Proof
+
+A cryptographic proof of DID ownership submitted during relay registration. The agent signs `(DID + timestamp)` with its Ed25519 signing key. The relay verifies this signature to ensure the registering party controls the private key for the claimed DID. Can be disabled with `-skip-did-proof` (not recommended for production).
 
 ### DIDComm
 
@@ -56,17 +66,33 @@ A remote procedure call protocol using JSON. msg2agent uses JSON-RPC 2.0 for all
 
 A protocol for integrating tools with AI assistants. msg2agent provides an MCP adapter that exposes agent functionality as tools (e.g., `send_message`, `list_agents`).
 
+### MCP Server
+
+The msg2agent component (`cmd/mcp-server`) that bridges AI assistants to the agent network. Runs a full agent internally and exposes its capabilities via MCP tools and resources. Supports stdio, SSE, and streamable-http transports. See [MCP Server Configuration](operations/configuration.md#mcp-server-configuration).
+
 ### Message Envelope
 
 The DIDComm wrapper around a JSON-RPC payload. Contains `id`, `type`, `from`, `to`, `created_time`, and `body` fields.
 
 ## O
 
+### OpenClaw
+
+The Claude Desktop plugin that connects Claude to the msg2agent network. Acts as an MCP client, communicating with the MCP server over streamable HTTP to discover agents, send messages, and read replies. See [OpenClaw Plugin](openclaw-plugin/README.md).
+
+### Offline Queue
+
+A store-and-forward mechanism in the relay for delivering messages to agents that are currently offline. When a recipient is not connected, messages are queued and delivered when the agent reconnects. Supports configurable TTL and queue size limits. Backed by memory or SQLite storage.
+
 ### OTLP (OpenTelemetry Protocol)
 
 A protocol for transmitting telemetry data (traces, metrics). msg2agent can export traces to OTLP-compatible backends like Jaeger.
 
 ## P
+
+### Presence
+
+Agent online status tracking within the relay. Agents can update their presence status, subscribe to other agents' presence changes, and query current presence. Managed via `relay.presence.*` JSON-RPC methods.
 
 ### P2P (Peer-to-Peer)
 
@@ -83,6 +109,10 @@ The central message routing hub. Agents connect to the relay via WebSocket, regi
 The storage component within the relay that tracks registered agents, their DIDs, public keys, and connection status. Supports memory, file, and SQLite backends.
 
 ## S
+
+### Sender Key
+
+An encryption key distributed to channel members for end-to-end encryption in group channels. Each member generates a sender key that is shared with other members via the `relay.channel.sender_key` method. Recipients use the sender key to decrypt messages from that member.
 
 ### Signature
 

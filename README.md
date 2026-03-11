@@ -59,27 +59,35 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 
 ```
 cmd/
-  agent/       # Agent binary
-  relay/       # Relay hub binary
-  mcp-server/  # MCP protocol adapter
+  agent/          # Agent binary
+  relay/          # Relay hub binary
+  mcp-server/     # MCP protocol adapter
 pkg/
-  agent/       # Agent implementation
-  crypto/      # Encryption and signing
-  identity/    # DID management
-  messaging/   # Message types and routing
-  protocol/    # JSON-RPC wire protocol
-  registry/    # Agent storage (memory, file, SQLite)
-  security/    # Access control lists
-  transport/   # WebSocket, stdio, SSE transports
-  telemetry/   # Metrics and tracing
+  agent/          # Agent implementation
+  config/         # Configuration helpers
+  conversation/   # Threaded conversation storage
+  crypto/         # Encryption and signing
+  identity/       # DID management
+  mcp/            # MCP server core (tools, resources, inbox)
+  messaging/      # Message types and routing
+  protocol/       # JSON-RPC wire protocol
+  queue/          # Offline message queueing (store-and-forward)
+  registry/       # Agent storage (memory, file, SQLite)
+  security/       # Access control lists
+  transport/      # WebSocket, stdio, SSE transports
+  telemetry/      # Metrics and tracing
 adapters/
-  a2a/         # A2A protocol adapter
-  mcp/         # MCP protocol adapter
+  a2a/            # A2A protocol adapter
+  mcp/            # MCP protocol adapter
+infrastructure/   # Terraform configurations
+scripts/          # Development/deployment/scenario scripts
+test/             # Integration and E2E tests
+docker-compose*.yml  # Docker Compose configurations
 ```
 
 ## Requirements
 
-- Go 1.23+
+- Go 1.24+
 - Docker (optional, for containerized deployment)
 
 ## License

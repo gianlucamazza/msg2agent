@@ -6,19 +6,21 @@ This guide covers all configuration options for msg2agent components.
 
 ### Command Line Flags
 
-| Flag               | Default  | Description                                 |
-| ------------------ | -------- | ------------------------------------------- |
-| `-addr`            | `:8080`  | Listen address                              |
-| `-tls`             | `false`  | Enable TLS                                  |
-| `-tls-cert`        |          | TLS certificate file                        |
-| `-tls-key`         |          | TLS private key file                        |
-| `-store`           | `memory` | Store type: `memory`, `file`, `sqlite`      |
-| `-store-file`      |          | Store file path (file/sqlite stores)        |
-| `-max-connections` | `1000`   | Maximum concurrent connections              |
-| `-msg-rate`        | `100`    | Message rate limit per client (msg/sec)     |
-| `-log-level`       | `info`   | Log level: `debug`, `info`, `warn`, `error` |
-| `-otlp-endpoint`   |          | OpenTelemetry OTLP endpoint                 |
-| `-trace-stdout`    | `false`  | Output traces to stdout                     |
+| Flag               | Default  | Description                                       |
+| ------------------ | -------- | ------------------------------------------------- |
+| `-addr`            | `:8080`  | Listen address                                    |
+| `-tls`             | `false`  | Enable TLS                                        |
+| `-tls-cert`        |          | TLS certificate file                              |
+| `-tls-key`         |          | TLS private key file                              |
+| `-store`           | `memory` | Store type: `memory`, `file`, `sqlite`            |
+| `-store-file`      |          | Store file path (file/sqlite stores)              |
+| `-max-connections` | `1000`   | Maximum concurrent connections                    |
+| `-msg-rate`        | `100`    | Message rate limit per client (msg/sec)           |
+| `-log-level`       | `info`   | Log level: `debug`, `info`, `warn`, `error`       |
+| `-otlp-endpoint`   |          | OpenTelemetry OTLP endpoint                       |
+| `-trace-stdout`    | `false`  | Output traces to stdout                           |
+| `-cors-origins`    |          | Comma-separated list of allowed CORS origins      |
+| `-skip-did-proof`  | `false`  | Skip DID ownership verification (not recommended) |
 
 ### Environment Variables
 
@@ -37,6 +39,8 @@ All flags can be set via environment variables with `MSG2AGENT_` prefix:
 | `MSG2AGENT_LOG_LEVEL`       | `-log-level`       |
 | `MSG2AGENT_OTLP_ENDPOINT`   | `-otlp-endpoint`   |
 | `MSG2AGENT_TRACE_STDOUT`    | `-trace-stdout`    |
+| `MSG2AGENT_CORS_ORIGINS`    | `-cors-origins`    |
+| `MSG2AGENT_SKIP_DID_PROOF`  | `-skip-did-proof`  |
 
 ### Example Configurations
 
@@ -77,23 +81,25 @@ export MSG2AGENT_STORE_FILE="/var/lib/msg2agent/relay.db"
 
 ### Command Line Flags
 
-| Flag                  | Default     | Description                        |
-| --------------------- | ----------- | ---------------------------------- |
-| `-name`               |             | Agent name (required)              |
-| `-domain`             | `localhost` | Domain for DID                     |
-| `-relay`              |             | Relay WebSocket URL                |
-| `-http`               |             | HTTP server address for agent card |
-| `-listen`             |             | P2P WebSocket listener address     |
-| `-metrics`            |             | Metrics server address             |
-| `-tls`                | `false`     | Enable TLS for listener            |
-| `-http-tls`           | `false`     | Enable TLS for HTTP server         |
-| `-tls-cert`           |             | TLS certificate file               |
-| `-tls-key`            |             | TLS private key file               |
-| `-tls-skip-verify`    | `false`     | Skip TLS verification (dev only)   |
-| `-require-encryption` | `false`     | Require message encryption         |
-| `-log-level`          | `info`      | Log level                          |
-| `-otlp-endpoint`      |             | OpenTelemetry endpoint             |
-| `-trace-stdout`       | `false`     | Output traces to stdout            |
+| Flag                  | Default     | Description                                   |
+| --------------------- | ----------- | --------------------------------------------- |
+| `-name`               |             | Agent name (required)                         |
+| `-domain`             | `localhost` | Domain for DID                                |
+| `-relay`              |             | Relay WebSocket URL                           |
+| `-http`               |             | HTTP server address for agent card            |
+| `-listen`             |             | P2P WebSocket listener address                |
+| `-metrics`            |             | Metrics server address                        |
+| `-tls`                | `false`     | Enable TLS for listener                       |
+| `-http-tls`           | `false`     | Enable TLS for HTTP server                    |
+| `-tls-cert`           |             | TLS certificate file                          |
+| `-tls-key`            |             | TLS private key file                          |
+| `-tls-skip-verify`    | `false`     | Skip TLS verification (dev only)              |
+| `-require-encryption` | `false`     | Require message encryption                    |
+| `-log-level`          | `info`      | Log level                                     |
+| `-otlp-endpoint`      |             | OpenTelemetry endpoint                        |
+| `-trace-stdout`       | `false`     | Output traces to stdout                       |
+| `-trusted-dids`       |             | Comma-separated list of trusted agent DIDs    |
+| `-open-acl`           | `false`     | Open ACL policy - allow all (not recommended) |
 
 ### Environment Variables
 
@@ -113,6 +119,8 @@ export MSG2AGENT_STORE_FILE="/var/lib/msg2agent/relay.db"
 | `MSG2AGENT_REQUIRE_ENCRYPTION` | `-require-encryption` |
 | `MSG2AGENT_LOG_LEVEL`          | `-log-level`          |
 | `MSG2AGENT_OTLP_ENDPOINT`      | `-otlp-endpoint`      |
+| `MSG2AGENT_TRUSTED_DIDS`       | `-trusted-dids`       |
+| `MSG2AGENT_OPEN_ACL`           | `-open-acl`           |
 
 ### Example Configurations
 
@@ -149,6 +157,73 @@ export MSG2AGENT_STORE_FILE="/var/lib/msg2agent/relay.db"
   -tls \
   -tls-cert server.crt \
   -tls-key server.key
+```
+
+## MCP Server Configuration
+
+The MCP server (`cmd/mcp-server`) bridges AI assistants to the msg2agent network. It runs a full agent internally and exposes its capabilities via the MCP protocol.
+
+### Command Line Flags
+
+| Flag             | Default               | Description                                                    |
+| ---------------- | --------------------- | -------------------------------------------------------------- |
+| `-name`          | `mcp-agent`           | Agent name                                                     |
+| `-domain`        | `localhost`           | Domain for DID                                                 |
+| `-relay`         | `ws://localhost:8080` | Relay WebSocket URL                                            |
+| `-transport`     | `stdio`               | MCP transport: `stdio`, `sse`, `streamable-http`               |
+| `-addr`          | `:8081`               | Listen address for SSE/HTTP transports                         |
+| `-identity-file` |                       | Path to identity key file (default: `~/.msg2agent/<name>.key`) |
+
+### Environment Variables
+
+| Environment Variable  | Flag Equivalent |
+| --------------------- | --------------- |
+| `MSG2AGENT_NAME`      | `-name`         |
+| `MSG2AGENT_DOMAIN`    | `-domain`       |
+| `MSG2AGENT_RELAY`     | `-relay`        |
+| `MSG2AGENT_TRANSPORT` | `-transport`    |
+| `MSG2AGENT_ADDR`      | `-addr`         |
+
+### Example Configurations
+
+**Stdio mode (Claude Code / Claude Desktop MCP):**
+
+```bash
+./mcp-server -name my-agent -relay ws://localhost:8080
+```
+
+Or in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "msg2agent": {
+      "command": "./mcp-server",
+      "args": ["-name", "my-agent", "-relay", "ws://localhost:8080"]
+    }
+  }
+}
+```
+
+**Streamable HTTP mode (OpenClaw plugin):**
+
+```bash
+./mcp-server \
+  -name openclaw \
+  -domain example.com \
+  -relay ws://relay:8080 \
+  -transport streamable-http \
+  -addr :3001
+```
+
+**SSE mode:**
+
+```bash
+./mcp-server \
+  -name sse-agent \
+  -relay ws://localhost:8080 \
+  -transport sse \
+  -addr :8081
 ```
 
 ## Store Configuration
@@ -283,11 +358,11 @@ curl http://localhost:9090/metrics
 
 ### Relay Limits
 
-| Resource        | Default | Notes                 |
-| --------------- | ------- | --------------------- |
-| Max connections | 1000    | Per-relay limit       |
-| Message size    | 1MB     | Enforced by WebSocket |
-| Rate limit      | 100/min | Per-client            |
+| Resource        | Default                  | Notes                 |
+| --------------- | ------------------------ | --------------------- |
+| Max connections | 1000                     | Per-relay limit       |
+| Message size    | 1MB                      | Enforced by WebSocket |
+| Rate limit      | 100 msg/sec (burst: 200) | Per-client            |
 
 ### Agent Limits
 

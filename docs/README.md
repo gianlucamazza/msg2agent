@@ -27,9 +27,16 @@ Welcome to the msg2agent documentation.
 - [Monitoring](operations/monitoring.md) - Prometheus, Grafana, OpenTelemetry
 - [Troubleshooting](operations/troubleshooting.md) - Common issues and solutions
 
+**Develop and test**
+
+- [Development Setup](development/setup.md) - Local development environment
+- [Testing](development/testing.md) - Running tests
+
 **Integrate with the API**
 
 - [JSON-RPC API](api/jsonrpc.md) - Complete API reference
+- [OpenClaw Plugin](openclaw-plugin/README.md) - Claude plugin for msg2agent
+- [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) - MCP server flags and transports
 
 ## Documentation Index
 
@@ -45,6 +52,13 @@ docs/
 │   ├── docker.md             # Docker deployment
 │   ├── kubernetes.md         # Kubernetes deployment
 │   └── tls-setup.md          # TLS certificate setup
+├── development/
+│   ├── setup.md              # Local development setup
+│   └── testing.md            # Testing guide
+├── openclaw-plugin/
+│   ├── README.md             # OpenClaw plugin guide
+│   ├── openclaw.plugin.json  # Plugin manifest
+│   └── index.ts              # Plugin implementation
 └── operations/
     ├── configuration.md      # Configuration reference
     ├── monitoring.md         # Metrics and tracing

@@ -11,6 +11,42 @@ The foundation for clear, secure, and verifiable communication between autonomou
 - **MCP Integration**: Model Context Protocol adapter for AI assistant integration
 - **Observability**: Prometheus metrics, OpenTelemetry tracing
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph AI Assistants
+        CC[Claude Code<br/>stdio]
+        OC[OpenClaw<br/>HTTP]
+    end
+
+    subgraph MCP Server
+        MCP[MCP Server<br/>cmd/mcp-server]
+    end
+
+    subgraph Relay Hub
+        R[Relay<br/>cmd/relay]
+        REG[(Registry)]
+        Q[(Offline Queue)]
+    end
+
+    subgraph Agents
+        A[Agent Alice<br/>did:wba:...:alice]
+        B[Agent Bob<br/>did:wba:...:bob]
+    end
+
+    CC -->|stdio| MCP
+    OC -->|streamable-http| MCP
+    MCP <-->|WebSocket| R
+    A <-->|WebSocket| R
+    B <-->|WebSocket| R
+    A <-.->|P2P WebSocket| B
+    R --- REG
+    R --- Q
+```
+
+See [Architecture docs](docs/architecture.md) for details.
+
 ## Use Cases
 
 - **Secure Multi-Agent Systems**: Create coordinated swarms of agents that can work together securely without sharing private keys or relying on central authorities for trust.

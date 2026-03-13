@@ -25,10 +25,12 @@ import (
 
 	"github.com/gianluca/msg2agent/pkg/config"
 	"github.com/gianluca/msg2agent/pkg/crypto"
+	"github.com/gianluca/msg2agent/pkg/identity"
 	"github.com/gianluca/msg2agent/pkg/messaging"
 	"github.com/gianluca/msg2agent/pkg/protocol"
 	"github.com/gianluca/msg2agent/pkg/queue"
 	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianluca/msg2agent/pkg/security"
 	"github.com/gianluca/msg2agent/pkg/telemetry"
 )
 
@@ -39,6 +41,7 @@ var (
 	ErrMaxConnections      = fmt.Errorf("max connections reached")
 	ErrDIDProofRequired    = fmt.Errorf("DID ownership proof required")
 	ErrDIDProofInvalid     = fmt.Errorf("DID ownership proof invalid")
+	ErrInvalidDIDFormat    = fmt.Errorf("invalid DID format: must be did:wba:*")
 	ErrInvalidPath         = fmt.Errorf("invalid or unsafe file path")
 )
 
@@ -176,6 +179,10 @@ type RelayHub struct {
 	ctxCancel   context.CancelFunc // Cancel function for hub context
 	stopCh      chan struct{}
 	wg          sync.WaitGroup // Track background goroutines for clean shutdown
+
+	// DID allowlist enforcement
+	aclEnforcer  *security.ACLEnforcer
+	allowlistACL *registry.ACLPolicy // nil = open relay (no allowlist)
 }
 
 // Client represents a connected agent.
@@ -704,11 +711,29 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 
 	agent := &regReq.Agent
 
+	// Validate DID format (must be did:wba:*)
+	parsedDID, err := identity.ParseDID(agent.DID)
+	if err != nil || parsedDID.Method != identity.MethodWBA {
+		c.hub.logger.Warn("invalid DID format", "did", agent.DID)
+		c.sendError(req.ID, protocol.CodeInvalidParams, ErrInvalidDIDFormat.Error())
+		return
+	}
+
 	// Verify DID ownership proof if required
 	if c.hub.config.RequireDIDProof {
 		if err := c.verifyDIDProof(&regReq); err != nil {
 			c.hub.logger.Warn("DID proof verification failed", "did", agent.DID, "error", err)
 			c.sendError(req.ID, protocol.CodeSignatureInvalid, err.Error())
+			return
+		}
+	}
+
+	// Check DID allowlist if configured
+	if c.hub.allowlistACL != nil {
+		relay := &registry.Agent{ACL: c.hub.allowlistACL}
+		if err := c.hub.aclEnforcer.CheckAccess(relay, agent.DID, "register"); err != nil {
+			c.hub.logger.Warn("DID not in allowlist", "did", agent.DID)
+			c.sendError(req.ID, protocol.CodeAccessDenied, "DID not allowed to register")
 			return
 		}
 	}
@@ -885,6 +910,16 @@ func (c *Client) sendError(id any, code int, message string) {
 	}
 }
 
+// securityHeaders wraps an http.Handler and sets security-related response headers.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// Define flags with defaults that can be overridden by env vars
 	addr := flag.String("addr", "", "Listen address (env: MSG2AGENT_RELAY_ADDR)")
@@ -912,6 +947,7 @@ func main() {
 
 	// Security settings
 	skipDIDProof := flag.Bool("skip-did-proof", false, "Skip DID ownership verification during registration (NOT recommended) (env: MSG2AGENT_SKIP_DID_PROOF)")
+	allowedDIDs := flag.String("allowed-dids", "", "Comma-separated list of allowed DIDs (empty = open relay) (env: MSG2AGENT_ALLOWED_DIDS)")
 
 	flag.Parse()
 
@@ -929,6 +965,18 @@ func main() {
 	useTraceStdout := config.FlagOrEnvBool(*traceStdout, "TRACE_STDOUT", false)
 	corsOriginsStr := config.FlagOrEnv(*corsOrigins, "CORS_ORIGINS", "")
 	skipDIDVerification := config.FlagOrEnvBool(*skipDIDProof, "SKIP_DID_PROOF", false)
+	allowedDIDsStr := config.FlagOrEnv(*allowedDIDs, "ALLOWED_DIDS", "")
+
+	// Parse allowed DIDs
+	var allowedDIDList []string
+	if allowedDIDsStr != "" {
+		for _, d := range strings.Split(allowedDIDsStr, ",") {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				allowedDIDList = append(allowedDIDList, d)
+			}
+		}
+	}
 
 	// Parse CORS origins
 	var allowedOrigins []string
@@ -1099,6 +1147,15 @@ func main() {
 
 	hub := NewRelayHubWithStore(relayCfg, store, queueStore, logger)
 
+	// Configure DID allowlist
+	hub.aclEnforcer = security.NewACLEnforcer()
+	if len(allowedDIDList) > 0 {
+		hub.allowlistACL = security.TrustedAgentsPolicy(allowedDIDList)
+		logger.Info("DID allowlist enabled", "count", len(allowedDIDList))
+	} else {
+		logger.Info("DID allowlist disabled (open relay)")
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", hub.handleWebSocket)
 
@@ -1123,7 +1180,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              listenAddr,
-		Handler:           mux,
+		Handler:           securityHeaders(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

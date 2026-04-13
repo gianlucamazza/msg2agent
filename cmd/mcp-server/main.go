@@ -37,6 +37,14 @@ func (b *agentBridge) Send(ctx context.Context, to, method string, params any) (
 	return &messageWrapper{msg}, nil
 }
 
+func (b *agentBridge) SendAsync(ctx context.Context, to, method string, params any) (string, error) {
+	id, err := b.a.SendAsync(ctx, to, method, params)
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
+}
+
 // messageWrapper adapts *messaging.Message to mcpadapter.AgentMessage.
 type messageWrapper struct {
 	m *messaging.Message

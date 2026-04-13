@@ -100,24 +100,18 @@ func (s *Server) sendMessageHandler(ctx context.Context, request mcp.CallToolReq
 
 	s.logger.Info("handling send_message", "to", to, "method", method)
 
-	// Use agent.Send to send a standard message
-	resp, err := s.caller.Send(ctx, to, method, params)
+	// Fire-and-forget: send via relay without waiting for recipient response.
+	// Responses arrive as inbox messages (use list_messages/read_message to retrieve them).
+	msgID, err := s.caller.SendAsync(ctx, to, method, params)
 	if err != nil {
 		s.logger.Error("send failed", "error", err)
 		return mcp.NewToolResultError(fmt.Sprintf("Send failed: %v", err)), nil
 	}
 
-	// Check if response is an error
-	if resp.IsError() {
-		return mcp.NewToolResultError(fmt.Sprintf("Agent returned error: %s", resp.RawBody())), nil
-	}
-
-	// Return the response body
-	output, err := json.MarshalIndent(resp.RawBody(), "", "  ")
-	if err != nil {
-		s.logger.Error("failed to encode response", "error", err)
-		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", ErrEncodingFailed.Error(), err)), nil
-	}
+	output, _ := json.Marshal(map[string]string{
+		"message_id": msgID,
+		"status":     "sent",
+	})
 	return mcp.NewToolResultText(string(output)), nil
 }
 

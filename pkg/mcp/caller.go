@@ -11,6 +11,7 @@ import (
 type AgentCaller interface {
 	DID() string
 	Send(ctx context.Context, to, method string, params any) (AgentMessage, error)
+	SendAsync(ctx context.Context, to, method string, params any) (string, error)
 	CallRelay(ctx context.Context, method string, params any) (json.RawMessage, error)
 	Record() *registry.Agent
 }

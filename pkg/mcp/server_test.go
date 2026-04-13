@@ -110,22 +110,23 @@ func TestListAgentsHandlerWithFilter(t *testing.T) {
 	}
 }
 
-// TestSendMessageHandler tests the send_message tool handler.
+// TestSendMessageHandler tests the send_message tool handler (fire-and-forget).
 func TestSendMessageHandler(t *testing.T) {
 	caller := newTestCaller()
 	sentTo := ""
 	sentMethod := ""
+	const testMsgID = "11111111-1111-1111-1111-111111111111"
 
-	caller.sendFn = func(ctx context.Context, to, method string, params any) (AgentMessage, error) {
+	caller.sendAsyncFn = func(ctx context.Context, to, method string, params any) (string, error) {
 		sentTo = to
 		sentMethod = method
-		return &mockMsg{body: json.RawMessage(`{"result":"success"}`)}, nil
+		return testMsgID, nil
 	}
 
 	server := NewServer(caller, testLogger())
 
 	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"to":     "did:wba:example.com:agent:bob",
 		"method": "chat.send",
 		"params": `{"text":"hello"}`,
@@ -143,6 +144,22 @@ func TestSendMessageHandler(t *testing.T) {
 	}
 	if sentMethod != "chat.send" {
 		t.Errorf("sentMethod = %s, want chat.send", sentMethod)
+	}
+
+	// Verify the response contains message_id and status
+	var resp map[string]string
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("expected TextContent, got %T", result.Content[0])
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if resp["message_id"] != testMsgID {
+		t.Errorf("message_id = %s, want %s", resp["message_id"], testMsgID)
+	}
+	if resp["status"] != "sent" {
+		t.Errorf("status = %s, want sent", resp["status"])
 	}
 }
 

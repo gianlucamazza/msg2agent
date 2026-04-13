@@ -21,21 +21,26 @@ func (m *mockMessage) RawBody() json.RawMessage { return m.body }
 
 // mockAgentCaller implements AgentCaller for testing.
 type mockAgentCaller struct {
-	did       string
-	record    *registry.Agent
-	sendFn    func(ctx context.Context, to, method string, params any) (AgentMessage, error)
-	callRelay func(ctx context.Context, method string, params any) (json.RawMessage, error)
+	did         string
+	record      *registry.Agent
+	sendFn      func(ctx context.Context, to, method string, params any) (AgentMessage, error)
+	sendAsyncFn func(ctx context.Context, to, method string, params any) (string, error)
+	callRelay   func(ctx context.Context, method string, params any) (json.RawMessage, error)
 }
 
-func (m *mockAgentCaller) DID() string { return m.did }
-func (m *mockAgentCaller) Record() *registry.Agent {
-	return m.record
-}
+func (m *mockAgentCaller) DID() string             { return m.did }
+func (m *mockAgentCaller) Record() *registry.Agent { return m.record }
 func (m *mockAgentCaller) Send(ctx context.Context, to, method string, params any) (AgentMessage, error) {
 	if m.sendFn != nil {
 		return m.sendFn(ctx, to, method, params)
 	}
 	return &mockMessage{body: json.RawMessage(`{"status":"ok"}`)}, nil
+}
+func (m *mockAgentCaller) SendAsync(ctx context.Context, to, method string, params any) (string, error) {
+	if m.sendAsyncFn != nil {
+		return m.sendAsyncFn(ctx, to, method, params)
+	}
+	return "00000000-0000-0000-0000-000000000000", nil
 }
 func (m *mockAgentCaller) CallRelay(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if m.callRelay != nil {

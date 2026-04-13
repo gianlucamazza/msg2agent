@@ -14,10 +14,11 @@ import (
 
 // mockCaller implements AgentCaller for handler tests.
 type mockCaller struct {
-	did       string
-	record    *registry.Agent
-	sendFn    func(ctx context.Context, to, method string, params any) (AgentMessage, error)
-	callRelay func(ctx context.Context, method string, params any) (json.RawMessage, error)
+	did         string
+	record      *registry.Agent
+	sendFn      func(ctx context.Context, to, method string, params any) (AgentMessage, error)
+	sendAsyncFn func(ctx context.Context, to, method string, params any) (string, error)
+	callRelay   func(ctx context.Context, method string, params any) (json.RawMessage, error)
 }
 
 func (m *mockCaller) DID() string             { return m.did }
@@ -27,6 +28,12 @@ func (m *mockCaller) Send(ctx context.Context, to, method string, params any) (A
 		return m.sendFn(ctx, to, method, params)
 	}
 	return &mockMsg{body: json.RawMessage(`{"status":"ok"}`)}, nil
+}
+func (m *mockCaller) SendAsync(ctx context.Context, to, method string, params any) (string, error) {
+	if m.sendAsyncFn != nil {
+		return m.sendAsyncFn(ctx, to, method, params)
+	}
+	return "00000000-0000-0000-0000-000000000000", nil
 }
 func (m *mockCaller) CallRelay(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	if m.callRelay != nil {
@@ -342,16 +349,16 @@ func TestListAgentsHandlerRelayError(t *testing.T) {
 func TestSendMessageHandlerWithValidParams(t *testing.T) {
 	caller := newHandlerTestCaller()
 	var sentTo, sentMethod string
-	caller.sendFn = func(ctx context.Context, to, method string, params any) (AgentMessage, error) {
+	caller.sendAsyncFn = func(ctx context.Context, to, method string, params any) (string, error) {
 		sentTo = to
 		sentMethod = method
-		return &mockMsg{body: json.RawMessage(`{"result":"success"}`)}, nil
+		return "22222222-2222-2222-2222-222222222222", nil
 	}
 
 	server := NewServer(caller, handlerTestLogger())
 
 	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"to":     "did:wba:example.com:agent:bob",
 		"method": "chat.send",
 		"params": `{"message": "hello"}`,
@@ -374,14 +381,14 @@ func TestSendMessageHandlerWithValidParams(t *testing.T) {
 
 func TestSendMessageHandlerErrorResponse(t *testing.T) {
 	caller := newHandlerTestCaller()
-	caller.sendFn = func(ctx context.Context, to, method string, params any) (AgentMessage, error) {
-		return &mockMsg{isError: true, body: json.RawMessage(`{"error":"denied"}`)}, nil
+	caller.sendAsyncFn = func(ctx context.Context, to, method string, params any) (string, error) {
+		return "", errors.New("send failed: connection refused")
 	}
 
 	server := NewServer(caller, handlerTestLogger())
 
 	req := mcp.CallToolRequest{}
-	req.Params.Arguments = map[string]interface{}{
+	req.Params.Arguments = map[string]any{
 		"to":     "did:wba:example.com:agent:bob",
 		"method": "error.test",
 		"params": `{"trigger": "error"}`,
@@ -392,7 +399,7 @@ func TestSendMessageHandlerErrorResponse(t *testing.T) {
 		t.Fatalf("handler returned error: %v", err)
 	}
 	if !result.IsError {
-		t.Error("expected error result when agent returns error")
+		t.Error("expected error result when send fails")
 	}
 }
 

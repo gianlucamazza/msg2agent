@@ -1063,6 +1063,9 @@ func main() {
 	oauth2Audience := flag.String("oauth2-audience", "", "OAuth2 expected audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
 	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL override (default: issuer/.well-known/jwks.json)")
 
+	// A2A AgentCard — served at /.well-known/agent.json (public, no auth)
+	agentCardPath := flag.String("agent-card", "", "Path to agent card JSON file to serve at /.well-known/agent.json")
+
 	// Self-service signup (optional; requires billing store)
 	enableSignup := flag.Bool("enable-signup", false, "Enable self-service tenant signup endpoint POST /api/tenants (requires --billing-db)")
 
@@ -1340,6 +1343,21 @@ func main() {
 
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
+
+	// A2A AgentCard — public, no auth, served at /.well-known/agent.json
+	if *agentCardPath != "" {
+		mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, r *http.Request) {
+			data, err := os.ReadFile(*agentCardPath)
+			if err != nil {
+				http.Error(w, "agent card not found", http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "public, max-age=300")
+			_, _ = w.Write(data)
+		})
+		logger.Info("agent card endpoint enabled", "path", "/.well-known/agent.json", "file", *agentCardPath)
+	}
 
 	// Stripe billing endpoints (opt-in; requires STRIPE_SECRET_KEY env var)
 	var stripeClient *billing.StripeClient

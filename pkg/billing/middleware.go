@@ -32,9 +32,8 @@ func TenantFromContext(ctx context.Context) *Tenant {
 func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Skip auth for health endpoints only.
-			// /.well-known/agent.json is A2A-specific; the MCP adapter does not serve it.
-			if strings.HasPrefix(r.URL.Path, "/health") {
+			// Skip auth for health and public discovery endpoints.
+			if strings.HasPrefix(r.URL.Path, "/health") || strings.HasPrefix(r.URL.Path, "/.well-known/") {
 				next.ServeHTTP(w, r)
 				return
 			}

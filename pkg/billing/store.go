@@ -329,6 +329,41 @@ var migrations = []migration{
 	// V5: per-tenant DID seed for deterministic identity derivation (gateway pattern).
 	// Existing tenants have did_seed=NULL and fall back to the shared gateway DID.
 	{5, `ALTER TABLE tenants ADD COLUMN did_seed BLOB`},
+	// V6: OAuth 2.1 AS tables for DCR, PKCE authorization codes, and refresh tokens.
+	{6, `
+		CREATE TABLE IF NOT EXISTS oauth_clients (
+			client_id                    TEXT PRIMARY KEY,
+			client_secret_hash           TEXT,
+			client_name                  TEXT NOT NULL,
+			redirect_uris                TEXT NOT NULL,
+			grant_types                  TEXT NOT NULL,
+			scope                        TEXT,
+			token_endpoint_auth_method   TEXT NOT NULL DEFAULT 'none',
+			created_at                   TEXT NOT NULL,
+			created_ip                   TEXT
+		);
+		CREATE TABLE IF NOT EXISTS oauth_codes (
+			code_hash              TEXT PRIMARY KEY,
+			client_id              TEXT NOT NULL,
+			tenant_id              TEXT NOT NULL,
+			redirect_uri           TEXT NOT NULL,
+			code_challenge         TEXT NOT NULL,
+			code_challenge_method  TEXT NOT NULL,
+			scope                  TEXT,
+			expires_at             TEXT NOT NULL,
+			used                   INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+		CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+			token_hash   TEXT PRIMARY KEY,
+			client_id    TEXT NOT NULL,
+			tenant_id    TEXT NOT NULL,
+			scope        TEXT,
+			expires_at   TEXT NOT NULL,
+			revoked      INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_oauth_refresh_expires ON oauth_refresh_tokens(expires_at);
+	`},
 }
 
 // stripeV4Stmts are the individual SQL statements for the V4 migration.

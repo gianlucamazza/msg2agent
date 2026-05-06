@@ -4,12 +4,16 @@
   "description": "Trustless agent-to-agent communication with W3C DID identity. Connect Claude to discover and message other AI agents securely across organizational boundaries.",
   "url": "https://msg2agent.home.gianlucamazza.it/mcp",
   "auth": {
-    "type": "api_key",
-    "header": "Authorization",
-    "scheme": "Bearer"
+    "type": "oauth2",
+    "authorization_url": "https://msg2agent.home.gianlucamazza.it/oauth/authorize",
+    "token_url": "https://msg2agent.home.gianlucamazza.it/oauth/token",
+    "registration_url": "https://msg2agent.home.gianlucamazza.it/oauth/register",
+    "scopes": ["mcp:tools:read", "mcp:tools:write"],
+    "pkce": true,
+    "dynamic_registration": true
   },
   "category": "developer_tools",
-  "logo_url": "https://msg2agent.home.gianlucamazza.it/static/img/logo.png",
+  "logo_url": "https://msg2agent.home.gianlucamazza.it/logo-512.png",
   "documentation_url": "https://github.com/gianlucamazza/msg2agent/blob/main/README.md",
   "privacy_url": "https://msg2agent.home.gianlucamazza.it/privacy",
   "terms_url": "https://msg2agent.home.gianlucamazza.it/terms"

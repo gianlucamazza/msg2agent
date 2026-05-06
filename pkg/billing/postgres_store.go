@@ -103,6 +103,41 @@ var pgMigrations = []pgMigration{
 	`},
 	// V5: per-tenant DID seed for deterministic identity derivation (gateway pattern).
 	{5, `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS did_seed BYTEA`},
+	// V6: OAuth 2.1 AS tables for DCR, PKCE authorization codes, and refresh tokens.
+	{6, `
+		CREATE TABLE IF NOT EXISTS oauth_clients (
+			client_id                    TEXT PRIMARY KEY,
+			client_secret_hash           TEXT,
+			client_name                  TEXT NOT NULL,
+			redirect_uris                TEXT NOT NULL,
+			grant_types                  TEXT NOT NULL,
+			scope                        TEXT,
+			token_endpoint_auth_method   TEXT NOT NULL DEFAULT 'none',
+			created_at                   TIMESTAMPTZ NOT NULL,
+			created_ip                   TEXT
+		);
+		CREATE TABLE IF NOT EXISTS oauth_codes (
+			code_hash              TEXT PRIMARY KEY,
+			client_id              TEXT NOT NULL,
+			tenant_id              TEXT NOT NULL,
+			redirect_uri           TEXT NOT NULL,
+			code_challenge         TEXT NOT NULL,
+			code_challenge_method  TEXT NOT NULL,
+			scope                  TEXT,
+			expires_at             TIMESTAMPTZ NOT NULL,
+			used                   INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires ON oauth_codes(expires_at);
+		CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+			token_hash   TEXT PRIMARY KEY,
+			client_id    TEXT NOT NULL,
+			tenant_id    TEXT NOT NULL,
+			scope        TEXT,
+			expires_at   TIMESTAMPTZ NOT NULL,
+			revoked      INTEGER NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_oauth_refresh_expires ON oauth_refresh_tokens(expires_at);
+	`},
 }
 
 // NewPostgresStore opens a billing Postgres database at dsn and runs migrations.

@@ -32,6 +32,7 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/httputil"
 	"github.com/gianlucamazza/msg2agent/pkg/identity"
 	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/oauth"
 	"github.com/gianlucamazza/msg2agent/pkg/protocol"
 	"github.com/gianlucamazza/msg2agent/pkg/queue"
 	"github.com/gianlucamazza/msg2agent/pkg/registry"
@@ -1173,6 +1174,12 @@ func main() {
 	oauth2Audience := flag.String("oauth2-audience", "", "OAuth2 expected audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
 	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL override (default: issuer/.well-known/jwks.json)")
 
+	// OAuth 2.1 Authorization Server (Phase B — our own AS, optional)
+	oauthASBaseURL := flag.String("oauth-as-base-url", "", "Base URL for the OAuth 2.1 Authorization Server (env: MSG2AGENT_OAUTH_AS_BASE_URL)")
+	oauthSigningKeyPath := flag.String("oauth-signing-key", "/data/oauth-signing-key.pem", "Path to the Ed25519 signing key PEM for the OAuth AS (env: MSG2AGENT_OAUTH_SIGNING_KEY)")
+	oauthGoogleClientID := flag.String("oauth-google-client-id", "", "Google OAuth2 client ID for the consent screen (env: MSG2AGENT_OAUTH_GOOGLE_CLIENT_ID)")
+	oauthGoogleClientSecret := flag.String("oauth-google-client-secret", "", "Google OAuth2 client secret (env: MSG2AGENT_OAUTH_GOOGLE_CLIENT_SECRET)")
+
 	// A2A AgentCard — served at /.well-known/agent.json (public, no auth)
 	agentCardPath := flag.String("agent-card", "", "Path to agent card JSON file to serve at /.well-known/agent.json")
 
@@ -1411,6 +1418,59 @@ func main() {
 		}
 	}
 
+	// OAuth 2.1 Authorization Server (Phase B — our own AS).
+	// Activated when MSG2AGENT_OAUTH_AS_BASE_URL is set.
+	// Vars are declared here so the mux section can reference them.
+	var (
+		oauthAccessTokenVal billing.AccessTokenValidator
+		oauthAuthzSrv       *oauth.AuthorizeServer
+		oauthJWKSHandler    http.Handler
+		oauthDCRHandler     http.Handler
+		oauthTokenHandler   http.Handler
+		oauthASMeta         *oauth.ASMetadata
+		oauthASBaseURLStr   string
+	)
+	oauthASBaseURLStr = config.FlagOrEnv(*oauthASBaseURL, "MSG2AGENT_OAUTH_AS_BASE_URL", "")
+	if oauthASBaseURLStr != "" && hub.billingStore != nil {
+		signingKeyPath := config.FlagOrEnv(*oauthSigningKeyPath, "MSG2AGENT_OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
+		privKey, err := oauth.LoadOrGenerateEd25519(signingKeyPath)
+		if err != nil {
+			logger.Error("oauth AS: failed to load/generate signing key", "path", signingKeyPath, "error", err)
+			os.Exit(1)
+		}
+		jwkSet, kid, err := oauth.BuildJWK(privKey)
+		if err != nil {
+			logger.Error("oauth AS: failed to build JWK set", "error", err)
+			os.Exit(1)
+		}
+		jwtIssuer := oauth.NewJWTIssuer(privKey, kid, oauthASBaseURLStr)
+		jwtVerifier := oauth.NewJWTVerifier(privKey, oauthASBaseURLStr, oauthASBaseURLStr+"/mcp")
+		oauthAccessTokenVal = jwtVerifier
+
+		oauthCombinedStore, ok := hub.billingStore.(billingOAuthStore)
+		if !ok {
+			logger.Error("oauth AS: billing store does not implement OAuth store (only SQLiteStore supported)")
+			os.Exit(1)
+		}
+		oauthASMeta = oauth.NewASMetadata(oauthASBaseURLStr)
+
+		var idp oauth.IdentityProvider
+		googleClientID := config.FlagOrEnv(*oauthGoogleClientID, "MSG2AGENT_OAUTH_GOOGLE_CLIENT_ID", "")
+		googleClientSecret := config.FlagOrEnv(*oauthGoogleClientSecret, "MSG2AGENT_OAUTH_GOOGLE_CLIENT_SECRET", "")
+		if googleClientID != "" {
+			idp = oauth.NewGoogleIDP(googleClientID, googleClientSecret, oauthASBaseURLStr+"/oauth/google-callback")
+		}
+
+		tenantLookup := &billingTenantLookup{store: oauthCombinedStore}
+		oauthStore := oauth.Store(oauthCombinedStore)
+		oauthAuthzSrv = oauth.NewAuthorizeServer(oauthStore, idp, tenantLookup, jwtIssuer, jwtVerifier, oauthASBaseURLStr)
+		oauthJWKSHandler = oauth.JWKSHandler(jwkSet)
+		oauthDCRHandler = oauth.DCRHandler(oauthStore)
+		oauthTokenHandler = oauth.TokenHandler(oauthStore, jwtIssuer, oauthASBaseURLStr+"/mcp")
+
+		logger.Info("oauth AS enabled", "base_url", oauthASBaseURLStr, "kid", kid, "google_idp", googleClientID != "")
+	}
+
 	// Internal service token — lets mcp-server connect without billing API key.
 	if svcToken := os.Getenv("MSG2AGENT_SERVICE_TOKEN"); svcToken != "" {
 		hub.serviceToken = svcToken
@@ -1504,18 +1564,48 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// RFC 9728 — OAuth 2.0 Protected Resource Metadata (public, no auth).
-	// Tells MCP clients which Authorization Server manages this resource.
-	// authorization_servers is populated once the OAuth 2.1 AS (Phase B) ships;
-	// for now it is empty so clients fall back to bearer API-key auth.
-	oauthResourceMeta := []byte(`{"resource":"https://msg2agent.home.gianlucamazza.it/mcp","authorization_servers":[],"bearer_methods_supported":["header"],"scopes_supported":["mcp:tools:read","mcp:tools:write","mcp:tools:destructive"]}`)
-	serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(oauthResourceMeta)
+	// authorization_servers is populated when the OAuth 2.1 AS is active.
+	{
+		type rsMeta struct {
+			Resource             string   `json:"resource"`
+			AuthorizationServers []string `json:"authorization_servers"`
+			BearerMethods        []string `json:"bearer_methods_supported"`
+			Scopes               []string `json:"scopes_supported"`
+		}
+		m := rsMeta{
+			Resource:      "https://msg2agent.home.gianlucamazza.it/mcp",
+			BearerMethods: []string{"header"},
+			Scopes:        []string{"mcp:tools:read", "mcp:tools:write", "mcp:tools:destructive"},
+		}
+		if oauthASBaseURLStr != "" {
+			m.AuthorizationServers = []string{oauthASBaseURLStr}
+		}
+		oauthResourceMeta, _ := json.Marshal(m)
+		serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write(oauthResourceMeta)
+		}
+		mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
+		mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
 	}
-	mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
-	// RFC 9728 path-appending variant for resource https://.../mcp
-	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
+
+	// OAuth 2.1 AS endpoints — only mounted when AS is enabled.
+	if oauthAuthzSrv != nil {
+		mux.Handle("/.well-known/oauth-authorization-server", oauth.ASMetadataHandler(oauthASMeta))
+		mux.Handle("/.well-known/jwks.json", oauthJWKSHandler)
+		mux.Handle("/oauth/register", oauthDCRHandler)
+		mux.HandleFunc("/oauth/authorize", oauthAuthzSrv.HandleAuthorize)
+		mux.HandleFunc("/oauth/google-callback", oauthAuthzSrv.HandleGoogleCallback)
+		mux.HandleFunc("/oauth/authorize/confirm", oauthAuthzSrv.HandleConfirm)
+		mux.Handle("/oauth/token", oauthTokenHandler)
+		logger.Info("oauth AS routes mounted",
+			"authorize", "/oauth/authorize",
+			"token", "/oauth/token",
+			"register", "/oauth/register",
+			"jwks", "/.well-known/jwks.json",
+		)
+	}
 
 	// A2A AgentCard — public, no auth, served at /.well-known/agent.json
 	if *agentCardPath != "" {
@@ -1550,7 +1640,7 @@ func main() {
 					"auto_fix", *stripeAutoReconcile)
 			}
 
-			authMW := billing.APIKeyMiddleware(hub.billingStore, false)
+			authMW := billing.BearerMiddleware(hub.billingStore, oauthAccessTokenVal, false)
 			mux.Handle("/api/billing/checkout", authMW(checkoutHandler(hub.billingStore, stripeClient, logger)))
 			mux.Handle("/api/billing/portal", authMW(portalHandler(hub.billingStore, stripeClient, logger)))
 			// Webhook has no auth middleware — Stripe verifies via signature.

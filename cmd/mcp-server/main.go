@@ -75,6 +75,8 @@ func main() {
 	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 OIDC issuer URL (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
 	oauth2Audience := flag.String("oauth2-audience", "", "Expected OAuth2 token audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
 	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "JWKS endpoint URL (env: MSG2AGENT_OAUTH2_JWKS_URL)")
+	oauthASBaseURL := flag.String("oauth-as-base-url", "", "OAuth 2.1 AS base URL for JWT access token verification (env: MSG2AGENT_OAUTH_AS_BASE_URL)")
+	oauthSigningKeyPath := flag.String("oauth-signing-key", "/data/oauth-signing-key.pem", "Path to Ed25519 signing key PEM shared with relay (env: MSG2AGENT_OAUTH_SIGNING_KEY)")
 	shutdownTimeout := flag.Duration("shutdown-timeout", 30*time.Second, "Graceful shutdown timeout for HTTP server")
 	auditVerifierIntervalFlag := flag.Duration("audit-verifier-interval", 6*time.Hour, "Interval for background audit chain verification (0 = disabled)")
 	flag.Parse()
@@ -300,9 +302,30 @@ func main() {
 		logger,
 	)
 
-	// Wire HTTP-level auth: API key always, OAuth2 if configured.
+	// Wire HTTP-level auth: BearerMiddleware supports both API keys and JWT access tokens.
 	if billingStore != nil {
-		apiKeyMW := billing.APIKeyMiddleware(billingStore, false)
+		// Resolve OAuth 2.1 AS JWT validator (our own AS).
+		var accessTokenVal billing.AccessTokenValidator
+		asBase := config.FlagOrEnv(*oauthASBaseURL, "MSG2AGENT_OAUTH_AS_BASE_URL", "")
+		if asBase != "" {
+			skPath := config.FlagOrEnv(*oauthSigningKeyPath, "MSG2AGENT_OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
+			privKey, err := oauthLoadKey(skPath)
+			if err != nil {
+				logger.Error("mcp-server: failed to load OAuth signing key", "path", skPath, "error", err)
+				os.Exit(1)
+			}
+			_, kid, err := oauthBuildKID(privKey)
+			if err != nil {
+				logger.Error("mcp-server: failed to build JWK kid", "error", err)
+				os.Exit(1)
+			}
+			accessTokenVal = oauthNewVerifier(privKey, kid, asBase)
+			logger.Info("OAuth 2.1 JWT access token auth enabled", "as", asBase)
+		}
+
+		bearerMW := billing.BearerMiddleware(billingStore, accessTokenVal, false)
+
+		// Optionally wrap with Google OIDC middleware (for A2A / human login flow).
 		if issuerURL != "" {
 			if jwksURL == "" {
 				jwksURL = strings.TrimRight(issuerURL, "/") + "/.well-known/jwks.json"
@@ -316,12 +339,12 @@ func main() {
 			autoProvisionPlan := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
 			oauthMW := billing.OAuth2Middleware(validator, billingStore, autoProvisionPlan)
 			mcpServer.WithAuthMiddleware(func(h http.Handler) http.Handler {
-				return oauthMW(apiKeyMW(h))
+				return oauthMW(bearerMW(h))
 			})
-			logger.Info("OAuth2 + API key auth enabled", "issuer", issuerURL)
+			logger.Info("Google OIDC + bearer auth enabled", "issuer", issuerURL)
 		} else {
-			mcpServer.WithAuthMiddleware(apiKeyMW)
-			logger.Info("API key auth enabled")
+			mcpServer.WithAuthMiddleware(bearerMW)
+			logger.Info("bearer auth enabled (API key + OAuth 2.1 JWT)")
 		}
 	}
 

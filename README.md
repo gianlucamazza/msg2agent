@@ -1,6 +1,14 @@
 # msg2agent
 
+[![CI](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml/badge.svg)](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gianlucamazza/msg2agent)](https://goreportcard.com/report/github.com/gianlucamazza/msg2agent)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 The foundation for clear, secure, and verifiable communication between autonomous AI agents. Build decentralized agent networks with built-in identity, encryption, and interoperability.
+
+## Project Status
+
+**Beta** — production-ready for early adopters. The relay, MCP server, and billing system are stable. Breaking changes will be communicated via CHANGELOG.md.
 
 ## Features
 
@@ -147,6 +155,10 @@ docker-compose*.yml  # Docker Compose configurations
 
 - Go 1.24+
 - Docker (optional, for containerized deployment)
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, branch naming, and commit conventions. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md). For security issues, see [SECURITY.md](SECURITY.md).
 
 ## License
 

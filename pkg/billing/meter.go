@@ -11,6 +11,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
 
 // UsageEvent identifies a billable action.
@@ -153,6 +156,14 @@ func (m *UsageMeter) Record(tenantID string, event UsageEvent, delta int64) {
 // if the new value exceeds limit. On failure the increment is rolled back.
 // Pass limit ≤ 0 to skip the quota check. Updates Prometheus gauges/counters.
 func (m *UsageMeter) TryConsume(tenantID string, event UsageEvent, limit, delta int64) error {
+	_, span := telemetry.StartSpan(context.Background(), "billing", "billing.TryConsume")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("billing.tenant_id", tenantID),
+		attribute.String("billing.event", string(event)),
+		attribute.Int64("billing.quota.limit", limit),
+	)
+
 	c := m.getOrCreateCounter(tenantID, event)
 	newVal := c.Add(delta)
 	if limit > 0 && newVal > limit {
@@ -160,13 +171,17 @@ func (m *UsageMeter) TryConsume(tenantID string, event UsageEvent, limit, delta 
 		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(1.0)
 		billingQuotaExceeded.WithLabelValues(tenantID, string(event)).Inc()
 		m.maybeNotify(tenantID, event, limit, 1.0)
-		return fmt.Errorf("%w: %s limit %d reached for tenant %s",
+		err := fmt.Errorf("%w: %s limit %d reached for tenant %s",
 			ErrQuotaExceeded, event, limit, tenantID)
+		span.RecordError(err)
+		span.SetAttributes(attribute.Int64("billing.quota.current", newVal))
+		return err
 	}
 	if limit > 0 {
 		ratio := float64(newVal) / float64(limit)
 		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(ratio)
 		m.maybeNotify(tenantID, event, limit, ratio)
+		span.SetAttributes(attribute.Int64("billing.quota.current", newVal))
 	}
 	return nil
 }

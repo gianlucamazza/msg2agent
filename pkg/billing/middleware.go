@@ -4,6 +4,10 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
 
 type contextKey string
@@ -34,6 +38,9 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				next.ServeHTTP(w, r)
 				return
 			}
+
+			rctx, span := telemetry.StartSpan(r.Context(), "billing", "billing.APIKeyMiddleware")
+			defer span.End()
 
 			// Rate-limit IPs that repeatedly fail authentication.
 			ip := realIP(r)
@@ -90,7 +97,11 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), tenantContextKey, tenant)
+			span.SetAttributes(
+				attribute.String("billing.tenant_id", tenant.ID),
+				attribute.String("billing.auth.method", "api_key"),
+			)
+			ctx := context.WithValue(rctx, tenantContextKey, tenant)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -10,7 +11,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	_ "modernc.org/sqlite" // SQLite driver
+
+	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
 
 // Store persists tenants and API keys.
@@ -396,6 +400,13 @@ func auditHash(prevHash, id, tenantID, event, toolName, requestID, ts string) st
 // RecordEvent implements EventStore — appends one audit event with a hash chain.
 // The single DB connection means the read-last/insert is implicitly serialized.
 func (s *SQLiteStore) RecordEvent(tenantID, event, toolName, requestID string) error {
+	_, span := telemetry.StartSpan(context.Background(), "billing", "billing.RecordEvent")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("billing.tenant_id", tenantID),
+		attribute.String("billing.event", event),
+	)
+
 	id := newID("e")
 	ts := time.Now().UTC().Format(time.RFC3339)
 
@@ -412,6 +423,9 @@ func (s *SQLiteStore) RecordEvent(tenantID, event, toolName, requestID string) e
 		`INSERT INTO usage_events(id,tenant_id,event,tool_name,request_id,ts,prev_hash) VALUES(?,?,?,?,?,?,?)`,
 		id, tenantID, event, toolName, requestID, ts, hash,
 	)
+	if err != nil {
+		span.RecordError(err)
+	}
 	return err
 }
 
@@ -427,6 +441,9 @@ type AuditChainResult struct {
 // VerifyAuditChain walks usage_events for tenantID in chronological order and
 // recomputes each hash, reporting the first divergence. Empty tenantID = all tenants.
 func (s *SQLiteStore) VerifyAuditChain(tenantID string) ([]AuditChainResult, error) {
+	ctx, span := telemetry.StartSpan(context.Background(), "billing", "billing.VerifyAuditChain")
+	defer span.End()
+	span.SetAttributes(attribute.String("billing.tenant_id", tenantID))
 	// Collect tenant IDs to verify.
 	var tenants []string
 	if tenantID != "" {
@@ -472,6 +489,9 @@ func (s *SQLiteStore) VerifyAuditChain(tenantID string) ([]AuditChainResult, err
 				res.Tampered = true
 				res.FirstBadID = id
 				res.FirstBadTime, _ = time.Parse(time.RFC3339, ts)
+				telemetry.AddEvent(ctx, "billing.audit_tampered",
+					attribute.String("billing.tenant_id", ten),
+					attribute.String("billing.first_bad_id", id))
 				rows.Close()
 				goto nextTenant
 			}

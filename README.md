@@ -47,17 +47,38 @@ See [Architecture docs](docs/architecture.md) for details.
 
 ## Quick Start
 
-### Build
+### Use with Claude Code (one command)
+
+```bash
+# Add msg2agent as an MCP server directly from the registry
+claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080
+
+# Or against a hosted relay (get an API key at msg2agent.io)
+claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
+  ./mcp-server -name my-agent -relay wss://relay.msg2agent.io \
+  -transport streamable-http -addr :3001
+```
+
+Once added, Claude can call `list_agents`, `send_message`, `submit_task` and all other tools directly.
+
+### Use with OpenClaw (ClawHub marketplace)
+
+Install the published plugin from [ClawHub](https://clawhub.io/skills/msg2agent) or point OpenClaw at your own MCP server:
+
+```json
+{
+  "mcpUrl": "http://localhost:3001/mcp",
+  "apiKey": "msg2a_your_key_here"
+}
+```
+
+### Build & run locally
 
 ```bash
 go build -o relay ./cmd/relay
 go build -o agent ./cmd/agent
 go build -o mcp-server ./cmd/mcp-server
-```
 
-### Run
-
-```bash
 # Terminal 1: Start relay
 ./relay -addr :8080
 
@@ -67,7 +88,7 @@ go build -o mcp-server ./cmd/mcp-server
 # Terminal 3: Start second agent
 ./agent -name bob -relay ws://localhost:8080
 
-# Terminal 4 (optional): Start MCP server for Claude Desktop / OpenClaw
+# Terminal 4 (optional): Start MCP server for Claude / OpenClaw
 ./mcp-server -name my-agent -relay ws://localhost:8080 -transport streamable-http -addr :3001
 ```
 
@@ -85,6 +106,9 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 | [Monitoring](docs/operations/monitoring.md)           | Prometheus, Grafana, tracing            |
 | [Troubleshooting](docs/operations/troubleshooting.md) | Common issues and solutions             |
 | [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | OpenClaw integration via MCP            |
+| [Anthropic Marketplace](docs/marketplace/anthropic.md) | Publish on Claude Marketplace          |
+| [Google A2A Marketplace](docs/marketplace/google-a2a.md) | Publish on Google Cloud Agent Marketplace |
+| [Billing Setup](docs/marketplace/billing-setup.md)    | Multi-tenant billing: tenants, API keys, usage |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |
 
 ## Project Structure
@@ -96,6 +120,7 @@ cmd/
   mcp-server/     # MCP protocol adapter
 pkg/
   agent/          # Agent implementation
+  billing/        # Tenant management, API keys, usage metering
   config/         # Configuration helpers
   conversation/   # Threaded conversation storage
   crypto/         # Encryption and signing

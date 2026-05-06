@@ -23,6 +23,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/crypto"
@@ -188,6 +189,7 @@ type RelayHub struct {
 	// Billing (optional; nil = self-hosted, no billing)
 	billingStore billing.Store
 	tenantPool   *billing.TenantRateLimiterPool
+	jwtValidator billing.JWTValidator // optional OAuth2 JWT validator for WS auth
 }
 
 // Client represents a connected agent.
@@ -484,7 +486,7 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Billing auth: resolve tenant from Bearer API key if billing is active.
+	// Billing auth: resolve tenant from Bearer API key or JWT if billing is active.
 	var tenantID string
 	if h.billingStore != nil {
 		authHeader := r.Header.Get("Authorization")
@@ -494,20 +496,42 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-			http.Error(w, "invalid Authorization header format; expected: Bearer msg2a_...", http.StatusUnauthorized)
+			http.Error(w, "invalid Authorization header format", http.StatusUnauthorized)
 			return
 		}
-		hash, err := billing.HashAPIKey(parts[1])
-		if err != nil {
-			http.Error(w, "invalid API key format", http.StatusUnauthorized)
+		token := parts[1]
+		var resolvedTenantID string
+		if billing.IsAPIKeyToken(token) {
+			// API key path
+			hash, err := billing.HashAPIKey(token)
+			if err != nil {
+				http.Error(w, "invalid API key format", http.StatusUnauthorized)
+				return
+			}
+			key, err := h.billingStore.GetAPIKeyByHash(hash)
+			if err != nil || !key.IsValid() {
+				http.Error(w, "invalid or revoked API key", http.StatusUnauthorized)
+				return
+			}
+			resolvedTenantID = key.TenantID
+		} else if h.jwtValidator != nil {
+			// JWT / OAuth2 path
+			claims, err := h.jwtValidator.ValidateTokenToBillingClaims(token)
+			if err != nil {
+				http.Error(w, "invalid OAuth2 token", http.StatusUnauthorized)
+				return
+			}
+			tid, err := h.billingStore.GetOAuthIdentityTenant(claims.Issuer, claims.Subject)
+			if err != nil {
+				http.Error(w, "OAuth identity not registered; contact support", http.StatusForbidden)
+				return
+			}
+			resolvedTenantID = tid
+		} else {
+			http.Error(w, "invalid authorization token", http.StatusUnauthorized)
 			return
 		}
-		key, err := h.billingStore.GetAPIKeyByHash(hash)
-		if err != nil || !key.IsValid() {
-			http.Error(w, "invalid or revoked API key", http.StatusUnauthorized)
-			return
-		}
-		tenant, err := h.billingStore.GetTenant(key.TenantID)
+		tenant, err := h.billingStore.GetTenant(resolvedTenantID)
 		if err != nil || !tenant.IsActive() {
 			http.Error(w, "tenant not found or suspended", http.StatusForbidden)
 			return
@@ -1031,6 +1055,11 @@ func main() {
 	// Billing (optional)
 	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
 
+	// OAuth2 (optional; enables JWT auth on WS in addition to API keys)
+	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL for JWT validation on relay WS (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
+	oauth2Audience := flag.String("oauth2-audience", "", "OAuth2 expected audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
+	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL override (default: issuer/.well-known/jwks.json)")
+
 	// Self-service signup (optional; requires billing store)
 	enableSignup := flag.Bool("enable-signup", false, "Enable self-service tenant signup endpoint POST /api/tenants (requires --billing-db)")
 
@@ -1243,6 +1272,20 @@ func main() {
 		hub.billingStore = bStore
 		hub.tenantPool = billing.NewTenantRateLimiterPool(bStore)
 		logger.Info("relay billing enabled", "db", billingDBStr)
+
+		// Optional: JWT validator for OAuth2 WS auth alongside API keys.
+		issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "MSG2AGENT_OAUTH2_ISSUER_URL", "")
+		if issuerURL != "" {
+			jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "", strings.TrimRight(issuerURL, "/")+
+				"/.well-known/jwks.json")
+			oauthCfg := a2a.OAuth2Config{
+				JWKSURL:  jwksURL,
+				Issuer:   issuerURL,
+				Audience: config.FlagOrEnv(*oauth2Audience, "MSG2AGENT_OAUTH2_AUDIENCE", ""),
+			}
+			hub.jwtValidator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
+			logger.Info("relay OAuth2 JWT auth enabled", "issuer", issuerURL)
+		}
 	}
 
 	// Configure DID allowlist

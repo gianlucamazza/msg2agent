@@ -93,6 +93,13 @@ func HashAPIKey(plaintext string) (string, error) {
 	return "", ErrInvalidAPIKey
 }
 
+// IsAPIKeyToken reports whether token has an API key prefix (sk_live_, sk_test_, msg2a_).
+func IsAPIKeyToken(token string) bool {
+	return strings.HasPrefix(token, apiKeyPrefixLive) ||
+		strings.HasPrefix(token, apiKeyPrefixTest) ||
+		strings.HasPrefix(token, apiKeyPrefixLegacy)
+}
+
 func hashKey(plaintext string) string {
 	sum := sha256.Sum256([]byte(plaintext))
 	return hex.EncodeToString(sum[:])

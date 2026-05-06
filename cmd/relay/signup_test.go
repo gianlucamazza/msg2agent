@@ -12,12 +12,12 @@ import (
 
 func TestSignupHandler_success(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	body, _ := json.Marshal(map[string]string{
 		"name":  "Acme Corp",
 		"email": "admin@acme.io",
-		"plan":  "starter",
+		"plan":  "free",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -34,11 +34,33 @@ func TestSignupHandler_success(t *testing.T) {
 	if resp.TenantID == "" || resp.APIKey == "" {
 		t.Errorf("missing tenant_id or api_key: %+v", resp)
 	}
+	if resp.Status != "active" {
+		t.Errorf("status = %q, want active", resp.Status)
+	}
+}
+
+func TestSignupHandler_paidPlanNoStripe(t *testing.T) {
+	store := billing.NewMemoryStore()
+	// nil stripeClient → paid plans should return 503
+	handler := signupHandler(store, nil, testLogger())
+
+	body, _ := json.Marshal(map[string]string{
+		"name":  "Paid Corp",
+		"email": "paid@corp.io",
+		"plan":  "starter",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503 when Stripe is not configured", rec.Code)
+	}
 }
 
 func TestSignupHandler_defaultPlan(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	// Omit plan — should default to "free".
 	body, _ := json.Marshal(map[string]string{
@@ -56,7 +78,7 @@ func TestSignupHandler_defaultPlan(t *testing.T) {
 
 func TestSignupHandler_invalidEmail(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	body, _ := json.Marshal(map[string]string{"name": "Test", "email": "not-an-email", "plan": "free"})
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
@@ -70,7 +92,7 @@ func TestSignupHandler_invalidEmail(t *testing.T) {
 
 func TestSignupHandler_nameTooShort(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	body, _ := json.Marshal(map[string]string{"name": "X", "email": "x@example.com", "plan": "free"})
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
@@ -84,7 +106,7 @@ func TestSignupHandler_nameTooShort(t *testing.T) {
 
 func TestSignupHandler_invalidPlan(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	body, _ := json.Marshal(map[string]string{"name": "Corp", "email": "corp@example.com", "plan": "enterprise"})
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
@@ -98,7 +120,7 @@ func TestSignupHandler_invalidPlan(t *testing.T) {
 
 func TestSignupHandler_methodNotAllowed(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/tenants", nil)
 	rec := httptest.NewRecorder()
@@ -111,7 +133,7 @@ func TestSignupHandler_methodNotAllowed(t *testing.T) {
 
 func TestSignupHandler_rateLimit(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	makeBody := func() *bytes.Reader {
 		body, _ := json.Marshal(map[string]string{"name": "X Corp", "email": "x@corp.io", "plan": "free"})
@@ -150,7 +172,7 @@ func TestSignupHandler_rateLimit(t *testing.T) {
 
 func TestSignupHandler_realIPHeaders(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	makeBody := func() *bytes.Reader {
 		body, _ := json.Marshal(map[string]string{"name": "Header Corp", "email": "h@corp.io", "plan": "free"})
@@ -177,12 +199,12 @@ func TestSignupHandler_realIPHeaders(t *testing.T) {
 
 func TestSignupHandler_tenantStoredCorrectly(t *testing.T) {
 	store := billing.NewMemoryStore()
-	handler := signupHandler(store, testLogger())
+	handler := signupHandler(store, nil, testLogger())
 
 	body, _ := json.Marshal(map[string]string{
 		"name":  "Test Tenant",
 		"email": "TENANT@Example.COM", // should be lowercased
-		"plan":  "team",
+		"plan":  "free",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/tenants", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
@@ -205,8 +227,8 @@ func TestSignupHandler_tenantStoredCorrectly(t *testing.T) {
 	if tenant.Email != "tenant@example.com" {
 		t.Errorf("email = %q, want lowercased", tenant.Email)
 	}
-	if tenant.Plan != billing.PlanTeam {
-		t.Errorf("plan = %q, want team", tenant.Plan)
+	if tenant.Plan != billing.PlanFree {
+		t.Errorf("plan = %q, want free", tenant.Plan)
 	}
 
 	// Verify the API key was stored and is valid.

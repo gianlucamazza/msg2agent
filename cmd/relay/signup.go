@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -23,8 +24,10 @@ type signupRequest struct {
 }
 
 type signupResponse struct {
-	TenantID string `json:"tenant_id"`
-	APIKey   string `json:"api_key"`
+	TenantID    string `json:"tenant_id"`
+	APIKey      string `json:"api_key,omitempty"`
+	Status      string `json:"status"`
+	CheckoutURL string `json:"checkout_url,omitempty"`
 }
 
 var validPlans = map[string]billing.Plan{
@@ -61,9 +64,15 @@ func (l *ipRateLimiter) allow(ip string, maxPerWindow int, windowSec int64) bool
 }
 
 // signupHandler returns an HTTP handler for POST /api/tenants.
-// It creates a tenant and issues the first API key (printed once).
+//
+// Free plan: creates tenant + API key immediately (key active on creation).
+// Paid plans (starter, team): creates tenant with BillingStatus="incomplete",
+// issues an inactive API key, and returns a Stripe Checkout URL. The key becomes
+// active automatically when the checkout.session.completed webhook fires.
+// Requires stripeClient != nil for paid plans; returns 503 otherwise.
+//
 // Per-IP rate limit: 5 signups per 60 seconds.
-func signupHandler(store billing.Store, logger *slog.Logger) http.HandlerFunc {
+func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logger *slog.Logger) http.HandlerFunc {
 	limiter := newIPRateLimiter()
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +119,36 @@ func signupHandler(store billing.Store, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
+		isPaid := plan != billing.PlanFree
+		if isPaid && stripeClient == nil {
+			http.Error(w, "paid plans are not available: billing not configured", http.StatusServiceUnavailable)
+			return
+		}
+
 		tenant := billing.NewTenant(req.Name, req.Email, plan)
+
+		var checkoutURL string
+		if isPaid {
+			// Mark as incomplete until Stripe checkout.session.completed fires.
+			tenant.BillingStatus = "incomplete"
+
+			origin := fmt.Sprintf("https://%s", r.Host)
+			if r.Header.Get("X-Forwarded-Proto") == "" {
+				origin = fmt.Sprintf("http://%s", r.Host)
+			}
+			sess, err := stripeClient.CreateCheckoutSession(
+				tenant.ID, plan,
+				origin+"/app/?checkout=success&tenant="+tenant.ID,
+				origin+"/pricing?checkout=canceled",
+			)
+			if err != nil {
+				logger.Error("signup: CreateCheckoutSession failed", "error", err)
+				http.Error(w, "failed to create checkout session", http.StatusInternalServerError)
+				return
+			}
+			checkoutURL = sess.URL
+		}
+
 		if err := store.PutTenant(tenant); err != nil {
 			logger.Error("signup: PutTenant failed", "error", err)
 			http.Error(w, "failed to create tenant", http.StatusInternalServerError)
@@ -129,11 +167,31 @@ func signupHandler(store billing.Store, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		logger.Info("signup: tenant created", "tenant_id", tenant.ID, "email", req.Email, "plan", plan)
+		logger.Info("signup: tenant created",
+			"tenant_id", tenant.ID,
+			"email", req.Email,
+			"plan", plan,
+			"paid", isPaid,
+		)
+
+		status := "active"
+		if isPaid {
+			status = "incomplete"
+		}
+
+		resp := signupResponse{
+			TenantID:    tenant.ID,
+			Status:      status,
+			CheckoutURL: checkoutURL,
+		}
+		// Return the API key for free tenants. For paid tenants the key is issued
+		// but inactive (BillingStatus=incomplete); we return it so the user can
+		// save it and use it after checkout without another API call.
+		resp.APIKey = plaintext
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(signupResponse{TenantID: tenant.ID, APIKey: plaintext})
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 }
 

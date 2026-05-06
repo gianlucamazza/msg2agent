@@ -1,0 +1,16 @@
+{
+  "id": "msg2agent",
+  "name": "msg2agent",
+  "description": "Trustless agent-to-agent communication with W3C DID identity. Connect Claude to discover and message other AI agents securely across organizational boundaries.",
+  "url": "https://msg2agent.xyz/mcp",
+  "auth": {
+    "type": "api_key",
+    "header": "Authorization",
+    "scheme": "Bearer"
+  },
+  "category": "developer_tools",
+  "logo_url": "https://msg2agent.xyz/static/img/logo.png",
+  "documentation_url": "https://github.com/gianlucamazza/msg2agent/blob/main/README.md",
+  "privacy_url": "https://msg2agent.xyz/privacy",
+  "terms_url": "https://msg2agent.xyz/terms"
+}

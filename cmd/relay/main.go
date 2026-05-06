@@ -1341,24 +1341,15 @@ func main() {
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Self-service signup endpoint (opt-in; requires billing store)
-	if *enableSignup {
-		if hub.billingStore == nil {
-			logger.Error("--enable-signup requires --billing-db to be set")
-			os.Exit(1)
-		}
-		mux.HandleFunc("/api/tenants", signupHandler(hub.billingStore, logger))
-		logger.Info("signup endpoint enabled", "path", "/api/tenants")
-	}
-
 	// Stripe billing endpoints (opt-in; requires STRIPE_SECRET_KEY env var)
+	var stripeClient *billing.StripeClient
 	if hub.billingStore != nil {
 		// Period rollover checker: resets usage counters when billing periods end.
 		meter := billing.NewUsageMeter()
 		billing.StartPeriodRolloverChecker(hub.ctx, hub.billingStore, meter, logger)
 
 		if stripeCfg := billing.StripeConfigFromEnv(); stripeCfg != nil {
-			stripeClient := billing.NewStripeClient(*stripeCfg)
+			stripeClient = billing.NewStripeClient(*stripeCfg)
 
 			// Stripe reconciler: periodically syncs subscription state from Stripe.
 			billing.StartStripeReconciler(hub.ctx, hub.billingStore, stripeClient, *stripeReconcileInterval, *stripeAutoReconcile, logger)
@@ -1378,6 +1369,17 @@ func main() {
 				"portal", "/api/billing/portal",
 				"webhook", "/api/billing/webhook")
 		}
+	}
+
+	// Self-service signup endpoint (opt-in; requires billing store).
+	// Declared after Stripe setup so stripeClient is available for paid plans.
+	if *enableSignup {
+		if hub.billingStore == nil {
+			logger.Error("--enable-signup requires --billing-db to be set")
+			os.Exit(1)
+		}
+		mux.HandleFunc("/api/tenants", signupHandler(hub.billingStore, stripeClient, logger))
+		logger.Info("signup endpoint enabled", "path", "/api/tenants", "stripe", stripeClient != nil)
 	}
 
 	server := &http.Server{

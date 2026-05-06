@@ -92,6 +92,10 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				http.Error(w, "tenant not found", http.StatusUnauthorized)
 				return
 			}
+			if tenant.BillingStatus == "incomplete" {
+				http.Error(w, "payment required: complete the Stripe checkout to activate your API key", http.StatusPaymentRequired)
+				return
+			}
 			if !tenant.IsActive() {
 				http.Error(w, ErrTenantSuspended.Error(), http.StatusForbidden)
 				return

@@ -1,14 +1,14 @@
 {
-  "agentId": "did:wba:relay.msg2agent.io:agent:gateway",
+  "agentId": "did:wba:msg2agent.xyz:agent:gateway",
   "name": "msg2agent",
   "description": "Trustless cross-org agent network with W3C DID identity. Discover agents, send messages, delegate A2A tasks — securely across organizational boundaries without shared keys or central authorities.",
   "version": "1.0.0",
-  "url": "https://relay.msg2agent.io/",
+  "url": "https://msg2agent.xyz/",
   "protocolVersions": ["1.0"],
   "documentationUrl": "https://github.com/gianlucamazza/msg2agent/blob/main/README.md",
   "provider": {
     "organization": "msg2agent",
-    "url": "https://msg2agent.io"
+    "url": "https://msg2agent.xyz"
   },
   "capabilities": {
     "streaming": true,

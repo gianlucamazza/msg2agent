@@ -1356,6 +1356,8 @@ func main() {
 	mux.HandleFunc("/privacy", servePage("privacy.html"))
 	mux.HandleFunc("/terms", servePage("terms.html"))
 	mux.HandleFunc("/favicon.svg", serveAsset("favicon.svg", "image/svg+xml"))
+	mux.HandleFunc("/logo-512.png", serveAsset("logo-512.png", "image/png"))
+	mux.HandleFunc("/logo-180.png", serveAsset("logo-180.png", "image/png"))
 	mux.HandleFunc("/style.css", serveAsset("style.css", "text/css; charset=utf-8"))
 
 	// Root: WebSocket upgrade for agents, landing page for browsers.

@@ -1,9 +1,12 @@
 package billing
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,6 +240,8 @@ var migrations = []migration{
 			PRIMARY KEY (tenant_id, period, event)
 		);
 	`},
+	// V2: add prev_hash column to usage_events for tamper-evidence hash chain.
+	{2, `ALTER TABLE usage_events ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''`},
 }
 
 func (s *SQLiteStore) migrate() error {
@@ -381,13 +386,106 @@ func (s *SQLiteStore) ListAPIKeysActive(tenantID string) ([]*APIKey, error) {
 	return out, rows.Err()
 }
 
-// RecordEvent implements EventStore — appends one audit event.
+// auditHash computes the chain hash for a new event: sha256(prev || canonical).
+func auditHash(prevHash, id, tenantID, event, toolName, requestID, ts string) string {
+	canonical := strings.Join([]string{id, tenantID, event, toolName, requestID, ts}, "|")
+	sum := sha256.Sum256([]byte(prevHash + canonical))
+	return hex.EncodeToString(sum[:])
+}
+
+// RecordEvent implements EventStore — appends one audit event with a hash chain.
+// The single DB connection means the read-last/insert is implicitly serialized.
 func (s *SQLiteStore) RecordEvent(tenantID, event, toolName, requestID string) error {
+	id := newID("e")
+	ts := time.Now().UTC().Format(time.RFC3339)
+
+	// Read the previous hash for this tenant's chain (genesis = "").
+	var prevHash string
+	_ = s.db.QueryRow(
+		`SELECT COALESCE(prev_hash,'') FROM usage_events WHERE tenant_id=? ORDER BY ts DESC LIMIT 1`,
+		tenantID,
+	).Scan(&prevHash)
+
+	hash := auditHash(prevHash, id, tenantID, event, toolName, requestID, ts)
+
 	_, err := s.db.Exec(
-		`INSERT INTO usage_events(id,tenant_id,event,tool_name,request_id,ts) VALUES(?,?,?,?,?,?)`,
-		newID("e"), tenantID, event, toolName, requestID, time.Now().UTC().Format(time.RFC3339),
+		`INSERT INTO usage_events(id,tenant_id,event,tool_name,request_id,ts,prev_hash) VALUES(?,?,?,?,?,?,?)`,
+		id, tenantID, event, toolName, requestID, ts, hash,
 	)
 	return err
+}
+
+// AuditChainResult holds the outcome of VerifyAuditChain.
+type AuditChainResult struct {
+	TenantID     string
+	Verified     int64
+	Tampered     bool
+	FirstBadID   string
+	FirstBadTime time.Time
+}
+
+// VerifyAuditChain walks usage_events for tenantID in chronological order and
+// recomputes each hash, reporting the first divergence. Empty tenantID = all tenants.
+func (s *SQLiteStore) VerifyAuditChain(tenantID string) ([]AuditChainResult, error) {
+	// Collect tenant IDs to verify.
+	var tenants []string
+	if tenantID != "" {
+		tenants = []string{tenantID}
+	} else {
+		rows, err := s.db.Query(`SELECT DISTINCT tenant_id FROM usage_events ORDER BY tenant_id`)
+		if err != nil {
+			return nil, fmt.Errorf("billing: verify audit: list tenants: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var tid string
+			if err := rows.Scan(&tid); err != nil {
+				return nil, err
+			}
+			tenants = append(tenants, tid)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	var results []AuditChainResult
+	for _, tid := range tenants {
+		res := AuditChainResult{TenantID: tid}
+		rows, err := s.db.Query(
+			`SELECT id,tenant_id,event,tool_name,request_id,ts,prev_hash FROM usage_events WHERE tenant_id=? ORDER BY ts ASC`,
+			tid,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("billing: verify audit: query tenant %s: %w", tid, err)
+		}
+
+		prevHash := ""
+		for rows.Next() {
+			var id, ten, ev, tool, reqID, ts, storedHash string
+			if err := rows.Scan(&id, &ten, &ev, &tool, &reqID, &ts, &storedHash); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			expected := auditHash(prevHash, id, ten, ev, tool, reqID, ts)
+			if expected != storedHash {
+				res.Tampered = true
+				res.FirstBadID = id
+				res.FirstBadTime, _ = time.Parse(time.RFC3339, ts)
+				rows.Close()
+				goto nextTenant
+			}
+			prevHash = storedHash
+			res.Verified++
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	nextTenant:
+		results = append(results, res)
+	}
+	return results, nil
 }
 
 // LoadAggregates implements EventStore — reads stored monthly totals for hot-cache restore.

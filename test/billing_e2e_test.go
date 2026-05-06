@@ -4,12 +4,14 @@ package test
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	_ "modernc.org/sqlite"
 )
 
 // TestBillingE2E exercises the full billing lifecycle in-process:
@@ -165,6 +167,71 @@ func TestBillingE2E_QuotaExceeded(t *testing.T) {
 	// Now quota should be exceeded.
 	if err := meter.CheckQuota(tenant.ID, billing.EventMessage, limit); err == nil {
 		t.Error("expected quota exceeded error, got nil")
+	}
+}
+
+// TestBillingE2E_AuditChain verifies that the hash chain detects tampering.
+func TestBillingE2E_AuditChain(t *testing.T) {
+	dir := t.TempDir()
+	store, err := billing.NewSQLiteStore(filepath.Join(dir, "billing.db"))
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	defer store.Close()
+
+	tenant := billing.NewTenant("Chain Corp", "chain@example.com", billing.PlanStarter)
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	// Record 20 events.
+	for range 20 {
+		if err := store.RecordEvent(tenant.ID, "message", "send_message", "req-chain"); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	// Chain must be valid before any tampering.
+	results, err := store.VerifyAuditChain(tenant.ID)
+	if err != nil {
+		t.Fatalf("VerifyAuditChain (clean): %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Tampered {
+		t.Errorf("expected clean chain, got tampered at %s", results[0].FirstBadID)
+	}
+	if results[0].Verified != 20 {
+		t.Errorf("verified = %d, want 20", results[0].Verified)
+	}
+
+	// Tamper directly with the 10th event via raw SQL (simulates a DB compromise).
+	events, _ := store.QueryEvents(billing.EventFilter{TenantID: tenant.ID})
+	if len(events) < 10 {
+		t.Fatal("not enough events to tamper")
+	}
+	tamperedID := events[9].ID
+	dbPath := filepath.Join(dir, "billing.db")
+	tamperDB, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open tamper db: %v", err)
+	}
+	if _, err := tamperDB.Exec(`UPDATE usage_events SET tool_name='spoofed' WHERE id=?`, tamperedID); err != nil {
+		t.Fatalf("tamper UPDATE: %v", err)
+	}
+	tamperDB.Close()
+
+	// Chain must now detect the tamper.
+	results2, err := store.VerifyAuditChain(tenant.ID)
+	if err != nil {
+		t.Fatalf("VerifyAuditChain (tampered): %v", err)
+	}
+	if !results2[0].Tampered {
+		t.Error("expected tampered chain, got clean")
+	}
+	if results2[0].FirstBadID != tamperedID {
+		t.Errorf("FirstBadID = %q, want %q", results2[0].FirstBadID, tamperedID)
 	}
 }
 

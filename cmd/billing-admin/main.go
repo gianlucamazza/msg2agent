@@ -33,6 +33,7 @@ Commands:
   query-events    Query raw audit events for a tenant (for dispute resolution)
   backup          Write a consistent snapshot of the billing DB to a new file
   verify          Print a health summary of the billing DB
+  verify-audit    Walk the audit hash chain and report any tampering
 
 Flags:
   -db string    Path to billing SQLite database (required)
@@ -93,6 +94,8 @@ func main() {
 		runBackup(store, cmdArgs)
 	case "verify":
 		runVerify(store)
+	case "verify-audit":
+		runVerifyAudit(store, cmdArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage()
@@ -413,6 +416,32 @@ func runBackup(store *billing.SQLiteStore, args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("backup written to %s\n", *out)
+}
+
+func runVerifyAudit(store *billing.SQLiteStore, args []string) {
+	fs := flag.NewFlagSet("verify-audit", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "verify only this tenant (default: all tenants)")
+	fs.Parse(args)
+
+	results, err := store.VerifyAuditChain(*tenantID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	anyTampered := false
+	for _, r := range results {
+		if r.Tampered {
+			anyTampered = true
+			fmt.Printf("TAMPERED tenant=%s first_bad_id=%s first_bad_ts=%s verified_before=%d\n",
+				r.TenantID, r.FirstBadID, r.FirstBadTime.Format(time.RFC3339), r.Verified)
+		} else {
+			fmt.Printf("OK       tenant=%s verified=%d\n", r.TenantID, r.Verified)
+		}
+	}
+	if anyTampered {
+		os.Exit(1)
+	}
 }
 
 func runVerify(store *billing.SQLiteStore) {

@@ -228,6 +228,10 @@ func (m *Message) Clone() *Message {
 		clone.Signature = make([]byte, len(m.Signature))
 		copy(clone.Signature, m.Signature)
 	}
+	if m.ActorProof != nil {
+		clone.ActorProof = make([]byte, len(m.ActorProof))
+		copy(clone.ActorProof, m.ActorProof)
+	}
 	return &clone
 }
 

@@ -1589,9 +1589,14 @@ func (a *Agent) verifyMessageSignature(msg *messaging.Message) error {
 		return ErrNoSigningKey
 	}
 
-	// Clone message and remove signature for verification
+	// Clone message and remove fields that are not part of the signature domain.
+	// Signature and the gateway-delegation envelope (ActorDID, ActorProof) are
+	// excluded: the tenant signs only the core message payload; the relay
+	// separately validates ActorDID/ActorProof before forwarding.
 	msgCopy := msg.Clone()
 	msgCopy.Signature = nil
+	msgCopy.ActorDID = ""
+	msgCopy.ActorProof = nil
 
 	// Marshal the message without signature
 	msgBytes, err := json.Marshal(msgCopy)

@@ -38,7 +38,7 @@ services:
       MSG2AGENT_LOG_LEVEL:       "info"
       MSG2AGENT_MAX_CONNECTIONS: "100"
       MSG2AGENT_MSG_RATE:        "20"
-      MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw,did:wba:msg2agent.home.gianlucamazza.it:agent:gianluca-local,did:wba:msg2agent.home.gianlucamazza.it:agent:claude-desktop"
+      MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw,did:wba:msg2agent.home.gianlucamazza.it:agent:gianluca-local,did:wba:msg2agent.home.gianlucamazza.it:agent:claude-desktop,did:wba:msg2agent.home.gianlucamazza.it:tenant:*"
       MSG2AGENT_BILLING_DB:      "/billing/billing.db"   # shared with mcp-server; relay owns Stripe webhook
       # OAuth2 vars come from .env: MSG2AGENT_OAUTH2_ISSUER_URL, MSG2AGENT_OAUTH2_AUDIENCE, MSG2AGENT_OAUTH2_JWKS_URL
       # Stripe vars come from .env: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_*

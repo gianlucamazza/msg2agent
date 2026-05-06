@@ -25,7 +25,7 @@ GOFMT   := gofmt
 .PHONY: dev dev-up dev-down dev-logs dev-ps
 .PHONY: scenario-p2p scenario-relay scenario-tls scenario-mcp
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
-.PHONY: test-security test-load test-a2a test-mcp test-all
+.PHONY: test-security test-load test-a2a test-mcp test-all loadtest loadtest-http loadtest-ws
 .PHONY: ci ci-e2e setup-certs
 
 ## Build
@@ -182,6 +182,18 @@ test-security: ## Run security-related tests
 
 test-load: ## Run load/performance tests
 	@./scripts/test-load.sh
+
+loadtest: ## Run k6 billing HTTP load test (requires k6)
+	k6 run loadtest/billing_http.k6.js \
+		-e MCP_URL=$(MCP_URL) \
+		-e API_KEY=$(API_KEY) \
+		-e API_KEYS_FILE=$(API_KEYS_FILE)
+
+loadtest-http: loadtest ## Alias for loadtest
+
+loadtest-ws: ## Run k6 relay WebSocket load test (requires k6)
+	k6 run loadtest/relay_ws.k6.js \
+		-e RELAY_URL=$(RELAY_URL)
 
 test-a2a: ## Run A2A adapter tests
 	$(GOTEST) -v -race ./adapters/a2a/...

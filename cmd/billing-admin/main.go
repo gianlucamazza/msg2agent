@@ -40,6 +40,7 @@ Commands:
   attach-stripe   Set StripeCustomerID on a tenant
   sync-subscription Sync Stripe subscription state to local tenant record
   list-stripe     Print Stripe fields for a tenant
+  seed-events     Seed fake usage events for demo/testing
 
 Flags:
   -db string    Path to billing SQLite database (required)
@@ -108,6 +109,8 @@ func main() {
 		runSyncSubscription(store, cmdArgs)
 	case "list-stripe":
 		runListStripe(store, cmdArgs)
+	case "seed-events":
+		runSeedEvents(store, cmdArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage()
@@ -579,6 +582,39 @@ func runSyncSubscription(store billing.Store, args []string) {
 		os.Exit(1)
 	}
 	fmt.Println("tenant updated")
+}
+
+// runSeedEvents inserts N fake usage events for a tenant, used for demo/testing.
+// Events go through the audit hash chain so integrity is preserved.
+// Usage: billing-admin -db <path> seed-events --tenant <id> --count 50 --event tool_call
+func runSeedEvents(store billing.Store, args []string) {
+	fs := flag.NewFlagSet("seed-events", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "tenant ID (required)")
+	count := fs.Int("count", 50, "number of events to seed")
+	event := fs.String("event", "tool_call", "event type: tool_call|message|task_submit")
+	toolName := fs.String("tool", "demo_tool", "tool name recorded with each event")
+	fs.Parse(args)
+
+	if *tenantID == "" {
+		fmt.Fprintln(os.Stderr, "error: -tenant is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	es, ok := store.(billing.EventStore)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "error: store does not implement EventStore")
+		os.Exit(1)
+	}
+
+	for i := range *count {
+		requestID := fmt.Sprintf("seed-%d", i)
+		if err := es.RecordEvent(*tenantID, *event, *toolName, requestID); err != nil {
+			fmt.Fprintf(os.Stderr, "error: record event %d: %v\n", i, err)
+			os.Exit(1)
+		}
+	}
+	fmt.Printf("seeded %d %s event(s) for tenant %s\n", *count, *event, *tenantID)
 }
 
 // runListStripe prints Stripe billing fields for a tenant.

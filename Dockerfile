@@ -42,6 +42,10 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
     -o /out/billing-admin ./cmd/billing-admin
 
+RUN CGO_ENABLED=0 go build \
+    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -o /out/dashboard ./cmd/dashboard
+
 # =============================================================================
 # Relay Image
 # =============================================================================
@@ -154,3 +158,29 @@ VOLUME ["/data"]
 
 ENTRYPOINT ["billing-admin"]
 CMD ["-help"]
+
+# =============================================================================
+# Dashboard Image
+# =============================================================================
+FROM alpine:3.20 AS dashboard
+
+RUN apk add --no-cache ca-certificates tzdata
+
+RUN addgroup -g 1000 msg2agent && \
+    adduser -u 1000 -G msg2agent -s /bin/sh -D msg2agent
+
+RUN mkdir -p /data && chown msg2agent:msg2agent /data
+
+COPY --from=builder /out/dashboard /usr/local/bin/dashboard
+
+USER msg2agent
+
+VOLUME ["/data"]
+
+EXPOSE 8082
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1
+
+ENTRYPOINT ["dashboard"]
+CMD ["-addr", ":8082"]

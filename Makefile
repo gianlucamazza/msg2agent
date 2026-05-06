@@ -12,7 +12,7 @@ BUILD_DIR := ./build
 DIST_DIR  := ./dist
 
 # Binaries
-BINARIES := agent relay mcp-server billing-admin
+BINARIES := agent relay mcp-server billing-admin dashboard
 
 # Go commands
 GO      := go
@@ -21,7 +21,7 @@ GOBUILD := $(GO) build $(GOFLAGS) $(LDFLAGS)
 GOVET   := $(GO) vet
 GOFMT   := gofmt
 
-.PHONY: all build build-agent build-relay build-mcp build-billing-admin clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help
+.PHONY: all build build-agent build-relay build-mcp build-billing-admin build-dashboard clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help bootstrap demo smoke
 .PHONY: dev dev-up dev-down dev-logs dev-ps
 .PHONY: scenario-p2p scenario-relay scenario-tls scenario-mcp
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
@@ -32,7 +32,7 @@ GOFMT   := gofmt
 
 all: build
 
-build: build-agent build-relay build-mcp build-billing-admin ## Build all binaries
+build: build-agent build-relay build-mcp build-billing-admin build-dashboard ## Build all binaries
 
 build-agent: ## Build agent binary
 	$(GOBUILD) -o $(BUILD_DIR)/agent ./cmd/agent
@@ -45,6 +45,9 @@ build-mcp: ## Build mcp-server binary
 
 build-billing-admin: ## Build billing-admin CLI
 	$(GOBUILD) -o $(BUILD_DIR)/billing-admin ./cmd/billing-admin
+
+build-dashboard: ## Build dashboard binary
+	$(GOBUILD) -o $(BUILD_DIR)/dashboard ./cmd/dashboard
 
 ## Testing
 
@@ -84,6 +87,7 @@ docker-build: ## Build Docker images
 	docker build --target agent -t msg2agent-agent:$(VERSION) -t msg2agent-agent:latest .
 	docker build --target mcp-server -t msg2agent-mcp-server:$(VERSION) -t msg2agent-mcp-server:latest .
 	docker build --target billing-admin -t msg2agent-billing-admin:$(VERSION) -t msg2agent-billing-admin:latest .
+	docker build --target dashboard -t msg2agent-dashboard:$(VERSION) -t msg2agent-dashboard:latest .
 
 docker-push: ## Push Docker images to registry
 	docker push msg2agent-relay:$(VERSION)
@@ -92,6 +96,10 @@ docker-push: ## Push Docker images to registry
 	docker push msg2agent-agent:latest
 	docker push msg2agent-mcp-server:$(VERSION)
 	docker push msg2agent-mcp-server:latest
+	docker push msg2agent-billing-admin:$(VERSION)
+	docker push msg2agent-billing-admin:latest
+	docker push msg2agent-dashboard:$(VERSION)
+	docker push msg2agent-dashboard:latest
 
 ## Installation
 
@@ -100,13 +108,14 @@ install: build ## Install binaries to GOPATH/bin
 	$(GO) install ./cmd/relay
 	$(GO) install ./cmd/mcp-server
 	$(GO) install ./cmd/billing-admin
+	$(GO) install ./cmd/dashboard
 
 ## Cleanup
 
 clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
 	rm -f coverage.out coverage.html
-	rm -f agent relay mcp-server
+	rm -f agent relay mcp-server billing-admin dashboard
 
 ## Help
 
@@ -207,6 +216,15 @@ test-all: test-unit test-integration test-a2a test-mcp ## Run all tests
 
 setup-certs: ## Generate TLS certificates for testing
 	@./scripts/setup-certs.sh
+
+bootstrap: build ## First-time setup: identity, billing DB, first tenant + API key
+	@./scripts/bootstrap.sh
+
+demo: bootstrap ## Bootstrap + seed demo data (3 tenants, 50 events each)
+	@./scripts/seed-demo.sh
+
+smoke: ## Post-deploy smoke test (env: RELAY_URL, MCP_URL, API_KEY)
+	@./scripts/smoke-test.sh
 
 ## CI
 

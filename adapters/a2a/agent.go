@@ -11,7 +11,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/gianluca/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
 )
 
 // AgentHandler wraps an A2A server with HTTP/WebSocket handling.
@@ -23,6 +24,11 @@ type AgentHandler struct {
 	oauth2      *OAuth2Validator
 	requireAuth bool
 	mu          sync.Mutex
+
+	// API key billing auth (alternative to OAuth2)
+	billingStore     billing.Store
+	billingMeter     *billing.UsageMeter
+	billingAllowAnon bool
 }
 
 // AgentInfo provides agent identity info for the agent card.
@@ -55,6 +61,16 @@ func WithOAuth2(cfg OAuth2Config) AgentHandlerOption {
 	return func(h *AgentHandler) {
 		h.oauth2 = NewOAuth2Validator(cfg)
 		h.requireAuth = true
+	}
+}
+
+// WithAPIKeyBilling enables Bearer API key authentication backed by the billing store.
+// Events are recorded to meter if provided. Set allowAnon to permit unauthenticated access.
+func WithAPIKeyBilling(store billing.Store, meter *billing.UsageMeter, allowAnon bool) AgentHandlerOption {
+	return func(h *AgentHandler) {
+		h.billingStore = store
+		h.billingMeter = meter
+		h.billingAllowAnon = allowAnon
 	}
 }
 
@@ -92,14 +108,41 @@ func (h *AgentHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Protected endpoints - validate OAuth2 if configured
-	if h.requireAuth && h.oauth2 != nil {
+	// API key billing auth (checked first if configured).
+	if h.billingStore != nil {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" && !h.billingAllowAnon {
+			http.Error(w, "missing Authorization header", http.StatusUnauthorized)
+			return
+		}
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+				http.Error(w, "invalid Authorization format; expected: Bearer msg2a_...", http.StatusUnauthorized)
+				return
+			}
+			hash, err := billing.HashAPIKey(parts[1])
+			if err == nil {
+				key, err := h.billingStore.GetAPIKeyByHash(hash)
+				if err != nil || !key.IsValid() {
+					http.Error(w, "invalid or revoked API key", http.StatusUnauthorized)
+					return
+				}
+				tenant, err := h.billingStore.GetTenant(key.TenantID)
+				if err != nil || !tenant.IsActive() {
+					http.Error(w, "tenant not found or suspended", http.StatusForbidden)
+					return
+				}
+				r = r.WithContext(context.WithValue(r.Context(), billing.TenantContextKey(), tenant))
+			}
+		}
+	} else if h.requireAuth && h.oauth2 != nil {
+		// Fall back to OAuth2 if billing store not configured.
 		claims, err := h.validateAuth(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		// Store claims in context
 		r = r.WithContext(context.WithValue(r.Context(), claimsContextKey, claims))
 	}
 
@@ -272,6 +315,8 @@ func (h *AgentHandler) handleJSONRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.meterA2ARequest(r.Context(), reqData)
+
 	respData, err := h.server.HandleRequest(r.Context(), reqData)
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -313,9 +358,12 @@ func (h *AgentHandler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 		// Handle streaming requests
 		if req.Method == A2AMessageStream {
+			h.meterA2ARequest(ctx, data)
 			h.handleStreamingRequest(ctx, conn, req)
 			continue
 		}
+
+		h.meterA2ARequest(ctx, data)
 
 		// Handle regular requests
 		respData, err := h.server.HandleRequest(ctx, data)
@@ -343,6 +391,35 @@ func (h *AgentHandler) handleStreamingRequest(ctx context.Context, conn *websock
 		resp := protocol.NewErrorResponse(req.ID, ErrCodeInternalError, err.Error(), nil)
 		respData, _ := protocol.Encode(resp)
 		_ = conn.Write(ctx, websocket.MessageText, respData) // Best effort
+	}
+}
+
+// meterA2ARequest records a billing event for an A2A JSON-RPC request if metering is configured.
+// It peeks the method without full parsing so decode errors are silently skipped.
+func (h *AgentHandler) meterA2ARequest(ctx context.Context, data json.RawMessage) {
+	if h.billingMeter == nil {
+		return
+	}
+	tenant := billing.TenantFromContext(ctx)
+	if tenant == nil {
+		return
+	}
+	var peek struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(data, &peek); err != nil || peek.Method == "" {
+		return
+	}
+	h.billingMeter.RecordAudit(tenant.ID, a2aMethodEvent(peek.Method), peek.Method, "", 1)
+}
+
+// a2aMethodEvent maps an A2A JSON-RPC method name to its billing event type.
+func a2aMethodEvent(method string) billing.UsageEvent {
+	switch method {
+	case A2AMessageSend, A2AMessageStream:
+		return billing.EventMessage
+	default:
+		return billing.EventToolCall
 	}
 }
 

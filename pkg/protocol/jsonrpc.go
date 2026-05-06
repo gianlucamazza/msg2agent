@@ -32,6 +32,7 @@ const (
 	CodeSenderMismatch      = -32006 // Message From field doesn't match client DID
 	CodeRateLimited         = -32007 // Rate limit exceeded
 	CodeQuotaExceeded       = -32008 // Billing quota exceeded
+	CodeDelegationInvalid   = -32009 // Gateway delegation proof invalid or namespace mismatch
 )
 
 // JSONRPCRequest represents a JSON-RPC 2.0 request.

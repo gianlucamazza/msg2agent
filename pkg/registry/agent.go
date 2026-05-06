@@ -157,6 +157,13 @@ type Agent struct {
 	Metadata     map[string]any  `json:"metadata,omitempty"`
 	Presence     *PresenceInfo   `json:"presence,omitempty"`
 	PresenceCfg  *PresenceConfig `json:"presence_config,omitempty"`
+
+	// Gateway delegation fields.
+	// Role "gateway" marks an agent that can send messages on behalf of tenant DIDs.
+	// DelegationNamespace is a prefix glob (e.g. "did:wba:domain:tenant:*") listing
+	// which From DIDs this gateway may assert on outbound messages.
+	Role                string `json:"role,omitempty"`
+	DelegationNamespace string `json:"delegation_namespace,omitempty"`
 }
 
 // NewAgent creates a new agent with a generated UUID v7.

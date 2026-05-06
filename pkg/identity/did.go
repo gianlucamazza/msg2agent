@@ -134,6 +134,32 @@ func LoadFromFile(path, domain, agentID string) (*Identity, error) {
 	return ident, nil
 }
 
+// NewIdentityFromKeys creates an Identity using pre-built keys.
+// Use this when deriving identities deterministically (e.g. per-tenant DIDs from seeds).
+func NewIdentityFromKeys(domain, agentID string, keys *crypto.AgentKeys) (*Identity, error) {
+	didStr := fmt.Sprintf("did:%s:%s:agent:%s", MethodWBA, domain, agentID)
+	d, err := did.ParseDID(didStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DID: %w", err)
+	}
+	ident := &Identity{DID: *d, Keys: keys}
+	ident.Document = ident.buildDocument()
+	return ident, nil
+}
+
+// NewIdentityFromKeysTenant creates an Identity with a tenant-style DID
+// (did:wba:<domain>:tenant:<tenantID>) from pre-built keys.
+func NewIdentityFromKeysTenant(domain, tenantID string, keys *crypto.AgentKeys) (*Identity, error) {
+	didStr := fmt.Sprintf("did:%s:%s:tenant:%s", MethodWBA, domain, tenantID)
+	d, err := did.ParseDID(didStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse DID: %w", err)
+	}
+	ident := &Identity{DID: *d, Keys: keys}
+	ident.Document = ident.buildDocument()
+	return ident, nil
+}
+
 // ParseDID parses a DID string.
 func ParseDID(s string) (*did.DID, error) {
 	d, err := did.ParseDID(s)

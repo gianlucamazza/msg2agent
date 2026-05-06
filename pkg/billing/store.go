@@ -326,6 +326,9 @@ var migrations = []migration{
 	// Each ALTER TABLE is run individually; duplicate-column errors are ignored
 	// because SQLite does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
 	{4, `_stripe_v4`},
+	// V5: per-tenant DID seed for deterministic identity derivation (gateway pattern).
+	// Existing tenants have did_seed=NULL and fall back to the shared gateway DID.
+	{5, `ALTER TABLE tenants ADD COLUMN did_seed BLOB`},
 }
 
 // stripeV4Stmts are the individual SQL statements for the V4 migration.
@@ -429,8 +432,9 @@ func (s *SQLiteStore) PutTenant(t *Tenant) error {
 	}
 	_, err = s.db.Exec(`
 		INSERT INTO tenants(id,name,email,plan,status,quota_json,created_at,updated_at,
-		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,
+		                    did_seed)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, email=excluded.email, plan=excluded.plan,
 			status=excluded.status, quota_json=excluded.quota_json,
@@ -443,6 +447,7 @@ func (s *SQLiteStore) PutTenant(t *Tenant) error {
 		string(quota), t.CreatedAt.Format(time.RFC3339), t.UpdatedAt.Format(time.RFC3339),
 		sqlNullStr(t.StripeCustomerID), sqlNullStr(t.StripeSubscriptionID),
 		currentPeriodEnd, t.BillingStatus,
+		sqlNullBytes(t.DIDSeed),
 	)
 	return err
 }
@@ -450,7 +455,8 @@ func (s *SQLiteStore) PutTenant(t *Tenant) error {
 func (s *SQLiteStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
 		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,
+		        did_seed
 		 FROM tenants WHERE id=?`, id,
 	)
 	return scanTenant(row)
@@ -459,7 +465,8 @@ func (s *SQLiteStore) GetTenant(id string) (*Tenant, error) {
 func (s *SQLiteStore) ListTenants() ([]*Tenant, error) {
 	rows, err := s.db.Query(
 		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,
+		        did_seed
 		 FROM tenants`,
 	)
 	if err != nil {
@@ -826,9 +833,11 @@ func scanTenant(row scanner) (*Tenant, error) {
 	var t Tenant
 	var quotaJSON, createdStr, updatedStr string
 	var stripeCustomerID, stripeSubscriptionID, currentPeriodEndStr sql.NullString
+	var didSeed []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
 		&quotaJSON, &createdStr, &updatedStr,
-		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEndStr, &t.BillingStatus)
+		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEndStr, &t.BillingStatus,
+		&didSeed)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -850,7 +859,18 @@ func scanTenant(row scanner) (*Tenant, error) {
 		ts, _ := time.Parse(time.RFC3339, currentPeriodEndStr.String)
 		t.CurrentPeriodEnd = &ts
 	}
+	if len(didSeed) == 32 {
+		t.DIDSeed = didSeed
+	}
 	return &t, nil
+}
+
+// sqlNullBytes converts a possibly-nil byte slice into a sql.RawBytes-compatible value.
+func sqlNullBytes(b []byte) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
 }
 
 // sqlNullStr converts a possibly-empty string into a sql.NullString.

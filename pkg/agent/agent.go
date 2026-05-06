@@ -848,6 +848,41 @@ func (a *Agent) SendAsync(ctx context.Context, to, method string, params any) (u
 	return msg.ID, nil
 }
 
+// SendAs sends a message on behalf of a tenant DID (gateway delegation).
+// The message is signed by tenantIdent (the tenant's Ed25519 key) for the
+// From field, while ActorDID and ActorProof are set using this agent's key
+// so the relay can verify the gateway is authorized to delegate.
+func (a *Agent) SendAs(ctx context.Context, tenantIdent *identity.Identity, to, method string, params any) (*messaging.Message, error) {
+	msg, err := messaging.NewRequest(tenantIdent.String(), to, method, params)
+	if err != nil {
+		return nil, err
+	}
+	msgBytes, _ := json.Marshal(msg)
+	msg.Signature = tenantIdent.Sign(msgBytes)
+	msg.ActorDID = a.DID()
+	proofInput := []byte(a.DID() + ":" + tenantIdent.String() + ":" + msg.ID.String())
+	msg.ActorProof = a.identity.Sign(proofInput)
+	return a.sendAndWait(ctx, msg)
+}
+
+// SendAsAsync sends a message asynchronously on behalf of a tenant DID (gateway delegation).
+func (a *Agent) SendAsAsync(ctx context.Context, tenantIdent *identity.Identity, to, method string, params any) (uuid.UUID, error) {
+	msg, err := messaging.NewRequest(tenantIdent.String(), to, method, params)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	msg.RequestAck = true
+	msgBytes, _ := json.Marshal(msg)
+	msg.Signature = tenantIdent.Sign(msgBytes)
+	msg.ActorDID = a.DID()
+	proofInput := []byte(a.DID() + ":" + tenantIdent.String() + ":" + msg.ID.String())
+	msg.ActorProof = a.identity.Sign(proofInput)
+	if err := a.sendMessage(msg); err != nil {
+		return uuid.Nil, err
+	}
+	return msg.ID, nil
+}
+
 // OnDeliveryAck registers a handler to be called when delivery acknowledgments are received.
 func (a *Agent) OnDeliveryAck(handler DeliveryAckHandler) {
 	a.ackMu.Lock()

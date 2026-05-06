@@ -67,6 +67,16 @@ type Message struct {
 
 	// Async messaging
 	RequestAck bool `json:"request_ack,omitempty"` // Request delivery acknowledgment
+
+	// Gateway delegation (RFC 8693 actor/subject model).
+	// ActorDID is the gateway's DID (owner of the WS connection).
+	// ActorProof is the gateway's Ed25519 signature over
+	//   (actor_did + ":" + from + ":" + message_id).
+	// Relay verifies: gateway is a registered gateway, its DelegationNamespace
+	// covers From, and ActorProof is valid. Message.Signature must still be
+	// valid against From's (tenant) public key.
+	ActorDID   string `json:"actor_did,omitempty"`
+	ActorProof []byte `json:"actor_proof,omitempty"`
 }
 
 // NewMessage creates a new message with a generated UUID v7.

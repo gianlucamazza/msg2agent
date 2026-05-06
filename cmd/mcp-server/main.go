@@ -178,15 +178,17 @@ func main() {
 		proof := a.Sign([]byte(proofMessage))
 
 		regReq := map[string]any{
-			"id":           a.Record().ID,
-			"did":          a.Record().DID,
-			"display_name": a.Record().DisplayName,
-			"public_keys":  a.Record().PublicKeys,
-			"endpoints":    a.Record().Endpoints,
-			"capabilities": a.Record().Capabilities,
-			"status":       a.Record().Status,
-			"proof":        proof,
-			"timestamp":    ts,
+			"id":                   a.Record().ID,
+			"did":                  a.Record().DID,
+			"display_name":         a.Record().DisplayName,
+			"public_keys":          a.Record().PublicKeys,
+			"endpoints":            a.Record().Endpoints,
+			"capabilities":         a.Record().Capabilities,
+			"status":               a.Record().Status,
+			"proof":                proof,
+			"timestamp":            ts,
+			"role":                 "gateway",
+			"delegation_namespace": fmt.Sprintf("did:wba:%s:tenant:*", agentDomain),
 		}
 
 		result, err := a.CallRelay(ctx, "relay.register", regReq)
@@ -277,9 +279,18 @@ func main() {
 		logger.Info("billing enabled", "driver", dbDriver, "db", dbPath)
 	}
 
+	// Build caller: use gatewayBridge (per-tenant DID) when billing is enabled,
+	// plain agentBridge (process-wide DID) when running without billing.
+	var caller mcpadapter.AgentCaller
+	if billingStore != nil {
+		caller = &gatewayBridge{a: a, domain: agentDomain, store: billingStore}
+	} else {
+		caller = &agentBridge{a: a}
+	}
+
 	// Create MCP server via adapter.
 	mcpServer := mcpadapter.NewMCPServer(
-		&agentBridge{a: a},
+		caller,
 		mcpadapter.ServerConfig{
 			Name:      agentName,
 			Version:   "0.1.0",

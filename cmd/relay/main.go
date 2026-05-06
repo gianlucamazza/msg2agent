@@ -226,6 +226,13 @@ type Client struct {
 	// Context for cancellation
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// Gateway delegation — set when this client registers with role="gateway".
+	// gatewayNamespace is a DID prefix (e.g. "did:wba:domain:tenant:*") that
+	// lists which From DIDs this client is allowed to assert via ActorProof.
+	// gatewaySigningKey is the Ed25519 public key used to verify ActorProof.
+	gatewayNamespace  string
+	gatewaySigningKey []byte
 }
 
 // NewRelayHub creates a new relay hub with a memory store.
@@ -660,14 +667,36 @@ func (c *Client) writePump() {
 }
 
 // validateSender checks that the client is registered and the message From field matches.
+// For gateway clients (role="gateway"), delegation is allowed: the message From may be
+// any DID within the client's gatewayNamespace, provided ActorProof is a valid signature
+// of (actor_did + ":" + from + ":" + message_id) by the gateway's signing key.
 func (c *Client) validateSender(msg *messaging.Message) error {
 	if c.DID == "" {
 		return ErrClientNotRegistered
 	}
-	if msg.From != c.DID {
-		return fmt.Errorf("%w: message from %q but client registered as %q", ErrSenderMismatch, msg.From, c.DID)
+	if msg.From == c.DID {
+		return nil
 	}
-	return nil
+	// Gateway delegation path.
+	if msg.ActorDID != "" && msg.ActorDID == c.DID && c.gatewayNamespace != "" {
+		if !didMatchesNamespace(msg.From, c.gatewayNamespace) {
+			return fmt.Errorf("delegation denied: %q not in namespace %q", msg.From, c.gatewayNamespace)
+		}
+		proofInput := []byte(c.DID + ":" + msg.From + ":" + msg.ID.String())
+		if !crypto.VerifySignature(c.gatewaySigningKey, proofInput, msg.ActorProof) {
+			return fmt.Errorf("delegation proof invalid for actor %q asserting %q", c.DID, msg.From)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: message from %q but client registered as %q", ErrSenderMismatch, msg.From, c.DID)
+}
+
+// didMatchesNamespace checks if a DID falls within a namespace glob like "did:wba:domain:tenant:*".
+func didMatchesNamespace(did, namespace string) bool {
+	if strings.HasSuffix(namespace, "*") {
+		return strings.HasPrefix(did, namespace[:len(namespace)-1])
+	}
+	return did == namespace
 }
 
 // handleMessage processes an incoming message.
@@ -725,6 +754,9 @@ func (c *Client) handleMessage(data []byte) {
 		return
 	case "relay.channel.sender_key":
 		c.handleSenderKeyDistribute(req)
+		return
+	case "relay.register_subordinate":
+		c.handleRegisterSubordinate(req)
 		return
 	}
 
@@ -846,6 +878,19 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 	agent.SetOnline()
 	_ = c.hub.store.Put(agent) // Best effort store update
 
+	// If registering as a gateway, cache delegation config for fast validation.
+	if agent.Role == "gateway" && agent.DelegationNamespace != "" {
+		var sigKey []byte
+		for _, k := range agent.PublicKeys {
+			if k.Purpose == "signing" {
+				sigKey = k.Key
+				break
+			}
+		}
+		c.gatewayNamespace = agent.DelegationNamespace
+		c.gatewaySigningKey = sigKey
+	}
+
 	// Update client mapping
 	c.hub.mu.Lock()
 	c.hub.clients[agent.DID] = c
@@ -868,6 +913,66 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 
 	// Deliver any queued messages
 	c.deliverQueuedMessages()
+}
+
+// SubordinateRegisterRequest is the params for relay.register_subordinate.
+// A gateway sends this to register a tenant DID's public keys without a WS connection.
+// The relay stores the keys so messages sent via delegation can be verified by recipients.
+type SubordinateRegisterRequest struct {
+	DID        string               `json:"did"`
+	TenantID   string               `json:"tenant_id,omitempty"`
+	PublicKeys []registry.PublicKey `json:"public_keys"`
+}
+
+// handleRegisterSubordinate allows a gateway client to register tenant DIDs and their
+// public keys into the relay registry without the tenant holding a WS connection.
+// The tenant agent entry is created as offline and owned by this gateway's tenant.
+func (c *Client) handleRegisterSubordinate(req *protocol.JSONRPCRequest) {
+	if c.DID == "" {
+		c.sendError(req.ID, protocol.CodeSenderNotRegistered, "client must register before registering subordinates")
+		return
+	}
+	if c.gatewayNamespace == "" {
+		c.sendError(req.ID, protocol.CodeAccessDenied, "client is not registered as a gateway")
+		return
+	}
+
+	var subReq SubordinateRegisterRequest
+	if err := req.ParseParams(&subReq); err != nil {
+		c.sendError(req.ID, protocol.CodeInvalidParams, "invalid subordinate data")
+		return
+	}
+
+	// Validate DID format.
+	parsedDID, err := identity.ParseDID(subReq.DID)
+	if err != nil || parsedDID.Method != identity.MethodWBA {
+		c.sendError(req.ID, protocol.CodeInvalidParams, ErrInvalidDIDFormat.Error())
+		return
+	}
+
+	// Ensure the subordinate DID is within this gateway's namespace.
+	if !didMatchesNamespace(subReq.DID, c.gatewayNamespace) {
+		c.sendError(req.ID, protocol.CodeDelegationInvalid, "subordinate DID not in gateway namespace")
+		return
+	}
+
+	// Check allowlist (same rule as direct registration).
+	if c.hub.allowlistACL != nil {
+		relay := &registry.Agent{ACL: c.hub.allowlistACL}
+		if err := c.hub.aclEnforcer.CheckAccess(relay, subReq.DID, "register"); err != nil {
+			c.sendError(req.ID, protocol.CodeAccessDenied, "DID not allowed to register")
+			return
+		}
+	}
+
+	agent := registry.NewAgent(subReq.DID, subReq.DID)
+	agent.TenantID = c.TenantID
+	agent.PublicKeys = subReq.PublicKeys
+	// Status remains offline — tenant has no WS connection.
+	_ = c.hub.store.Put(agent)
+
+	c.sendResult(req.ID, map[string]string{"status": "registered", "did": subReq.DID})
+	c.hub.logger.Info("subordinate registered", "gateway", c.DID, "sub_did", subReq.DID)
 }
 
 // verifyDIDProof verifies that the registering agent owns the claimed DID.

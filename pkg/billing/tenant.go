@@ -2,6 +2,7 @@
 package billing
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"os"
@@ -141,6 +142,11 @@ type Tenant struct {
 	StripeSubscriptionID string     `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
 	CurrentPeriodEnd     *time.Time `json:"current_period_end,omitempty" db:"current_period_end"`
 	BillingStatus        string     `json:"billing_status,omitempty" db:"billing_status"` // active|past_due|canceled|incomplete
+
+	// DIDSeed is a 32-byte random seed used to deterministically derive the
+	// tenant's Ed25519 signing key and DID via billing.DeriveTenantIdentity.
+	// Set once at signup; never changes. Nil for tenants created before V5 migration.
+	DIDSeed []byte `json:"-" db:"did_seed"`
 }
 
 // Billing errors.
@@ -154,9 +160,14 @@ var (
 	ErrOAuthIdentityNotFound = errors.New("OAuth identity not found")
 )
 
-// NewTenant creates a new tenant with a generated ID.
+// NewTenant creates a new tenant with a generated ID and a random DID seed.
 func NewTenant(name, email string, plan Plan) *Tenant {
 	now := time.Now().UTC()
+	seed := make([]byte, 32)
+	if _, err := rand.Read(seed); err != nil {
+		// crypto/rand failure is fatal; the OS entropy pool is exhausted.
+		panic("billing: failed to generate DID seed: " + err.Error())
+	}
 	return &Tenant{
 		ID:            newID("t"),
 		Name:          name,
@@ -167,6 +178,7 @@ func NewTenant(name, email string, plan Plan) *Tenant {
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		BillingStatus: "active",
+		DIDSeed:       seed,
 	}
 }
 

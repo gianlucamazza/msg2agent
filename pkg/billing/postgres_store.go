@@ -101,6 +101,8 @@ var pgMigrations = []pgMigration{
 			processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 		);
 	`},
+	// V5: per-tenant DID seed for deterministic identity derivation (gateway pattern).
+	{5, `ALTER TABLE tenants ADD COLUMN IF NOT EXISTS did_seed BYTEA`},
 }
 
 // NewPostgresStore opens a billing Postgres database at dsn and runs migrations.
@@ -172,10 +174,14 @@ func (s *PostgresStore) PutTenant(t *Tenant) error {
 	if t.CurrentPeriodEnd != nil {
 		currentPeriodEnd = t.CurrentPeriodEnd.UTC()
 	}
+	var didSeed any
+	if len(t.DIDSeed) == 32 {
+		didSeed = t.DIDSeed
+	}
 	_, err = s.db.Exec(`
 		INSERT INTO tenants(id,name,email,plan,status,quota,created_at,updated_at,
-		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		ON CONFLICT(id) DO UPDATE SET
 			name=EXCLUDED.name, email=EXCLUDED.email, plan=EXCLUDED.plan,
 			status=EXCLUDED.status, quota=EXCLUDED.quota,
@@ -183,11 +189,12 @@ func (s *PostgresStore) PutTenant(t *Tenant) error {
 			stripe_customer_id=EXCLUDED.stripe_customer_id,
 			stripe_subscription_id=EXCLUDED.stripe_subscription_id,
 			current_period_end=EXCLUDED.current_period_end,
-			billing_status=EXCLUDED.billing_status`,
+			billing_status=EXCLUDED.billing_status,
+			did_seed=EXCLUDED.did_seed`,
 		t.ID, t.Name, t.Email, string(t.Plan), string(t.Status),
 		string(quota), t.CreatedAt.UTC(), t.UpdatedAt.UTC(),
 		pgNullStr(t.StripeCustomerID), pgNullStr(t.StripeSubscriptionID),
-		currentPeriodEnd, t.BillingStatus,
+		currentPeriodEnd, t.BillingStatus, didSeed,
 	)
 	return err
 }
@@ -195,7 +202,7 @@ func (s *PostgresStore) PutTenant(t *Tenant) error {
 func (s *PostgresStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
 		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed
 		 FROM tenants WHERE id=$1`, id,
 	)
 	return pgScanTenant(row)
@@ -204,7 +211,7 @@ func (s *PostgresStore) GetTenant(id string) (*Tenant, error) {
 func (s *PostgresStore) ListTenants() ([]*Tenant, error) {
 	rows, err := s.db.Query(
 		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed
 		 FROM tenants`,
 	)
 	if err != nil {
@@ -667,9 +674,10 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	var createdAt, updatedAt time.Time
 	var stripeCustomerID, stripeSubscriptionID sql.NullString
 	var currentPeriodEnd sql.NullTime
+	var didSeed []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
 		&quotaJSON, &createdAt, &updatedAt,
-		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEnd, &t.BillingStatus)
+		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEnd, &t.BillingStatus, &didSeed)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -690,6 +698,9 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	if currentPeriodEnd.Valid {
 		ts := currentPeriodEnd.Time.UTC()
 		t.CurrentPeriodEnd = &ts
+	}
+	if len(didSeed) == 32 {
+		t.DIDSeed = didSeed
 	}
 	return &t, nil
 }

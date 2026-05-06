@@ -101,6 +101,7 @@ type Agent struct {
 	tlsCertFile       string
 	tlsKeyFile        string
 	tlsSkipVerify     bool
+	relayBearerToken  string
 }
 
 // Config holds agent configuration.
@@ -126,6 +127,10 @@ type Config struct {
 	// Identity allows passing a pre-built identity (e.g. loaded from disk).
 	// If nil, a new ephemeral identity is generated.
 	Identity *identity.Identity
+
+	// RelayBearerToken is sent as the Authorization header when connecting to
+	// the relay. Required when the relay has billing auth enabled.
+	RelayBearerToken string
 }
 
 // New creates a new agent with the given configuration.
@@ -191,6 +196,7 @@ func New(cfg Config) (*Agent, error) {
 		tlsCertFile:       cfg.TLSCertFile,
 		tlsKeyFile:        cfg.TLSKeyFile,
 		tlsSkipVerify:     cfg.TLSSkipVerify,
+		relayBearerToken:  cfg.RelayBearerToken,
 	}, nil
 }
 
@@ -744,6 +750,7 @@ func encodeBase58(data []byte) string {
 func (a *Agent) Connect(ctx context.Context, addr string) error {
 	cfg := transport.DefaultConfig(addr)
 	cfg.TLSSkipVerify = a.tlsSkipVerify
+	cfg.BearerToken = a.relayBearerToken
 	t := transport.NewWebSocketTransport(cfg)
 
 	if err := t.Connect(ctx); err != nil {

@@ -140,12 +140,13 @@ func main() {
 
 	// Create agent.
 	cfg := agent.Config{
-		Domain:      agentDomain,
-		AgentID:     agentName,
-		DisplayName: agentName,
-		RelayAddr:   relayAddr,
-		Logger:      logger,
-		Identity:    ident,
+		Domain:           agentDomain,
+		AgentID:          agentName,
+		DisplayName:      agentName,
+		RelayAddr:        relayAddr,
+		Logger:           logger,
+		Identity:         ident,
+		RelayBearerToken: os.Getenv("MSG2AGENT_SERVICE_TOKEN"),
 	}
 
 	a, err := agent.New(cfg)

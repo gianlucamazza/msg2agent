@@ -90,6 +90,7 @@ type Config struct {
 	TLSKeyFile      string
 	TLSSkipVerify   bool     // Skip TLS certificate verification (for testing)
 	AllowedOrigins  []string // Allowed CORS origins for WebSocket (nil = same-origin only)
+	BearerToken     string   // Bearer token sent as Authorization header on dial (optional)
 }
 
 // DefaultConfig returns a default transport configuration.

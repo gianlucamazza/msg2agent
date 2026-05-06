@@ -52,10 +52,14 @@ func (t *WebSocketTransport) Connect(ctx context.Context) error {
 
 	t.logger.Debug("websocket connecting", "addr", t.remoteAddr)
 
+	headers := http.Header{
+		"User-Agent": []string{"msg2agent/1.0"},
+	}
+	if t.config.BearerToken != "" {
+		headers.Set("Authorization", "Bearer "+t.config.BearerToken)
+	}
 	opts := &websocket.DialOptions{
-		HTTPHeader: http.Header{
-			"User-Agent": []string{"msg2agent/1.0"},
-		},
+		HTTPHeader: headers,
 	}
 
 	// Configure TLS skip verify if enabled (for testing)

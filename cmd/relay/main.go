@@ -191,6 +191,9 @@ type RelayHub struct {
 	billingStore billing.Store
 	tenantPool   *billing.TenantRateLimiterPool
 	jwtValidator billing.JWTValidator // optional OAuth2 JWT validator for WS auth
+
+	// serviceToken allows internal agents to bypass billing auth on WebSocket connect.
+	serviceToken string
 }
 
 // Client represents a connected agent.
@@ -488,8 +491,11 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Billing auth: resolve tenant from Bearer API key or JWT if billing is active.
+	// Internal agents (e.g. mcp-server) bypass billing by presenting the service token.
+	isSvcConn := h.serviceToken != "" &&
+		r.Header.Get("Authorization") == "Bearer "+h.serviceToken
 	var tenantID string
-	if h.billingStore != nil {
+	if h.billingStore != nil && !isSvcConn {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "missing Authorization header", http.StatusUnauthorized)
@@ -1290,6 +1296,12 @@ func main() {
 			hub.jwtValidator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
 			logger.Info("relay OAuth2 JWT auth enabled", "issuer", issuerURL)
 		}
+	}
+
+	// Internal service token — lets mcp-server connect without billing API key.
+	if svcToken := os.Getenv("MSG2AGENT_SERVICE_TOKEN"); svcToken != "" {
+		hub.serviceToken = svcToken
+		logger.Info("relay service token configured for internal agent auth")
 	}
 
 	// Configure DID allowlist

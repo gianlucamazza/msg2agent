@@ -527,6 +527,7 @@ func (s *SQLiteStore) VerifyAuditChain(tenantID string) ([]AuditChainResult, err
 				telemetry.AddEvent(ctx, "billing.audit_tampered",
 					attribute.String("billing.tenant_id", ten),
 					attribute.String("billing.first_bad_id", id))
+				RecordAuditChainTampered(ten)
 				rows.Close()
 				goto nextTenant
 			}

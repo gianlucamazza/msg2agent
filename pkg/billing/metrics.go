@@ -30,6 +30,11 @@ var (
 		Name: "billing_quota_usage_ratio",
 		Help: "Current quota usage ratio (0.0–1.0) per tenant and event type",
 	}, []string{"tenant_id", "event"})
+
+	billingAuditChainTampered = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "billing_audit_chain_tampered_total",
+		Help: "Audit chain divergences detected by VerifyAuditChain",
+	}, []string{"tenant_id"})
 )
 
 // RecordQuotaExceeded increments the quota-exceeded counter for external callers
@@ -42,4 +47,9 @@ func RecordQuotaExceeded(tenantID, event string) {
 // (e.g. relay handleMessage enforcing tenant rate limit).
 func RecordRateLimited(tenantID string) {
 	billingRateLimited.WithLabelValues(tenantID).Inc()
+}
+
+// RecordAuditChainTampered increments the tamper counter for a tenant.
+func RecordAuditChainTampered(tenantID string) {
+	billingAuditChainTampered.WithLabelValues(tenantID).Inc()
 }

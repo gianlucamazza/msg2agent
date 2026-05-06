@@ -109,6 +109,7 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 | [Anthropic Marketplace](docs/marketplace/anthropic.md) | Publish on Claude Marketplace          |
 | [Google A2A Marketplace](docs/marketplace/google-a2a.md) | Publish on Google Cloud Agent Marketplace |
 | [Billing Setup](docs/marketplace/billing-setup.md)    | Multi-tenant billing: tenants, API keys, usage |
+| [Billing Client Guide](docs/marketplace/billing-client-guide.md) | API key usage, error codes, rate-limit back-off |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |
 
 ## Project Structure

@@ -45,6 +45,8 @@ var (
 	ErrListenerFailed     = errors.New("listener failed to start")
 	ErrAlreadyListening   = errors.New("already listening")
 	ErrEncryptionRequired = errors.New("encryption required but failed")
+	ErrRateLimited        = errors.New("relay rate limit exceeded; back off and retry")
+	ErrQuotaExceeded      = errors.New("billing quota exceeded for current period")
 )
 
 // MethodHandler handles a specific method call.
@@ -1096,12 +1098,48 @@ func (a *Agent) CallRelay(ctx context.Context, method string, params any) (json.
 			return nil, context.Canceled
 		}
 		if resp.IsError() {
+			switch resp.Error.Code {
+			case protocol.CodeRateLimited:
+				return nil, ErrRateLimited
+			case protocol.CodeQuotaExceeded:
+				return nil, ErrQuotaExceeded
+			}
 			return nil, errors.New(resp.Error.Message)
 		}
 		return resp.Result, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// CallRelayWithRetry calls CallRelay with exponential backoff on ErrRateLimited.
+// Quota-exceeded errors are returned immediately without retry.
+// maxAttempts=0 uses the default of 5. cap is 30s.
+func (a *Agent) CallRelayWithRetry(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	const maxAttempts = 5
+	base := 500 * time.Millisecond
+	cap := 30 * time.Second
+
+	for attempt := range maxAttempts {
+		result, err := a.CallRelay(ctx, method, params)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, ErrRateLimited) {
+			return nil, err
+		}
+		delay := time.Duration(1<<attempt) * base
+		if delay > cap {
+			delay = cap
+		}
+		a.logger.Warn("relay rate limited, retrying", "method", method, "attempt", attempt+1, "delay", delay)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return nil, ErrRateLimited
 }
 
 // receiveLoop handles incoming messages from a transport.

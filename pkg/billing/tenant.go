@@ -2,9 +2,36 @@
 package billing
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"sync"
 	"time"
 )
+
+var (
+	quotaOverrideOnce  sync.Once
+	quotaOverrides     map[string]QuotaConfig // plan name → override
+	quotaOverrideError error
+)
+
+// loadQuotaOverrides reads BILLING_QUOTAS_FILE (JSON) once and returns plan overrides.
+// The file format is {"free": {...}, "starter": {...}, ...}. Missing fields keep defaults.
+func loadQuotaOverrides() (map[string]QuotaConfig, error) {
+	quotaOverrideOnce.Do(func() {
+		path := os.Getenv("BILLING_QUOTAS_FILE")
+		if path == "" {
+			return
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			quotaOverrideError = err
+			return
+		}
+		quotaOverrideError = json.Unmarshal(data, &quotaOverrides)
+	})
+	return quotaOverrides, quotaOverrideError
+}
 
 // Plan identifies a subscription tier.
 type Plan string
@@ -25,8 +52,8 @@ type QuotaConfig struct {
 	RateLimitBurstSize   float64 // token-bucket burst
 }
 
-// DefaultQuota returns the quota for a given plan.
-func DefaultQuota(p Plan) QuotaConfig {
+// hardcodedQuota returns the built-in quota defaults per plan.
+func hardcodedQuota(p Plan) QuotaConfig {
 	switch p {
 	case PlanStarter:
 		return QuotaConfig{
@@ -61,6 +88,32 @@ func DefaultQuota(p Plan) QuotaConfig {
 			RateLimitBurstSize:   20,
 		}
 	}
+}
+
+// DefaultQuota returns the quota for a given plan, with optional overrides from
+// BILLING_QUOTAS_FILE (JSON map of plan name → QuotaConfig partial overrides).
+func DefaultQuota(p Plan) QuotaConfig {
+	q := hardcodedQuota(p)
+	overrides, _ := loadQuotaOverrides()
+	if ov, ok := overrides[string(p)]; ok {
+		// Apply non-zero fields from override.
+		if ov.MaxAgentDIDs > 0 {
+			q.MaxAgentDIDs = ov.MaxAgentDIDs
+		}
+		if ov.MaxMessagesPerMonth > 0 {
+			q.MaxMessagesPerMonth = ov.MaxMessagesPerMonth
+		}
+		if ov.MaxToolCallsPerMonth > 0 {
+			q.MaxToolCallsPerMonth = ov.MaxToolCallsPerMonth
+		}
+		if ov.RateLimitMsgPerSec > 0 {
+			q.RateLimitMsgPerSec = ov.RateLimitMsgPerSec
+		}
+		if ov.RateLimitBurstSize > 0 {
+			q.RateLimitBurstSize = ov.RateLimitBurstSize
+		}
+	}
+	return q
 }
 
 // TenantStatus is the lifecycle state of a tenant account.

@@ -792,7 +792,12 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 			if err == nil && count >= tenant.Quota.MaxAgentDIDs {
 				c.hub.logger.Warn("MaxAgentDIDs quota exceeded", "tenant", c.TenantID, "count", count, "limit", tenant.Quota.MaxAgentDIDs)
 				billing.RecordQuotaExceeded(c.TenantID, "agent_did")
-				c.sendError(req.ID, protocol.CodeQuotaExceeded, "DID quota exceeded for this tenant")
+				c.sendErrorWithData(req.ID, protocol.CodeQuotaExceeded, "DID quota exceeded for this tenant", map[string]any{
+					"plan":         string(tenant.Plan),
+					"current":      count,
+					"limit":        tenant.Quota.MaxAgentDIDs,
+					"upgrade_hint": "billing-admin set-plan --tenant " + c.TenantID + " --plan team",
+				})
 				return
 			}
 		}
@@ -970,7 +975,11 @@ func (c *Client) sendResult(id any, result any) {
 }
 
 func (c *Client) sendError(id any, code int, message string) {
-	resp := protocol.NewErrorResponse(id, code, message, nil)
+	c.sendErrorWithData(id, code, message, nil)
+}
+
+func (c *Client) sendErrorWithData(id any, code int, message string, errData any) {
+	resp := protocol.NewErrorResponse(id, code, message, errData)
 	data, _ := protocol.Encode(resp)
 	select {
 	case c.SendCh <- data:

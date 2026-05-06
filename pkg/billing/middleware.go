@@ -35,6 +35,14 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				return
 			}
 
+			// Rate-limit IPs that repeatedly fail authentication.
+			ip := realIP(r)
+			if !globalAuthLimiter.Allow(ip) {
+				billingRateLimited.WithLabelValues("__auth_failed__").Inc()
+				http.Error(w, "too many failed authentication attempts", http.StatusTooManyRequests)
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				if allowAnon {
@@ -47,6 +55,7 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+				globalAuthLimiter.Consume(ip)
 				http.Error(w, "invalid Authorization format; expected: Bearer sk_live_...", http.StatusUnauthorized)
 				return
 			}
@@ -54,16 +63,19 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 			plaintext := parts[1]
 			hash, err := HashAPIKey(plaintext)
 			if err != nil {
+				globalAuthLimiter.Consume(ip)
 				http.Error(w, ErrInvalidAPIKey.Error(), http.StatusUnauthorized)
 				return
 			}
 
 			key, err := store.GetAPIKeyByHash(hash)
 			if err != nil {
+				globalAuthLimiter.Consume(ip)
 				http.Error(w, "invalid or unknown API key", http.StatusUnauthorized)
 				return
 			}
 			if !key.IsValid() {
+				globalAuthLimiter.Consume(ip)
 				http.Error(w, ErrAPIKeyRevoked.Error(), http.StatusUnauthorized)
 				return
 			}

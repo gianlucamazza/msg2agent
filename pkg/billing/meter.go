@@ -135,10 +135,12 @@ func (m *UsageMeter) Record(tenantID string, event UsageEvent, delta int64) {
 // RecordAudit increments the counter AND queues an audit event for persistence.
 func (m *UsageMeter) RecordAudit(tenantID string, event UsageEvent, toolName, requestID string, delta int64) {
 	m.Record(tenantID, event, delta)
+	billingUsageEvents.WithLabelValues(tenantID, string(event)).Add(float64(delta))
 	if m.eventCh != nil {
 		select {
 		case m.eventCh <- auditEvent{tenantID: tenantID, event: string(event), toolName: toolName, requestID: requestID}:
 		default:
+			billingAuditDropped.Inc()
 			if m.logger != nil {
 				m.logger.Warn("billing: audit event channel full, event dropped", "tenant", tenantID, "event", event)
 			}
@@ -178,12 +180,15 @@ func (m *UsageMeter) Current(tenantID string, event UsageEvent) int64 {
 }
 
 // CheckQuota returns ErrQuotaExceeded if the tenant has reached the monthly limit.
-// Pass limit ≤ 0 to skip the check.
+// Pass limit ≤ 0 to skip the check. Updates the quota_usage_ratio gauge on every call.
 func (m *UsageMeter) CheckQuota(tenantID string, event UsageEvent, limit int64) error {
 	if limit <= 0 {
 		return nil
 	}
-	if m.Current(tenantID, event) >= limit {
+	current := m.Current(tenantID, event)
+	billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(float64(current) / float64(limit))
+	if current >= limit {
+		billingQuotaExceeded.WithLabelValues(tenantID, string(event)).Inc()
 		return fmt.Errorf("%w: %s limit %d reached for tenant %s",
 			ErrQuotaExceeded, event, limit, tenantID)
 	}

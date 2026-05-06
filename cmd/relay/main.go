@@ -697,6 +697,7 @@ func (c *Client) handleMessage(data []byte) {
 		if !c.hub.tenantPool.Allow(c.TenantID) {
 			c.hub.logger.Warn("tenant rate limit exceeded", "tenant", c.TenantID)
 			recordRateLimitHit("tenant_message")
+			billing.RecordRateLimited(c.TenantID)
 			c.sendError(req.ID, protocol.CodeRateLimited, "tenant rate limit exceeded")
 			return
 		}
@@ -790,6 +791,7 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 			count, err := c.hub.store.CountByTenant(c.TenantID)
 			if err == nil && count >= tenant.Quota.MaxAgentDIDs {
 				c.hub.logger.Warn("MaxAgentDIDs quota exceeded", "tenant", c.TenantID, "count", count, "limit", tenant.Quota.MaxAgentDIDs)
+				billing.RecordQuotaExceeded(c.TenantID, "agent_did")
 				c.sendError(req.ID, protocol.CodeQuotaExceeded, "DID quota exceeded for this tenant")
 				return
 			}

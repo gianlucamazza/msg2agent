@@ -22,6 +22,20 @@ The relay exposes Prometheus metrics at `/metrics` on its main port. All relay m
 | `relay_discoveries_total`                   | Counter |          | Discovery requests                                                         |
 | `relay_errors_total`                        | Counter | `type`   | Errors (e.g. `websocket_accept`, `discovery`)                              |
 
+### Billing Metrics
+
+Billing metrics are emitted by the relay and MCP server when multi-tenant billing is enabled (`--billing-db`). All billing metrics use the `billing_` prefix.
+
+| Metric                          | Type    | Labels                  | Description                                                |
+| ------------------------------- | ------- | ----------------------- | ---------------------------------------------------------- |
+| `billing_quota_exceeded_total`  | Counter | `tenant_id`, `event`   | Requests rejected because monthly quota was reached        |
+| `billing_rate_limited_total`    | Counter | `tenant_id`             | Requests rejected by tenant-level rate limiter             |
+| `billing_audit_dropped_total`   | Counter |                         | Audit events dropped due to full internal channel          |
+| `billing_usage_events_total`    | Counter | `tenant_id`, `event`   | Billable events recorded (`message`, `tool_call`, etc.)    |
+| `billing_quota_usage_ratio`     | Gauge   | `tenant_id`, `event`   | Current usage / monthly limit (0.0–1.0); updated per call  |
+
+`event` label values: `message`, `tool_call`, `task_submit`, `agent_did`.
+
 ### Agent Metrics
 
 Agents expose metrics on a separate port (configured via `-metrics`). Agent metrics use a configurable namespace (default: `agent`), so metric names follow the pattern `{namespace}_metric_name`.
@@ -237,6 +251,34 @@ groups:
         annotations:
           summary: "Rate limiting active"
           description: "Rate limiting {{ $value }} requests/s"
+
+      # Billing alerts (only relevant when --billing-db is set)
+      - alert: TenantQuotaExceeded
+        expr: rate(billing_quota_exceeded_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant quota exceeded"
+          description: "Tenant {{ $labels.tenant_id }} is hitting {{ $labels.event }} quota limit"
+
+      - alert: TenantApproachingQuota
+        expr: billing_quota_usage_ratio > 0.8
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Tenant approaching quota"
+          description: "Tenant {{ $labels.tenant_id }} at {{ $value | humanizePercentage }} of {{ $labels.event }} quota"
+
+      - alert: BillingAuditDropping
+        expr: rate(billing_audit_dropped_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Billing audit events being dropped"
+          description: "Audit channel is full — persisted usage counts may be inaccurate"
 ```
 
 ## Docker Compose with Monitoring

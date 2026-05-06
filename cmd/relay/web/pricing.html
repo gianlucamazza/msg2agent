@@ -29,6 +29,8 @@
     }
     .plan-tab:hover { border-color: var(--accent); }
     .plan-tab.selected { border-color: var(--accent); background: rgba(233,69,96,0.12); color: var(--accent); font-weight: 600; }
+    .plan-tab[data-disabled="1"] { opacity: 0.45; cursor: not-allowed; }
+    .plan-tab[data-disabled="1"]:hover { border-color: var(--border); }
     .plan-tab .price { font-size: 0.75rem; color: var(--muted); display: block; }
     .plan-tab.selected .price { color: var(--accent); }
     label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; }
@@ -75,18 +77,18 @@
 
   <div class="pricing-wrap">
     <h1>Get your API key</h1>
-    <p class="subtitle">Start for free — no credit card required. Upgrade any time.</p>
+    <p class="subtitle">Free during early access — no credit card required. Paid plans coming soon.</p>
 
     <div class="form-section">
       <div class="plan-tabs">
-        <div class="plan-tab" data-plan="free">
+        <div class="plan-tab selected" data-plan="free">
           Free<span class="price">$0/mo</span>
         </div>
-        <div class="plan-tab" data-plan="starter">
-          Starter<span class="price">$19/mo</span>
+        <div class="plan-tab" data-plan="starter" data-disabled="1" title="Coming soon">
+          Starter<span class="price">Coming soon</span>
         </div>
-        <div class="plan-tab" data-plan="team">
-          Team<span class="price">$99/mo</span>
+        <div class="plan-tab" data-plan="team" data-disabled="1" title="Coming soon">
+          Team<span class="price">Coming soon</span>
         </div>
       </div>
 
@@ -122,16 +124,18 @@
   </div>
 
   <script>
-    // Pre-select plan from URL query param.
-    const urlPlan = new URLSearchParams(location.search).get('plan') || 'free';
-    let selectedPlan = urlPlan;
+    // Paid plans are disabled during early access — only "free" is selectable.
+    let selectedPlan = 'free';
 
     const tabs = document.querySelectorAll('.plan-tab');
     function selectPlan(plan) {
       selectedPlan = plan;
       tabs.forEach(t => t.classList.toggle('selected', t.dataset.plan === plan));
     }
-    tabs.forEach(t => t.addEventListener('click', () => selectPlan(t.dataset.plan)));
+    tabs.forEach(t => t.addEventListener('click', () => {
+      if (t.dataset.disabled === '1') return;
+      selectPlan(t.dataset.plan);
+    }));
     selectPlan(selectedPlan);
 
     document.getElementById('submit-btn').addEventListener('click', async () => {

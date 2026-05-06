@@ -29,11 +29,12 @@ type Server struct {
 	inbox *Inbox
 }
 
-// NewServer creates a new MCP server
-func NewServer(caller AgentCaller, logger *slog.Logger) *Server {
+// NewServer creates a new MCP server. Optional ServerOptions (e.g. middleware) are
+// forwarded to the underlying mcp-go MCPServer.
+func NewServer(caller AgentCaller, logger *slog.Logger, opts ...server.ServerOption) *Server {
 	s := &Server{
 		caller: caller,
-		mcp:    server.NewMCPServer("msg2agent-mcp", "0.1.0"),
+		mcp:    server.NewMCPServer("msg2agent-mcp", "0.1.0", opts...),
 		logger: logger,
 		tasks:  make(map[string]*TrackedTask),
 		inbox:  NewInbox(1000), // Buffer up to 1000 messages

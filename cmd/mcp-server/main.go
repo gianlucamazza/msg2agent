@@ -12,11 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	mcpadapter "github.com/gianluca/msg2agent/adapters/mcp"
-	"github.com/gianluca/msg2agent/pkg/agent"
-	"github.com/gianluca/msg2agent/pkg/identity"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/mark3labs/mcp-go/server"
+
+	mcpadapter "github.com/gianlucamazza/msg2agent/adapters/mcp"
+	"github.com/gianlucamazza/msg2agent/pkg/agent"
+	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/identity"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // agentBridge adapts *agent.Agent to mcpadapter.AgentCaller.
@@ -60,6 +63,8 @@ func main() {
 	transport := flag.String("transport", "stdio", "MCP transport: stdio, sse, streamable-http")
 	addr := flag.String("addr", ":8081", "Listen address for SSE/HTTP transports")
 	identFile := flag.String("identity-file", "", "Path to identity key file for persistence")
+	billingDB := flag.String("billing-db", "", "Path to billing SQLite DB (enables API key auth when set)")
+	allowAnon := flag.Bool("allow-anon", false, "Allow unauthenticated MCP requests (only when billing-db is set)")
 	flag.Parse()
 
 	// Validate transport flag
@@ -203,7 +208,32 @@ func main() {
 		}
 	}
 
-	// Create MCP server via adapter
+	// Prepare billing when a billing DB path is provided (streamable-http only).
+	var billingOpts []server.ServerOption
+	var billingStore billing.Store
+
+	if *billingDB != "" && tp == mcpadapter.TransportStreamableHTTP {
+		if *allowAnon {
+			logger.Warn("SECURITY: --allow-anon is set with billing enabled; unauthenticated requests bypass billing")
+		}
+		bStore, err := billing.NewSQLiteStore(*billingDB)
+		if err != nil {
+			logger.Error("failed to open billing store", "path", *billingDB, "error", err)
+			os.Exit(1)
+		}
+		billingStore = bStore
+		meter := billing.NewUsageMeter()
+		// Restore monthly counters from persisted aggregates (crash-safe restart).
+		if err := meter.RestoreFromAggregates(bStore); err != nil {
+			logger.Warn("billing: failed to restore usage counters", "error", err)
+		}
+		// Start async audit writer (flushes to DB every 5s).
+		meter.WithStore(ctx, bStore, logger)
+		billingOpts = append(billingOpts, server.WithToolHandlerMiddleware(billing.MCPToolMeterMiddleware(meter)))
+		logger.Info("billing enabled", "db", *billingDB, "allow_anon", *allowAnon)
+	}
+
+	// Create MCP server via adapter (tool middleware injected via billingOpts).
 	mcpServer := mcpadapter.NewMCPServer(
 		&agentBridge{a: a},
 		mcpadapter.ServerConfig{
@@ -213,7 +243,14 @@ func main() {
 			Addr:      *addr,
 		},
 		logger,
+		billingOpts...,
 	)
+
+	// Wire HTTP-level API key auth middleware.
+	if billingStore != nil {
+		mcpServer.WithAuthMiddleware(billing.APIKeyMiddleware(billingStore, *allowAnon))
+		logger.Info("API key auth enabled")
+	}
 
 	// Register catch-all handler for incoming messages
 	a.RegisterMethod("*", func(ctx context.Context, params json.RawMessage) (any, error) {

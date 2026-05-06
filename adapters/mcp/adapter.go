@@ -4,10 +4,11 @@ package mcp
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
-	pkgmcp "github.com/gianluca/msg2agent/pkg/mcp"
+	pkgmcp "github.com/gianlucamazza/msg2agent/pkg/mcp"
 )
 
 // TransportType selects the MCP transport.
@@ -38,15 +39,23 @@ type MCPServer struct {
 	*pkgmcp.Server // provides all tools, resources, inbox, notifications
 	logger         *slog.Logger
 	cfg            ServerConfig
+	authMiddleware func(http.Handler) http.Handler // optional auth wrapper
 }
 
 // NewMCPServer creates a new MCP server backed by the given AgentCaller.
-func NewMCPServer(caller AgentCaller, cfg ServerConfig, logger *slog.Logger) *MCPServer {
+// Optional ServerOptions (e.g. billing tool middleware) are forwarded to mcp-go.
+func NewMCPServer(caller AgentCaller, cfg ServerConfig, logger *slog.Logger, opts ...server.ServerOption) *MCPServer {
 	return &MCPServer{
-		Server: pkgmcp.NewServer(caller, logger),
+		Server: pkgmcp.NewServer(caller, logger, opts...),
 		logger: logger,
 		cfg:    cfg,
 	}
+}
+
+// WithAuthMiddleware wraps the HTTP handler with the given middleware (e.g. API key auth).
+// Must be called before Serve/Handler/RegisterWithMux.
+func (s *MCPServer) WithAuthMiddleware(mw func(http.Handler) http.Handler) {
+	s.authMiddleware = mw
 }
 
 // ServeSSE starts an SSE transport on the given address.
@@ -58,14 +67,25 @@ func (s *MCPServer) ServeSSE(addr string) error {
 
 // ServeStreamableHTTP starts a Streamable HTTP transport on the given address.
 func (s *MCPServer) ServeStreamableHTTP(addr string) error {
-	httpServer := server.NewStreamableHTTPServer(s.Internal())
 	s.logger.Info("starting MCP Streamable HTTP server", "addr", addr)
-	return httpServer.Start(addr)
+	if s.authMiddleware == nil {
+		return server.NewStreamableHTTPServer(s.Internal()).Start(addr)
+	}
+	// Wrap the mcp-go handler with auth middleware and serve via net/http.
+	mux := http.NewServeMux()
+	s.RegisterWithMux(mux, "/mcp")
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	return srv.ListenAndServe()
 }
 
-// Handler returns an http.Handler for the Streamable HTTP transport.
+// Handler returns an http.Handler for the Streamable HTTP transport,
+// wrapped with auth middleware if one was set via WithAuthMiddleware.
 func (s *MCPServer) Handler() http.Handler {
-	return server.NewStreamableHTTPServer(s.Internal())
+	var h http.Handler = server.NewStreamableHTTPServer(s.Internal())
+	if s.authMiddleware != nil {
+		h = s.authMiddleware(h)
+	}
+	return h
 }
 
 // RegisterWithMux registers the MCP Streamable HTTP handler on a mux.

@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 

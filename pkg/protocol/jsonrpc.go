@@ -31,6 +31,7 @@ const (
 	CodeSenderNotRegistered = -32005 // Sender not registered with relay
 	CodeSenderMismatch      = -32006 // Message From field doesn't match client DID
 	CodeRateLimited         = -32007 // Rate limit exceeded
+	CodeQuotaExceeded       = -32008 // Billing quota exceeded
 )
 
 // JSONRPCRequest represents a JSON-RPC 2.0 request.

@@ -1031,6 +1031,9 @@ func main() {
 	// Billing (optional)
 	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
 
+	// Self-service signup (optional; requires billing store)
+	enableSignup := flag.Bool("enable-signup", false, "Enable self-service tenant signup endpoint POST /api/tenants (requires --billing-db)")
+
 	flag.Parse()
 
 	// Resolve configuration: flags override env vars override defaults
@@ -1278,6 +1281,16 @@ func main() {
 
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
+
+	// Self-service signup endpoint (opt-in; requires billing store)
+	if *enableSignup {
+		if hub.billingStore == nil {
+			logger.Error("--enable-signup requires --billing-db to be set")
+			os.Exit(1)
+		}
+		mux.HandleFunc("/api/tenants", signupHandler(hub.billingStore, logger))
+		logger.Info("signup endpoint enabled", "path", "/api/tenants")
+	}
 
 	server := &http.Server{
 		Addr:              listenAddr,

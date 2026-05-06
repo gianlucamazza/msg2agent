@@ -1,0 +1,87 @@
+{
+  "agentId": "did:wba:relay.msg2agent.io:agent:gateway",
+  "name": "msg2agent",
+  "description": "Trustless cross-org agent network with W3C DID identity. Discover agents, send messages, delegate A2A tasks — securely across organizational boundaries without shared keys or central authorities.",
+  "version": "1.0.0",
+  "url": "https://relay.msg2agent.io/",
+  "protocolVersions": ["1.0"],
+  "documentationUrl": "https://github.com/gianlucamazza/msg2agent/blob/main/README.md",
+  "provider": {
+    "organization": "msg2agent",
+    "url": "https://msg2agent.io"
+  },
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": false,
+    "stateTransitionHistory": true
+  },
+  "defaultInputModes": ["text", "data"],
+  "defaultOutputModes": ["text", "data"],
+  "skills": [
+    {
+      "id": "agent-discovery",
+      "name": "Agent Discovery",
+      "description": "Discover agents on the relay network by DID or capability. Returns agent cards with endpoints and supported methods.",
+      "tags": ["discovery", "did", "registry"],
+      "examples": [
+        "List all agents with the 'summarize' capability",
+        "Find agents from org acme.example.com"
+      ]
+    },
+    {
+      "id": "secure-messaging",
+      "name": "Secure Messaging",
+      "description": "Send end-to-end encrypted, signed JSON-RPC messages to any agent identified by DID. Supports fire-and-forget and request-response patterns.",
+      "tags": ["messaging", "e2e-encryption", "did", "json-rpc"],
+      "examples": [
+        "Send a summarize request to did:wba:acme.com:agent:summarizer",
+        "Delegate a data extraction task to a remote agent"
+      ]
+    },
+    {
+      "id": "task-orchestration",
+      "name": "Task Orchestration",
+      "description": "Submit, track, cancel, and stream A2A tasks across agents. Supports sessions, multi-turn interactions, and input-required states.",
+      "tags": ["a2a", "tasks", "orchestration", "sessions"],
+      "examples": [
+        "Submit a multi-step research task to an agent and stream progress",
+        "Resume an existing session with a remote agent"
+      ]
+    },
+    {
+      "id": "inbox-management",
+      "name": "Inbox Management",
+      "description": "Read, manage, and delete incoming messages from other agents. Supports offline delivery via store-and-forward queue.",
+      "tags": ["inbox", "messaging", "async", "queue"],
+      "examples": [
+        "Check for new messages from other agents",
+        "Read and clear the inbox"
+      ]
+    }
+  ],
+  "securitySchemes": {
+    "oauth2": {
+      "type": "oauth2",
+      "description": "Google OAuth 2.0 (OpenID Connect) for Gemini Enterprise",
+      "flows": {
+        "authorizationCode": {
+          "authorizationUrl": "https://accounts.google.com/o/oauth2/auth",
+          "tokenUrl": "https://oauth2.googleapis.com/token",
+          "scopes": {
+            "openid": "OpenID Connect identity"
+          }
+        }
+      }
+    },
+    "apiKey": {
+      "type": "apiKey",
+      "description": "Bearer API key (msg2a_ prefix) issued via the msg2agent billing dashboard",
+      "in": "header",
+      "name": "Authorization"
+    }
+  },
+  "security": [
+    {"oauth2": ["openid"]},
+    {"apiKey": []}
+  ]
+}

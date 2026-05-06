@@ -87,11 +87,12 @@ func NewSQLiteStore(cfg SQLiteConfig) (*SQLiteStore, error) {
 // migrate runs database migrations.
 func (s *SQLiteStore) migrate() error {
 	migrations := []string{
-		// Version 1: Create agents table
+		// Version 0: Create schema_migrations table
 		`CREATE TABLE IF NOT EXISTS schema_migrations (
 			version INTEGER PRIMARY KEY,
 			applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		// Version 1: Create agents table
 		`CREATE TABLE IF NOT EXISTS agents (
 			id TEXT PRIMARY KEY,
 			did TEXT UNIQUE NOT NULL,
@@ -106,9 +107,16 @@ func (s *SQLiteStore) migrate() error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		// Version 2: Indexes
 		`CREATE INDEX IF NOT EXISTS idx_agents_did ON agents(did)`,
+		// Version 3
 		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
+		// Version 4
 		`CREATE INDEX IF NOT EXISTS idx_agents_last_seen ON agents(last_seen)`,
+		// Version 5: Add tenant_id for multi-tenant billing
+		`ALTER TABLE agents ADD COLUMN tenant_id TEXT NOT NULL DEFAULT ''`,
+		// Version 6: Index for tenant-scoped queries
+		`CREATE INDEX IF NOT EXISTS idx_agents_tenant ON agents(tenant_id)`,
 	}
 
 	for i, migration := range migrations {
@@ -140,7 +148,7 @@ func (s *SQLiteStore) Get(id uuid.UUID) (*Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.getByQuery("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata FROM agents WHERE id = ?", id.String())
+	return s.getByQuery("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, tenant_id FROM agents WHERE id = ?", id.String())
 }
 
 // GetByDID retrieves an agent by DID.
@@ -148,7 +156,7 @@ func (s *SQLiteStore) GetByDID(did string) (*Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.getByQuery("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata FROM agents WHERE did = ?", did)
+	return s.getByQuery("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, tenant_id FROM agents WHERE did = ?", did)
 }
 
 // getByQuery executes a query and scans the result into an Agent.
@@ -166,9 +174,10 @@ func (s *SQLiteStore) getByQuery(query string, args ...any) (*Agent, error) {
 		metadata     string
 	)
 
+	var tenantID string
 	err := s.db.QueryRow(query, args...).Scan(
 		&idStr, &did, &displayName, &publicKeys, &endpoints,
-		&capabilities, &acl, &status, &lastSeen, &metadata,
+		&capabilities, &acl, &status, &lastSeen, &metadata, &tenantID,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrAgentNotFound
@@ -177,7 +186,12 @@ func (s *SQLiteStore) getByQuery(query string, args ...any) (*Agent, error) {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	return s.scanAgent(idStr, did, displayName, publicKeys, endpoints, capabilities, acl, status, lastSeen, metadata)
+	agent, err := s.scanAgent(idStr, did, displayName, publicKeys, endpoints, capabilities, acl, status, lastSeen, metadata)
+	if err != nil {
+		return nil, err
+	}
+	agent.TenantID = tenantID
+	return agent, nil
 }
 
 // scanAgent converts database row values into an Agent.
@@ -251,8 +265,8 @@ func (s *SQLiteStore) Put(agent *Agent) error {
 	}
 
 	_, err = s.db.Exec(`
-		INSERT INTO agents (id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO agents (id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, tenant_id, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(did) DO UPDATE SET
 			id = excluded.id,
 			display_name = excluded.display_name,
@@ -263,10 +277,11 @@ func (s *SQLiteStore) Put(agent *Agent) error {
 			status = excluded.status,
 			last_seen = excluded.last_seen,
 			metadata = excluded.metadata,
+			tenant_id = excluded.tenant_id,
 			updated_at = CURRENT_TIMESTAMP
 	`, agent.ID.String(), agent.DID, agent.DisplayName, string(publicKeys),
 		string(endpoints), string(capabilities), aclStr,
-		string(agent.Status), agent.LastSeen, string(metadata))
+		string(agent.Status), agent.LastSeen, string(metadata), agent.TenantID)
 
 	if err != nil {
 		return fmt.Errorf("failed to upsert agent: %w", err)
@@ -304,7 +319,7 @@ func (s *SQLiteStore) List() ([]*Agent, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata FROM agents ORDER BY last_seen DESC")
+	rows, err := s.db.Query("SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, tenant_id FROM agents ORDER BY last_seen DESC")
 	if err != nil {
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
@@ -323,9 +338,10 @@ func (s *SQLiteStore) List() ([]*Agent, error) {
 			status       string
 			lastSeen     time.Time
 			metadata     string
+			tenantID     string
 		)
 
-		if err := rows.Scan(&idStr, &did, &displayName, &publicKeys, &endpoints, &capabilities, &acl, &status, &lastSeen, &metadata); err != nil {
+		if err := rows.Scan(&idStr, &did, &displayName, &publicKeys, &endpoints, &capabilities, &acl, &status, &lastSeen, &metadata, &tenantID); err != nil {
 			return nil, fmt.Errorf("scan failed: %w", err)
 		}
 
@@ -334,6 +350,7 @@ func (s *SQLiteStore) List() ([]*Agent, error) {
 			s.logger.Warn("failed to parse agent", "id", idStr, "error", err)
 			continue
 		}
+		agent.TenantID = tenantID
 		agents = append(agents, agent)
 	}
 
@@ -352,7 +369,7 @@ func (s *SQLiteStore) Search(capability string) ([]*Agent, error) {
 	// Use JSON_EXTRACT to search within capabilities array
 	// This searches for capability name in the JSON array
 	rows, err := s.db.Query(`
-		SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata
+		SELECT id, did, display_name, public_keys, endpoints, capabilities, acl, status, last_seen, metadata, tenant_id
 		FROM agents
 		WHERE capabilities LIKE ?
 		ORDER BY last_seen DESC
@@ -375,9 +392,10 @@ func (s *SQLiteStore) Search(capability string) ([]*Agent, error) {
 			status       string
 			lastSeen     time.Time
 			metadata     string
+			tenantID     string
 		)
 
-		if err := rows.Scan(&idStr, &did, &displayName, &publicKeys, &endpoints, &capabilities, &acl, &status, &lastSeen, &metadata); err != nil {
+		if err := rows.Scan(&idStr, &did, &displayName, &publicKeys, &endpoints, &capabilities, &acl, &status, &lastSeen, &metadata, &tenantID); err != nil {
 			return nil, fmt.Errorf("scan failed: %w", err)
 		}
 
@@ -386,6 +404,7 @@ func (s *SQLiteStore) Search(capability string) ([]*Agent, error) {
 			s.logger.Warn("failed to parse agent", "id", idStr, "error", err)
 			continue
 		}
+		agent.TenantID = tenantID
 
 		// Double-check capability match (LIKE can have false positives)
 		if agent.HasCapability(capability) {
@@ -398,6 +417,25 @@ func (s *SQLiteStore) Search(capability string) ([]*Agent, error) {
 	}
 
 	return agents, nil
+}
+
+// CountByTenant returns the number of agents for a given tenant.
+// If tenantID is empty, returns total agent count (self-hosted mode).
+func (s *SQLiteStore) CountByTenant(tenantID string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int
+	var err error
+	if tenantID == "" {
+		err = s.db.QueryRow("SELECT COUNT(*) FROM agents").Scan(&count)
+	} else {
+		err = s.db.QueryRow("SELECT COUNT(*) FROM agents WHERE tenant_id = ?", tenantID).Scan(&count)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("CountByTenant failed: %w", err)
+	}
+	return count, nil
 }
 
 // Close closes the database connection.

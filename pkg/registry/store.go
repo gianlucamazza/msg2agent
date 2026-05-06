@@ -34,6 +34,10 @@ type Store interface {
 
 	// Search searches for agents by capability.
 	Search(capability string) ([]*Agent, error)
+
+	// CountByTenant returns the number of agents registered for a given tenant.
+	// An empty tenantID returns all agents (for self-hosted / no-billing mode).
+	CountByTenant(tenantID string) (int, error)
 }
 
 // MemoryStore is an in-memory implementation of Store.
@@ -127,6 +131,21 @@ func (s *MemoryStore) Search(capability string) ([]*Agent, error) {
 		}
 	}
 	return result, nil
+}
+
+func (s *MemoryStore) CountByTenant(tenantID string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if tenantID == "" {
+		return len(s.agents), nil
+	}
+	count := 0
+	for _, a := range s.agents {
+		if a.TenantID == tenantID {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // FileStore wraps MemoryStore with file persistence.

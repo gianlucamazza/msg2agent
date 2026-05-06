@@ -23,15 +23,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/gianluca/msg2agent/pkg/config"
-	"github.com/gianluca/msg2agent/pkg/crypto"
-	"github.com/gianluca/msg2agent/pkg/identity"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/protocol"
-	"github.com/gianluca/msg2agent/pkg/queue"
-	"github.com/gianluca/msg2agent/pkg/registry"
-	"github.com/gianluca/msg2agent/pkg/security"
-	"github.com/gianluca/msg2agent/pkg/telemetry"
+	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/config"
+	"github.com/gianlucamazza/msg2agent/pkg/crypto"
+	"github.com/gianlucamazza/msg2agent/pkg/identity"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/queue"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/security"
+	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
 
 var (
@@ -183,15 +184,20 @@ type RelayHub struct {
 	// DID allowlist enforcement
 	aclEnforcer  *security.ACLEnforcer
 	allowlistACL *registry.ACLPolicy // nil = open relay (no allowlist)
+
+	// Billing (optional; nil = self-hosted, no billing)
+	billingStore billing.Store
+	tenantPool   *billing.TenantRateLimiterPool
 }
 
 // Client represents a connected agent.
 type Client struct {
-	ID     string
-	DID    string
-	Conn   *websocket.Conn
-	SendCh chan []byte
-	hub    *RelayHub
+	ID       string
+	DID      string
+	TenantID string // empty = self-hosted / no billing
+	Conn     *websocket.Conn
+	SendCh   chan []byte
+	hub      *RelayHub
 
 	// Rate limiters
 	msgLimiter      *messaging.RateLimiter
@@ -477,6 +483,37 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Billing auth: resolve tenant from Bearer API key if billing is active.
+	var tenantID string
+	if h.billingStore != nil {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "missing Authorization header", http.StatusUnauthorized)
+			return
+		}
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+			http.Error(w, "invalid Authorization header format; expected: Bearer msg2a_...", http.StatusUnauthorized)
+			return
+		}
+		hash, err := billing.HashAPIKey(parts[1])
+		if err != nil {
+			http.Error(w, "invalid API key format", http.StatusUnauthorized)
+			return
+		}
+		key, err := h.billingStore.GetAPIKeyByHash(hash)
+		if err != nil || !key.IsValid() {
+			http.Error(w, "invalid or revoked API key", http.StatusUnauthorized)
+			return
+		}
+		tenant, err := h.billingStore.GetTenant(key.TenantID)
+		if err != nil || !tenant.IsActive() {
+			http.Error(w, "tenant not found or suspended", http.StatusForbidden)
+			return
+		}
+		tenantID = tenant.ID
+	}
+
 	// Configure CORS: use allowed origins or reject cross-origin requests
 	acceptOpts := &websocket.AcceptOptions{}
 	if len(h.config.AllowedOrigins) > 0 {
@@ -500,6 +537,7 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	client := &Client{
 		ID:              uuid.New().String(),
+		TenantID:        tenantID,
 		Conn:            conn,
 		SendCh:          make(chan []byte, 256),
 		hub:             h,
@@ -648,12 +686,20 @@ func (c *Client) handleMessage(data []byte) {
 		return
 	}
 
-	// Check message rate limit
+	// Check message rate limit (per-client baseline + per-tenant plan limit).
 	if !c.msgLimiter.Allow() {
 		c.hub.logger.Warn("message rate limit exceeded", "client_id", c.ID)
 		recordRateLimitHit("message")
 		c.sendError(req.ID, protocol.CodeRateLimited, "rate limit exceeded")
 		return
+	}
+	if c.TenantID != "" && c.hub.tenantPool != nil {
+		if !c.hub.tenantPool.Allow(c.TenantID) {
+			c.hub.logger.Warn("tenant rate limit exceeded", "tenant", c.TenantID)
+			recordRateLimitHit("tenant_message")
+			c.sendError(req.ID, protocol.CodeRateLimited, "tenant rate limit exceeded")
+			return
+		}
 	}
 
 	// Parse message params
@@ -736,6 +782,19 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 			c.sendError(req.ID, protocol.CodeAccessDenied, "DID not allowed to register")
 			return
 		}
+	}
+
+	// Billing: enforce MaxAgentDIDs quota for the tenant.
+	if c.TenantID != "" && c.hub.billingStore != nil {
+		if tenant, err := c.hub.billingStore.GetTenant(c.TenantID); err == nil {
+			count, err := c.hub.store.CountByTenant(c.TenantID)
+			if err == nil && count >= tenant.Quota.MaxAgentDIDs {
+				c.hub.logger.Warn("MaxAgentDIDs quota exceeded", "tenant", c.TenantID, "count", count, "limit", tenant.Quota.MaxAgentDIDs)
+				c.sendError(req.ID, protocol.CodeQuotaExceeded, "DID quota exceeded for this tenant")
+				return
+			}
+		}
+		agent.TenantID = c.TenantID
 	}
 
 	c.DID = agent.DID
@@ -875,6 +934,13 @@ func (c *Client) handleDiscover(req *protocol.JSONRPCRequest) {
 
 // handleLookup handles looking up a single agent by DID.
 func (c *Client) handleLookup(req *protocol.JSONRPCRequest) {
+	if !c.discoverLimiter.Allow() {
+		c.hub.logger.Warn("lookup rate limit exceeded", "client_id", c.ID)
+		recordRateLimitHit("lookup")
+		c.sendError(req.ID, protocol.CodeRateLimited, "rate limit exceeded")
+		return
+	}
+
 	var query struct {
 		DID string `json:"did"`
 	}
@@ -948,6 +1014,9 @@ func main() {
 	// Security settings
 	skipDIDProof := flag.Bool("skip-did-proof", false, "Skip DID ownership verification during registration (NOT recommended) (env: MSG2AGENT_SKIP_DID_PROOF)")
 	allowedDIDs := flag.String("allowed-dids", "", "Comma-separated list of allowed DIDs (empty = open relay) (env: MSG2AGENT_ALLOWED_DIDS)")
+
+	// Billing (optional)
+	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
 
 	flag.Parse()
 
@@ -1146,6 +1215,19 @@ func main() {
 	}
 
 	hub := NewRelayHubWithStore(relayCfg, store, queueStore, logger)
+
+	// Configure billing (optional)
+	billingDBStr := config.FlagOrEnv(*billingDBPath, "BILLING_DB", "")
+	if billingDBStr != "" {
+		bStore, err := billing.NewSQLiteStore(billingDBStr)
+		if err != nil {
+			logger.Error("failed to open billing store", "path", billingDBStr, "error", err)
+			os.Exit(1)
+		}
+		hub.billingStore = bStore
+		hub.tenantPool = billing.NewTenantRateLimiterPool(bStore)
+		logger.Info("relay billing enabled", "db", billingDBStr)
+	}
 
 	// Configure DID allowlist
 	hub.aclEnforcer = security.NewACLEnforcer()

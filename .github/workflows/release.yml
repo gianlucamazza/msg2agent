@@ -45,7 +45,7 @@ jobs:
     needs: test
     strategy:
       matrix:
-        target: [relay, agent, mcp-server]
+        target: [relay, agent, mcp-server, billing-admin, dashboard]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

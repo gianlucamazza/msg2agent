@@ -26,6 +26,9 @@ type Store interface {
 	ListAPIKeysActive(tenantID string) ([]*APIKey, error)
 	RevokeAPIKey(id string) error
 
+	// Ping checks whether the store is reachable/healthy.
+	Ping() error
+
 	Close() error
 }
 
@@ -161,6 +164,7 @@ func (s *MemoryStore) RevokeAPIKey(id string) error {
 	return ErrAPIKeyNotFound
 }
 
+func (s *MemoryStore) Ping() error  { return nil }
 func (s *MemoryStore) Close() error { return nil }
 
 // SQLiteStore persists billing data to a SQLite database.
@@ -421,6 +425,48 @@ func (s *SQLiteStore) FlushAggregates(snapshots []UsageSnapshot) error {
 		}
 	}
 	return nil
+}
+
+// VerifyReport summarises the billing DB state.
+type VerifyReport struct {
+	SchemaVersion  int
+	TenantCount    int
+	KeyCount       int
+	AggregateCount int
+}
+
+// Verify returns counts from key billing tables and the current schema version.
+func (s *SQLiteStore) Verify() (*VerifyReport, error) {
+	r := &VerifyReport{}
+	queries := []struct {
+		dest *int
+		q    string
+	}{
+		{&r.SchemaVersion, `SELECT COALESCE(MAX(version),0) FROM schema_migrations`},
+		{&r.TenantCount, `SELECT COUNT(*) FROM tenants`},
+		{&r.KeyCount, `SELECT COUNT(*) FROM api_keys WHERE revoked_at IS NULL`},
+		{&r.AggregateCount, `SELECT COUNT(*) FROM usage_aggregates`},
+	}
+	for _, q := range queries {
+		if err := s.db.QueryRow(q.q).Scan(q.dest); err != nil {
+			return nil, fmt.Errorf("billing: verify: %w", err)
+		}
+	}
+	return r, nil
+}
+
+// Backup writes a consistent snapshot of the database to destPath using VACUUM INTO.
+// Safe to call while the DB is live; does not block readers or writers.
+func (s *SQLiteStore) Backup(destPath string) error {
+	if _, err := s.db.Exec(`VACUUM INTO ?`, destPath); err != nil {
+		return fmt.Errorf("billing: backup: %w", err)
+	}
+	return nil
+}
+
+// Ping checks whether the database connection is alive.
+func (s *SQLiteStore) Ping() error {
+	return s.db.Ping()
 }
 
 // PurgeEvents deletes audit events older than before from usage_events.

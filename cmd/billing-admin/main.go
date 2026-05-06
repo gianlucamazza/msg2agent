@@ -29,6 +29,8 @@ Commands:
   list-usage      Show usage aggregates for a tenant/period
   export-csv      Export usage CSV to stdout
   purge-events    Delete raw audit events older than a date (aggregates preserved)
+  backup          Write a consistent snapshot of the billing DB to a new file
+  verify          Print a health summary of the billing DB
 
 Flags:
   -db string    Path to billing SQLite database (required)
@@ -83,6 +85,10 @@ func main() {
 		runExportCSV(store, cmdArgs)
 	case "purge-events":
 		runPurgeEvents(store, cmdArgs)
+	case "backup":
+		runBackup(store, cmdArgs)
+	case "verify":
+		runVerify(store)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage()
@@ -303,4 +309,33 @@ func runPurgeEvents(store *billing.SQLiteStore, args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("deleted %d audit event(s) before %s (usage_aggregates preserved)\n", n, cutoff.Format("2006-01-02"))
+}
+
+func runBackup(store *billing.SQLiteStore, args []string) {
+	fs := flag.NewFlagSet("backup", flag.ExitOnError)
+	out := fs.String("out", "", "destination file path (required)")
+	fs.Parse(args)
+
+	if *out == "" {
+		fmt.Fprintln(os.Stderr, "error: -out is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+	if err := store.Backup(*out); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("backup written to %s\n", *out)
+}
+
+func runVerify(store *billing.SQLiteStore) {
+	r, err := store.Verify()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("schema version : %d\n", r.SchemaVersion)
+	fmt.Printf("tenants        : %d\n", r.TenantCount)
+	fmt.Printf("active keys    : %d\n", r.KeyCount)
+	fmt.Printf("aggregates     : %d\n", r.AggregateCount)
 }

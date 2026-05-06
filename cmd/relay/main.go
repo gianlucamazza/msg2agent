@@ -1254,8 +1254,14 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", hub.handleWebSocket)
 
-	// Health check endpoint
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+	// Health check endpoint — also verifies billing store if enabled.
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if hub.billingStore != nil {
+			if err := hub.billingStore.Ping(); err != nil {
+				http.Error(w, "billing store unavailable: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})

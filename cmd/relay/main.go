@@ -1430,9 +1430,9 @@ func main() {
 		oauthASMeta         *oauth.ASMetadata
 		oauthASBaseURLStr   string
 	)
-	oauthASBaseURLStr = config.FlagOrEnv(*oauthASBaseURL, "MSG2AGENT_OAUTH_AS_BASE_URL", "")
+	oauthASBaseURLStr = config.FlagOrEnv(*oauthASBaseURL, "OAUTH_AS_BASE_URL", "")
 	if oauthASBaseURLStr != "" && hub.billingStore != nil {
-		signingKeyPath := config.FlagOrEnv(*oauthSigningKeyPath, "MSG2AGENT_OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
+		signingKeyPath := config.FlagOrEnv(*oauthSigningKeyPath, "OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
 		privKey, err := oauth.LoadOrGenerateEd25519(signingKeyPath)
 		if err != nil {
 			logger.Error("oauth AS: failed to load/generate signing key", "path", signingKeyPath, "error", err)
@@ -1455,8 +1455,8 @@ func main() {
 		oauthASMeta = oauth.NewASMetadata(oauthASBaseURLStr)
 
 		var idp oauth.IdentityProvider
-		googleClientID := config.FlagOrEnv(*oauthGoogleClientID, "MSG2AGENT_OAUTH_GOOGLE_CLIENT_ID", "")
-		googleClientSecret := config.FlagOrEnv(*oauthGoogleClientSecret, "MSG2AGENT_OAUTH_GOOGLE_CLIENT_SECRET", "")
+		googleClientID := config.FlagOrEnv(*oauthGoogleClientID, "OAUTH_GOOGLE_CLIENT_ID", "")
+		googleClientSecret := config.FlagOrEnv(*oauthGoogleClientSecret, "OAUTH_GOOGLE_CLIENT_SECRET", "")
 		if googleClientID != "" {
 			idp = oauth.NewGoogleIDP(googleClientID, googleClientSecret, oauthASBaseURLStr+"/oauth/google-callback")
 		}

@@ -306,9 +306,9 @@ func main() {
 	if billingStore != nil {
 		// Resolve OAuth 2.1 AS JWT validator (our own AS).
 		var accessTokenVal billing.AccessTokenValidator
-		asBase := config.FlagOrEnv(*oauthASBaseURL, "MSG2AGENT_OAUTH_AS_BASE_URL", "")
+		asBase := config.FlagOrEnv(*oauthASBaseURL, "OAUTH_AS_BASE_URL", "")
 		if asBase != "" {
-			skPath := config.FlagOrEnv(*oauthSigningKeyPath, "MSG2AGENT_OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
+			skPath := config.FlagOrEnv(*oauthSigningKeyPath, "OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
 			privKey, err := oauthLoadKey(skPath)
 			if err != nil {
 				logger.Error("mcp-server: failed to load OAuth signing key", "path", skPath, "error", err)

@@ -194,7 +194,8 @@ type RelayHub struct {
 type Client struct {
 	ID       string
 	DID      string
-	TenantID string // empty = self-hosted / no billing
+	TenantID string       // empty = self-hosted / no billing
+	logger   *slog.Logger // tenant-scoped; falls back to hub.logger when TenantID is empty
 	Conn     *websocket.Conn
 	SendCh   chan []byte
 	hub      *RelayHub
@@ -535,9 +536,14 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Create client context derived from hub context, canceled when connection closes or hub stops
 	ctx, cancel := context.WithCancel(h.ctx)
 
+	clientLogger := h.logger
+	if tenantID != "" {
+		clientLogger = h.logger.With("tenant", tenantID)
+	}
 	client := &Client{
 		ID:              uuid.New().String(),
 		TenantID:        tenantID,
+		logger:          clientLogger,
 		Conn:            conn,
 		SendCh:          make(chan []byte, 256),
 		hub:             h,
@@ -695,7 +701,7 @@ func (c *Client) handleMessage(data []byte) {
 	}
 	if c.TenantID != "" && c.hub.tenantPool != nil {
 		if !c.hub.tenantPool.Allow(c.TenantID) {
-			c.hub.logger.Warn("tenant rate limit exceeded", "tenant", c.TenantID)
+			c.logger.Warn("tenant rate limit exceeded")
 			recordRateLimitHit("tenant_message")
 			billing.RecordRateLimited(c.TenantID)
 			c.sendError(req.ID, protocol.CodeRateLimited, "tenant rate limit exceeded")
@@ -790,7 +796,7 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 		if tenant, err := c.hub.billingStore.GetTenant(c.TenantID); err == nil {
 			count, err := c.hub.store.CountByTenant(c.TenantID)
 			if err == nil && count >= tenant.Quota.MaxAgentDIDs {
-				c.hub.logger.Warn("MaxAgentDIDs quota exceeded", "tenant", c.TenantID, "count", count, "limit", tenant.Quota.MaxAgentDIDs)
+				c.logger.Warn("MaxAgentDIDs quota exceeded", "count", count, "limit", tenant.Quota.MaxAgentDIDs)
 				billing.RecordQuotaExceeded(c.TenantID, "agent_did")
 				c.sendErrorWithData(req.ID, protocol.CodeQuotaExceeded, "DID quota exceeded for this tenant", map[string]any{
 					"plan":         string(tenant.Plan),

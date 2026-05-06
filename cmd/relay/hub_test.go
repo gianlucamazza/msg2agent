@@ -30,6 +30,7 @@ func testClient(hub *RelayHub, id string, did string) *Client {
 	return &Client{
 		ID:              id,
 		DID:             did,
+		logger:          hub.logger,
 		SendCh:          make(chan []byte, 256),
 		hub:             hub,
 		msgLimiter:      messaging.NewRateLimiter(cfg.MessageRateLimit, cfg.MessageBurstSize),

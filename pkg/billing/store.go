@@ -376,6 +376,20 @@ func (s *SQLiteStore) FlushAggregates(snapshots []UsageSnapshot) error {
 	return nil
 }
 
+// PurgeEvents deletes audit events older than before from usage_events.
+// usage_aggregates (the source of truth for invoicing) is left intact.
+// Returns the number of rows deleted.
+func (s *SQLiteStore) PurgeEvents(before time.Time) (int64, error) {
+	res, err := s.db.Exec(
+		`DELETE FROM usage_events WHERE ts < ?`,
+		before.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }

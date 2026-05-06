@@ -2,9 +2,11 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -26,6 +28,7 @@ Commands:
   list-keys       List API keys for a tenant
   list-usage      Show usage aggregates for a tenant/period
   export-csv      Export usage CSV to stdout
+  purge-events    Delete raw audit events older than a date (aggregates preserved)
 
 Flags:
   -db string    Path to billing SQLite database (required)
@@ -78,6 +81,8 @@ func main() {
 		runListUsage(store, cmdArgs)
 	case "export-csv":
 		runExportCSV(store, cmdArgs)
+	case "purge-events":
+		runPurgeEvents(store, cmdArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage()
@@ -141,6 +146,7 @@ func runIssueKey(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("issue-key", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
 	name := fs.String("name", "default", "key label")
+	ttl := fs.Duration("ttl", 0, "key TTL (e.g. 720h); 0 = no expiry")
 	fs.Parse(args)
 
 	if *tenantID == "" {
@@ -153,12 +159,19 @@ func runIssueKey(store billing.Store, args []string) {
 		fmt.Fprintf(os.Stderr, "error: generate key: %v\n", err)
 		os.Exit(1)
 	}
+	if *ttl > 0 {
+		exp := time.Now().UTC().Add(*ttl)
+		key.ExpiresAt = &exp
+	}
 	if err := store.PutAPIKey(key); err != nil {
 		fmt.Fprintf(os.Stderr, "error: store key: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Printf("API key issued (shown only once — store it securely):\n\n  %s\n\n", plaintext)
 	fmt.Printf("Key ID:  %s\nLabel:   %s\nPrefix:  %s\n", key.ID, key.Name, key.Prefix)
+	if key.ExpiresAt != nil {
+		fmt.Printf("Expires: %s\n", key.ExpiresAt.Format(time.RFC3339))
+	}
 }
 
 func runRevokeKey(store billing.Store, args []string) {
@@ -246,4 +259,48 @@ func runExportCSV(store *billing.SQLiteStore, args []string) {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runPurgeEvents(store *billing.SQLiteStore, args []string) {
+	fs := flag.NewFlagSet("purge-events", flag.ExitOnError)
+	before := fs.String("before", "", "delete events older than this date (YYYY-MM-DD or RFC3339, required)")
+	yes := fs.Bool("yes", false, "skip confirmation prompt")
+	fs.Parse(args)
+
+	if *before == "" {
+		fmt.Fprintln(os.Stderr, "error: -before is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	var cutoff time.Time
+	var parseErr error
+	for _, layout := range []string{"2006-01-02", time.RFC3339} {
+		cutoff, parseErr = time.Parse(layout, *before)
+		if parseErr == nil {
+			break
+		}
+	}
+	if parseErr != nil {
+		fmt.Fprintf(os.Stderr, "error: invalid date %q (use YYYY-MM-DD or RFC3339)\n", *before)
+		os.Exit(1)
+	}
+
+	if !*yes {
+		fmt.Printf("This will permanently delete audit events older than %s.\n", cutoff.Format("2006-01-02"))
+		fmt.Print("Type 'yes' to continue: ")
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Scan()
+		if strings.TrimSpace(scanner.Text()) != "yes" {
+			fmt.Println("aborted")
+			os.Exit(0)
+		}
+	}
+
+	n, err := store.PurgeEvents(cutoff)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("deleted %d audit event(s) before %s (usage_aggregates preserved)\n", n, cutoff.Format("2006-01-02"))
 }

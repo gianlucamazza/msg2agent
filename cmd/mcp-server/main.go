@@ -81,15 +81,15 @@ func main() {
 	flag.Parse()
 
 	// Apply env fallbacks.
-	agentName := config.FlagOrEnv(*name, "MSG2AGENT_NAME", "mcp-agent")
-	agentDomain := config.FlagOrEnv(*domain, "MSG2AGENT_DOMAIN", "localhost")
-	relayAddr := config.FlagOrEnv(*relay, "MSG2AGENT_RELAY_URL", "ws://localhost:8080")
-	listenAddr := config.FlagOrEnv(*addr, "MSG2AGENT_HTTP_ADDR", ":8081")
-	dbPath := config.FlagOrEnv(*billingDB, "MSG2AGENT_BILLING_DB", "")
-	dbDriver := config.FlagOrEnv(*billingDriver, "MSG2AGENT_BILLING_DRIVER", "sqlite")
-	issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "MSG2AGENT_OAUTH2_ISSUER_URL", "")
-	audience := config.FlagOrEnv(*oauth2Audience, "MSG2AGENT_OAUTH2_AUDIENCE", "")
-	jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "MSG2AGENT_OAUTH2_JWKS_URL", "")
+	agentName := config.FlagOrEnv(*name, "NAME", "mcp-agent")
+	agentDomain := config.FlagOrEnv(*domain, "DOMAIN", "localhost")
+	relayAddr := config.FlagOrEnv(*relay, "RELAY_URL", "ws://localhost:8080")
+	listenAddr := config.FlagOrEnv(*addr, "HTTP_ADDR", ":8081")
+	dbPath := config.FlagOrEnv(*billingDB, "BILLING_DB", "")
+	dbDriver := config.FlagOrEnv(*billingDriver, "BILLING_DRIVER", "sqlite")
+	issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "OAUTH2_ISSUER_URL", "")
+	audience := config.FlagOrEnv(*oauth2Audience, "OAUTH2_AUDIENCE", "")
+	jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "OAUTH2_JWKS_URL", "")
 
 	// Validate transport flag.
 	tp := mcpadapter.TransportType(*transport)

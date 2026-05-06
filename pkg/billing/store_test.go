@@ -246,3 +246,56 @@ func TestSQLiteStore_EventStore(t *testing.T) {
 		t.Errorf("upsert aggregate count = %d, want 15", loaded2[0].Count)
 	}
 }
+
+func TestSQLiteStore_WALAndFK(t *testing.T) {
+	// WAL mode requires a file-based DB; :memory: always reports "memory".
+	dir := t.TempDir()
+	s, err := NewSQLiteStore(dir + "/billing_test.db")
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// WAL mode should be active.
+	var mode string
+	if err := s.db.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil {
+		t.Fatalf("PRAGMA journal_mode: %v", err)
+	}
+	if mode != "wal" {
+		t.Errorf("journal_mode = %q, want wal", mode)
+	}
+
+	// Foreign key enforcement: inserting a key for a non-existent tenant must fail.
+	_, fkErr := s.db.Exec(
+		`INSERT INTO api_keys(id,tenant_id,name,key_hash,prefix,created_at) VALUES('k1','nonexistent','default','hash','pre','2026-01-01T00:00:00Z')`,
+	)
+	if fkErr == nil {
+		t.Error("expected FK constraint error for orphan api_key, got nil")
+	}
+}
+
+func TestSQLiteStore_SchemaVersioning(t *testing.T) {
+	s, err := NewSQLiteStore(":memory:")
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	var version int
+	if err := s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version); err != nil {
+		t.Fatalf("schema_migrations: %v", err)
+	}
+	if version != len(migrations) {
+		t.Errorf("schema version = %d, want %d", version, len(migrations))
+	}
+
+	// Calling migrate again must be a no-op (idempotent).
+	if err := s.migrate(); err != nil {
+		t.Errorf("second migrate() returned error: %v", err)
+	}
+	var version2 int
+	_ = s.db.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&version2)
+	if version2 != version {
+		t.Errorf("version changed after second migrate: %d → %d", version, version2)
+	}
+}

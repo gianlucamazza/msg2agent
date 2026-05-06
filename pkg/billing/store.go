@@ -170,7 +170,8 @@ type SQLiteStore struct {
 
 // NewSQLiteStore opens (or creates) a billing SQLite database at path.
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("billing: open db: %w", err)
 	}
@@ -183,8 +184,15 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 	return s, nil
 }
 
-func (s *SQLiteStore) migrate() error {
-	_, err := s.db.Exec(`
+type migration struct {
+	version int
+	sql     string
+}
+
+// migrations is the ordered list of schema changes. Each entry is applied exactly
+// once and recorded in schema_migrations. Never edit existing entries — add new ones.
+var migrations = []migration{
+	{1, `
 		CREATE TABLE IF NOT EXISTS tenants (
 			id          TEXT PRIMARY KEY,
 			name        TEXT NOT NULL,
@@ -195,7 +203,6 @@ func (s *SQLiteStore) migrate() error {
 			created_at  TEXT NOT NULL,
 			updated_at  TEXT NOT NULL
 		);
-
 		CREATE TABLE IF NOT EXISTS api_keys (
 			id          TEXT PRIMARY KEY,
 			tenant_id   TEXT NOT NULL REFERENCES tenants(id),
@@ -208,7 +215,6 @@ func (s *SQLiteStore) migrate() error {
 		);
 		CREATE INDEX IF NOT EXISTS api_keys_tenant ON api_keys(tenant_id);
 		CREATE INDEX IF NOT EXISTS api_keys_hash   ON api_keys(key_hash);
-
 		CREATE TABLE IF NOT EXISTS usage_events (
 			id          TEXT PRIMARY KEY,
 			tenant_id   TEXT NOT NULL,
@@ -218,7 +224,6 @@ func (s *SQLiteStore) migrate() error {
 			ts          TEXT NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS usage_events_tenant_ts ON usage_events(tenant_id, ts);
-
 		CREATE TABLE IF NOT EXISTS usage_aggregates (
 			tenant_id   TEXT NOT NULL,
 			period      TEXT NOT NULL,
@@ -227,8 +232,50 @@ func (s *SQLiteStore) migrate() error {
 			updated_at  TEXT NOT NULL,
 			PRIMARY KEY (tenant_id, period, event)
 		);
-	`)
-	return err
+	`},
+}
+
+func (s *SQLiteStore) migrate() error {
+	// Bootstrap the migrations tracker table.
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version    INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("billing: create schema_migrations: %w", err)
+	}
+
+	// Determine the current schema version.
+	var current int
+	row := s.db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`)
+	if err := row.Scan(&current); err != nil {
+		return fmt.Errorf("billing: read schema version: %w", err)
+	}
+
+	// Apply each migration that hasn't been applied yet.
+	for _, m := range migrations {
+		if m.version <= current {
+			continue
+		}
+		tx, err := s.db.Begin()
+		if err != nil {
+			return fmt.Errorf("billing: begin migration v%d: %w", m.version, err)
+		}
+		if _, err := tx.Exec(m.sql); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("billing: migrate v%d: %w", m.version, err)
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`,
+			m.version, time.Now().UTC().Format(time.RFC3339),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("billing: record migration v%d: %w", m.version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("billing: commit migration v%d: %w", m.version, err)
+		}
+	}
+	return nil
 }
 
 func (s *SQLiteStore) PutTenant(t *Tenant) error {

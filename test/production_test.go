@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/transport"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/transport"
 )
 
 // TestRateLimiterUnderLoad verifies the rate limiter works correctly under concurrent load.

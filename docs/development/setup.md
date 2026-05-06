@@ -13,7 +13,7 @@ This guide covers setting up msg2agent for local development.
 
 ```bash
 # Clone the repository
-git clone https://github.com/gianluca/msg2agent.git
+git clone https://github.com/gianlucamazza/msg2agent.git
 cd msg2agent
 
 # Build binaries

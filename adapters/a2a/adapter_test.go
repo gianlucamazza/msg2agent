@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // TestNewAdapter tests adapter creation.

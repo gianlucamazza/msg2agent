@@ -12,9 +12,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/protocol"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // TestSendAndReceive tests the full request/response cycle.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // ACL errors.

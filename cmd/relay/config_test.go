@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/config"
+	"github.com/gianlucamazza/msg2agent/pkg/config"
 )
 
 func TestEnvVarConfiguration(t *testing.T) {

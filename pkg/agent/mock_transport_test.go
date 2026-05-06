@@ -5,7 +5,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/gianluca/msg2agent/pkg/transport"
+	"github.com/gianlucamazza/msg2agent/pkg/transport"
 )
 
 // mockTransport is a test transport that simulates network communication.

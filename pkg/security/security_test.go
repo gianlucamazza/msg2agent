@@ -3,7 +3,7 @@ package security
 import (
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 func TestACLEnforcer(t *testing.T) {

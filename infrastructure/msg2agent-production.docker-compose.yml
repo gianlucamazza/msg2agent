@@ -39,8 +39,11 @@ services:
       "-domain", "msg2agent.home.gianlucamazza.it",
       "-relay", "ws://relay:8080",
       "-transport", "streamable-http",
-      "-addr", ":3001"
+      "-addr", ":3001",
+      "-billing-db", "/data/billing.db"
     ]
+    volumes:
+      - billing-data:/data
     depends_on:
       relay:
         condition: service_healthy
@@ -50,6 +53,7 @@ services:
 
 volumes:
   relay-data:
+  billing-data:
 
 networks:
   msg2agent:

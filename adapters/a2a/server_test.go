@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gianluca/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
 )
 
 // TestNewTaskStore tests task store creation.

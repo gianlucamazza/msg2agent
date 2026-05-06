@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/protocol"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // PresenceManager manages presence state and subscriptions.

@@ -102,6 +102,39 @@ docker-compose -f infrastructure/msg2agent-production.docker-compose.yml up -d
 
 The MCP server will be available at `http://<host>:3010/mcp`.
 
+## Publishing to ClawHub
+
+[ClawHub](https://clawhub.io) is OpenClaw's official skill marketplace (90/10 revenue split, no listing fee).
+
+### Prepare your listing
+
+1. **Build and host the MCP server** on a public HTTPS endpoint, e.g. `https://relay.msg2agent.io/mcp`.
+2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB` in the cloud Docker Compose).
+3. **Update `openclaw.plugin.json`** — change the `mcpUrl` placeholder to your hosted endpoint.
+
+### Submit to ClawHub
+
+```bash
+# Install the ClawHub CLI
+npm install -g @clawhub/cli
+
+# Login and publish
+clawhub login
+clawhub publish --manifest ./docs/openclaw-plugin/openclaw.plugin.json \
+                --readme ./docs/openclaw-plugin/README.md \
+                --price 19.00         # monthly subscription price in USD
+```
+
+### Pricing suggestions
+
+| Tier | Price | What to include |
+|---|---|---|
+| Free / self-hosted | $0 | Skill lists self-hosted setup |
+| Cloud Starter | $19/mo | Hosted relay, 5 agent DIDs, 10k msg/mo |
+| Cloud Team | $99/mo | 50 agents, 200k msg/mo, A2A endpoint |
+
+Buyers connect their own `mcpUrl` (self-hosted) or use your hosted URL with the `apiKey` you issue them via the billing dashboard.
+
 ## Files
 
 - [`openclaw.plugin.json`](openclaw.plugin.json) — Plugin manifest and config schema

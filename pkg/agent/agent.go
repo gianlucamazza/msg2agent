@@ -13,13 +13,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gianluca/msg2agent/pkg/crypto"
-	"github.com/gianluca/msg2agent/pkg/identity"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/protocol"
-	"github.com/gianluca/msg2agent/pkg/registry"
-	"github.com/gianluca/msg2agent/pkg/security"
-	"github.com/gianluca/msg2agent/pkg/transport"
+	"github.com/gianlucamazza/msg2agent/pkg/crypto"
+	"github.com/gianlucamazza/msg2agent/pkg/identity"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/security"
+	"github.com/gianlucamazza/msg2agent/pkg/transport"
 )
 
 // Default configuration values.

@@ -7,8 +7,8 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
-	"github.com/gianluca/msg2agent/adapters/a2a"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/adapters/a2a"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 func (s *Server) listAgentsHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

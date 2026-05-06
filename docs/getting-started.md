@@ -17,7 +17,7 @@ Optional:
 Clone and build the binaries:
 
 ```bash
-git clone https://github.com/gianluca/msg2agent.git
+git clone https://github.com/gianlucamazza/msg2agent.git
 cd msg2agent
 
 go build -o relay ./cmd/relay

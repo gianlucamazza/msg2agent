@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/agent"
-	"github.com/gianluca/msg2agent/pkg/crypto"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
-	"github.com/gianluca/msg2agent/pkg/security"
+	"github.com/gianlucamazza/msg2agent/pkg/agent"
+	"github.com/gianlucamazza/msg2agent/pkg/crypto"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/security"
 )
 
 // TestEndToEndSignatureFlow tests the complete signing and verification flow.

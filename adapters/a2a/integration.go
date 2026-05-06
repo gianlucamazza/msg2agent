@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/gianluca/msg2agent/pkg/conversation"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/conversation"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // AgentBridge bridges an A2A server with the agent's internal handlers.

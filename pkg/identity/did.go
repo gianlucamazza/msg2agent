@@ -13,7 +13,7 @@ import (
 	"github.com/nuts-foundation/go-did/did"
 	"golang.org/x/crypto/curve25519"
 
-	"github.com/gianluca/msg2agent/pkg/crypto"
+	"github.com/gianlucamazza/msg2agent/pkg/crypto"
 )
 
 // DID errors.

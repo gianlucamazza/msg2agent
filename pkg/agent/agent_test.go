@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 func TestNew(t *testing.T) {

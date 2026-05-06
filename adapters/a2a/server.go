@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/gianluca/msg2agent/pkg/protocol"
+	"github.com/gianlucamazza/msg2agent/pkg/protocol"
 )
 
 // Task states per A2A protocol specification.

@@ -248,7 +248,7 @@ package integration
 The codebase includes mock transports for testing:
 
 ```go
-import "github.com/gianluca/msg2agent/pkg/transport/mock"
+import "github.com/gianlucamazza/msg2agent/pkg/transport/mock"
 
 // Create mock transport
 mt := mock.NewTransport()

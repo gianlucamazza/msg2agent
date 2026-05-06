@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gianluca/msg2agent/pkg/conversation"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/conversation"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
 )
 
 // TestNewAgentBridge tests bridge creation.

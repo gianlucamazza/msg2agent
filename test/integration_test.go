@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gianluca/msg2agent/pkg/agent"
-	"github.com/gianluca/msg2agent/pkg/identity"
-	"github.com/gianluca/msg2agent/pkg/messaging"
-	"github.com/gianluca/msg2agent/pkg/registry"
-	"github.com/gianluca/msg2agent/pkg/security"
+	"github.com/gianlucamazza/msg2agent/pkg/agent"
+	"github.com/gianlucamazza/msg2agent/pkg/identity"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/security"
 )
 
 func TestAgentCreation(t *testing.T) {

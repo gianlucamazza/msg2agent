@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gianluca/msg2agent/pkg/messaging"
+	"github.com/gianlucamazza/msg2agent/pkg/messaging"
 )
 
 func TestValidateSender_NotRegistered(t *testing.T) {

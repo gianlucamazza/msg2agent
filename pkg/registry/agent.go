@@ -146,6 +146,7 @@ type ACLRule struct {
 type Agent struct {
 	ID           uuid.UUID       `json:"id"`
 	DID          string          `json:"did"`
+	TenantID     string          `json:"tenant_id,omitempty"` // billing tenant; empty for self-hosted
 	DisplayName  string          `json:"display_name"`
 	PublicKeys   []PublicKey     `json:"public_keys"`
 	Endpoints    []Endpoint      `json:"endpoints"`

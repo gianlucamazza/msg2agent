@@ -18,12 +18,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/gianluca/msg2agent/adapters/a2a"
-	"github.com/gianluca/msg2agent/pkg/agent"
-	"github.com/gianluca/msg2agent/pkg/config"
-	"github.com/gianluca/msg2agent/pkg/registry"
-	"github.com/gianluca/msg2agent/pkg/security"
-	"github.com/gianluca/msg2agent/pkg/telemetry"
+	"github.com/gianlucamazza/msg2agent/adapters/a2a"
+	"github.com/gianlucamazza/msg2agent/pkg/agent"
+	"github.com/gianlucamazza/msg2agent/pkg/config"
+	"github.com/gianlucamazza/msg2agent/pkg/registry"
+	"github.com/gianlucamazza/msg2agent/pkg/security"
+	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
 
 // ChatMessage represents a chat message for history.

@@ -1,4 +1,4 @@
-module github.com/gianluca/msg2agent
+module github.com/gianlucamazza/msg2agent
 
 go 1.24.0
 

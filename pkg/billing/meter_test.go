@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -48,6 +49,66 @@ func TestUsageMeter_concurrency(t *testing.T) {
 	}
 	if total != goroutines*perGoroutine {
 		t.Errorf("total = %d, want %d", total, goroutines*perGoroutine)
+	}
+}
+
+func TestQuotaConcurrent(t *testing.T) {
+	m := NewUsageMeter()
+	const limit = 100
+	const goroutines = 1000
+
+	var wg sync.WaitGroup
+	var succeeded, failed atomic.Int64
+
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			if err := m.TryConsume("tenant1", EventMessage, limit, 1); err != nil {
+				failed.Add(1)
+			} else {
+				succeeded.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	current := m.Current("tenant1", EventMessage)
+	if current != limit {
+		t.Errorf("counter = %d, want %d (TOCTOU leak)", current, limit)
+	}
+	if s := succeeded.Load(); s != limit {
+		t.Errorf("succeeded = %d, want %d", s, limit)
+	}
+	if f := failed.Load(); f != goroutines-limit {
+		t.Errorf("failed = %d, want %d", f, goroutines-limit)
+	}
+}
+
+func TestUsageMeter_TryConsume_zero_limit(t *testing.T) {
+	m := NewUsageMeter()
+	m.Record("t1", EventMessage, 999)
+	if err := m.TryConsume("t1", EventMessage, 0, 1); err != nil {
+		t.Errorf("limit=0 should be no-op, got %v", err)
+	}
+}
+
+func TestUsageMeter_ReleaseQuota(t *testing.T) {
+	m := NewUsageMeter()
+	const limit = 5
+	for range limit {
+		if err := m.TryConsume("t1", EventMessage, limit, 1); err != nil {
+			t.Fatalf("unexpected error at step: %v", err)
+		}
+	}
+	// At limit — next TryConsume fails.
+	if err := m.TryConsume("t1", EventMessage, limit, 1); err == nil {
+		t.Fatal("expected ErrQuotaExceeded at limit")
+	}
+	// Release one slot — next TryConsume must succeed.
+	m.ReleaseQuota("t1", EventMessage, 1)
+	if err := m.TryConsume("t1", EventMessage, limit, 1); err != nil {
+		t.Errorf("after ReleaseQuota: %v", err)
 	}
 }
 

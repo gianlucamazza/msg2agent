@@ -114,9 +114,9 @@ func (m *UsageMeter) WithStore(ctx context.Context, store EventStore, logger *sl
 	}()
 }
 
-// Record increments the counter for (tenantID, current month, event) by delta.
-// If an EventStore was configured via WithStore, the event is queued for persistence.
-func (m *UsageMeter) Record(tenantID string, event UsageEvent, delta int64) {
+// getOrCreateCounter returns the atomic counter for (tenantID, current month, event),
+// creating it if necessary. Safe for concurrent use.
+func (m *UsageMeter) getOrCreateCounter(tenantID string, event UsageEvent) *atomic.Int64 {
 	k := counterKey{tenantID: tenantID, period: periodKey(time.Now().UTC()), event: event}
 	m.mu.RLock()
 	c, ok := m.counters[k]
@@ -129,13 +129,43 @@ func (m *UsageMeter) Record(tenantID string, event UsageEvent, delta int64) {
 		}
 		m.mu.Unlock()
 	}
-	c.Add(delta)
+	return c
 }
 
-// RecordAudit increments the counter AND queues an audit event for persistence.
-func (m *UsageMeter) RecordAudit(tenantID string, event UsageEvent, toolName, requestID string, delta int64) {
-	m.Record(tenantID, event, delta)
-	billingUsageEvents.WithLabelValues(tenantID, string(event)).Add(float64(delta))
+// Record increments the counter for (tenantID, current month, event) by delta.
+func (m *UsageMeter) Record(tenantID string, event UsageEvent, delta int64) {
+	m.getOrCreateCounter(tenantID, event).Add(delta)
+}
+
+// TryConsume atomically increments the counter by delta and returns ErrQuotaExceeded
+// if the new value exceeds limit. On failure the increment is rolled back.
+// Pass limit ≤ 0 to skip the quota check. Updates Prometheus gauges/counters.
+func (m *UsageMeter) TryConsume(tenantID string, event UsageEvent, limit, delta int64) error {
+	c := m.getOrCreateCounter(tenantID, event)
+	newVal := c.Add(delta)
+	if limit > 0 && newVal > limit {
+		c.Add(-delta)
+		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(1.0)
+		billingQuotaExceeded.WithLabelValues(tenantID, string(event)).Inc()
+		return fmt.Errorf("%w: %s limit %d reached for tenant %s",
+			ErrQuotaExceeded, event, limit, tenantID)
+	}
+	if limit > 0 {
+		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(float64(newVal) / float64(limit))
+	}
+	return nil
+}
+
+// ReleaseQuota decrements the counter by delta — used to roll back a successful TryConsume
+// when the downstream handler fails and the event should not be billed.
+func (m *UsageMeter) ReleaseQuota(tenantID string, event UsageEvent, delta int64) {
+	m.getOrCreateCounter(tenantID, event).Add(-delta)
+}
+
+// queueAudit sends an audit event to the persistence channel (best-effort) and
+// increments the Prometheus usage counter. Does NOT touch the in-memory counter.
+func (m *UsageMeter) queueAudit(tenantID string, event UsageEvent, toolName, requestID string) {
+	billingUsageEvents.WithLabelValues(tenantID, string(event)).Add(1)
 	if m.eventCh != nil {
 		select {
 		case m.eventCh <- auditEvent{tenantID: tenantID, event: string(event), toolName: toolName, requestID: requestID}:
@@ -146,6 +176,12 @@ func (m *UsageMeter) RecordAudit(tenantID string, event UsageEvent, toolName, re
 			}
 		}
 	}
+}
+
+// RecordAudit increments the counter AND queues an audit event for persistence.
+func (m *UsageMeter) RecordAudit(tenantID string, event UsageEvent, toolName, requestID string, delta int64) {
+	m.Record(tenantID, event, delta)
+	m.queueAudit(tenantID, event, toolName, requestID)
 }
 
 // RestoreFromAggregates repopulates in-memory counters from the EventStore on startup.
@@ -266,14 +302,16 @@ func MCPToolMeterMiddleware(meter *UsageMeter) server.ToolHandlerMiddleware {
 			if event == EventMessage {
 				limit = tenant.Quota.MaxMessagesPerMonth
 			}
-			if err := meter.CheckQuota(tenant.ID, event, limit); err != nil {
+			if err := meter.TryConsume(tenant.ID, event, limit, 1); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 
 			result, err := next(ctx, req)
-			if err == nil {
-				meter.RecordAudit(tenant.ID, event, req.Params.Name, "", 1)
+			if err != nil {
+				meter.ReleaseQuota(tenant.ID, event, 1)
+				return result, err
 			}
+			meter.queueAudit(tenant.ID, event, req.Params.Name, "")
 			return result, err
 		}
 	}

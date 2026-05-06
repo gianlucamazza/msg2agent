@@ -82,6 +82,7 @@ services:
       # OAuth2 + Stripe keys come from .env (STRIPE_*, MSG2AGENT_OAUTH2_*)
     volumes:
       - billing-data:/data
+      - mcp-identity:/home/msg2agent/.msg2agent   # persistent DID key across redeploys
     depends_on:
       relay:
         condition: service_healthy
@@ -152,6 +153,8 @@ volumes:
     # SQLite relay store (agent registry + message queue)
   billing-data:
     # SQLite billing DB shared by mcp-server and dashboard
+  mcp-identity:
+    # mcp-server DID key file — keeps the same DID across redeploys
 
 networks:
   msg2agent:

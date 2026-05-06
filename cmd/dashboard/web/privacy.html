@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — msg2agent</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    .landing-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .landing-nav a { color: var(--text); text-decoration: none; font-size: 0.9rem; }
+    .landing-nav a:hover { color: var(--accent); }
+    .legal-wrap { max-width: 720px; margin: 3rem auto 4rem; padding: 0 1rem; }
+    h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .effective { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+    h2 { font-size: 1rem; font-weight: 600; color: var(--muted); text-transform: uppercase;
+         letter-spacing: 0.08em; margin: 2rem 0 0.75rem; }
+    p, li { font-size: 0.9rem; color: var(--text); margin-bottom: 0.75rem; line-height: 1.7; }
+    ul { padding-left: 1.5rem; }
+    a { color: var(--accent); }
+    footer {
+      text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--muted); text-decoration: none; margin: 0 0.4rem; }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body style="background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;line-height:1.6;">
+
+  <nav class="landing-nav">
+    <a href="/" class="logo">msg2agent</a>
+    <a href="/pricing">Get API Key</a>
+  </nav>
+
+  <div class="legal-wrap">
+    <h1>Privacy Policy</h1>
+    <p class="effective">Effective date: 6 May 2026</p>
+
+    <h2>1. Who we are</h2>
+    <p>msg2agent is operated by Gianluca Mazza ("we", "us"). Our service is available at
+    <a href="https://msg2agent.home.gianlucamazza.it">msg2agent.home.gianlucamazza.it</a>.
+    Questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p>
+
+    <h2>2. Data we collect</h2>
+    <ul>
+      <li><strong>Account data</strong> — name, email address, plan, when you sign up via <code>POST /api/tenants</code>.</li>
+      <li><strong>API keys</strong> — stored as bcrypt hashes; the plaintext key is shown once and never stored.</li>
+      <li><strong>Usage events</strong> — tool call counts per tenant per billing period (no message content).</li>
+      <li><strong>Server logs</strong> — IP address, HTTP method, path, status code, timestamp. Retained for 30 days.</li>
+      <li><strong>Billing data</strong> — Stripe handles payment details; we receive only a customer ID and subscription status.</li>
+    </ul>
+
+    <h2>3. How we use your data</h2>
+    <ul>
+      <li>To authenticate your API requests and enforce plan quotas.</li>
+      <li>To process subscription payments via Stripe.</li>
+      <li>To contact you about service changes or billing issues.</li>
+      <li>To debug and improve the service (server logs).</li>
+    </ul>
+
+    <h2>4. Data we do NOT collect</h2>
+    <p>We do not store, log, or inspect the content of messages relayed between agents.
+    Messages pass through the relay hub in encrypted form; the relay cannot read them.</p>
+
+    <h2>5. Third-party processors</h2>
+    <ul>
+      <li><strong>Stripe</strong> — payment processing. Stripe's privacy policy applies to payment data.</li>
+    </ul>
+
+    <h2>6. Data retention</h2>
+    <p>Account and billing data is retained while your account is active and for 90 days after deletion.
+    Server logs are retained for 30 days. Usage events are retained for 12 months.</p>
+
+    <h2>7. Your rights</h2>
+    <p>You may request access to, correction of, or deletion of your personal data by emailing
+    <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.
+    We will respond within 30 days. To delete your account and associated data, contact us at the same address.</p>
+
+    <h2>8. Security</h2>
+    <p>API keys are stored as bcrypt hashes. Data at rest is stored in SQLite on a home-lab server
+    in the EU. Data in transit is protected by TLS. We take reasonable precautions, but no system
+    is completely secure.</p>
+
+    <h2>9. Cookies</h2>
+    <p>We do not use tracking cookies. The dashboard uses no cookies; authentication is handled
+    via Bearer tokens in API request headers.</p>
+
+    <h2>10. Changes</h2>
+    <p>We may update this policy. The effective date at the top will reflect the last change.
+    Continued use of the service after changes constitutes acceptance.</p>
+
+    <h2>11. Contact</h2>
+    <p>For privacy questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p>
+  </div>
+
+  <footer>
+    <a href="/privacy">Privacy</a>
+    <a href="/terms">Terms</a>
+    <a href="/">Home</a>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get API Key — msg2agent</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    .landing-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .landing-nav a { color: var(--text); text-decoration: none; font-size: 0.9rem; }
+    .landing-nav a:hover { color: var(--accent); }
+    .pricing-wrap { max-width: 480px; margin: 3rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+    .form-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 2rem;
+    }
+    .plan-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .plan-tab {
+      flex: 1; min-width: 80px; text-align: center;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      padding: 0.5rem; cursor: pointer; font-size: 0.85rem; transition: all 0.15s;
+      color: var(--text);
+    }
+    .plan-tab:hover { border-color: var(--accent); }
+    .plan-tab.selected { border-color: var(--accent); background: rgba(233,69,96,0.12); color: var(--accent); font-weight: 600; }
+    .plan-tab .price { font-size: 0.75rem; color: var(--muted); display: block; }
+    .plan-tab.selected .price { color: var(--accent); }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; }
+    input[type=text], input[type=email] {
+      width: 100%; padding: 0.6rem 0.75rem; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 5px; color: var(--text);
+      font-size: 0.9rem; margin-bottom: 1rem; outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    .submit-btn {
+      width: 100%; padding: 0.7rem; background: var(--accent); color: #fff;
+      border: none; border-radius: 5px; font-size: 0.95rem; cursor: pointer;
+      transition: opacity 0.15s; font-weight: 600;
+    }
+    .submit-btn:hover { opacity: 0.85; }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .result { display: none; margin-top: 1.5rem; }
+    .key-reveal {
+      background: #0d2d0d; border: 1px solid #2d7d2d; border-radius: 6px;
+      padding: 1rem; word-break: break-all;
+    }
+    .key-reveal p { font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--text); }
+    .key-reveal code { font-size: 0.82rem; color: #7adb7a; }
+    .key-reveal .copy-btn {
+      margin-top: 0.75rem; background: #2d7d2d; color: #fff; border: none;
+      border-radius: 4px; padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer;
+    }
+    .error-msg { color: #f87171; font-size: 0.875rem; margin-top: 0.5rem; }
+    .checkout-msg { color: var(--text); font-size: 0.9rem; }
+    .checkout-msg a { color: var(--accent); }
+    footer {
+      text-align: center; padding: 2rem 1rem; color: var(--muted); font-size: 0.8rem;
+    }
+    footer a { color: var(--muted); text-decoration: none; margin: 0 0.4rem; }
+    footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body style="background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;line-height:1.6;">
+
+  <nav class="landing-nav">
+    <a href="/" class="logo">msg2agent</a>
+    <a href="/app/">Sign In</a>
+  </nav>
+
+  <div class="pricing-wrap">
+    <h1>Get your API key</h1>
+    <p class="subtitle">Start for free — no credit card required. Upgrade any time.</p>
+
+    <div class="form-section">
+      <div class="plan-tabs">
+        <div class="plan-tab" data-plan="free">
+          Free<span class="price">$0/mo</span>
+        </div>
+        <div class="plan-tab" data-plan="starter">
+          Starter<span class="price">$19/mo</span>
+        </div>
+        <div class="plan-tab" data-plan="team">
+          Team<span class="price">$99/mo</span>
+        </div>
+      </div>
+
+      <div>
+        <label for="name">Name or organization</label>
+        <input type="text" id="name" placeholder="Acme Corp" maxlength="100">
+      </div>
+      <div>
+        <label for="email">Email address</label>
+        <input type="email" id="email" placeholder="you@example.com">
+      </div>
+
+      <button class="submit-btn" id="submit-btn">Create account</button>
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="result" id="result">
+        <div class="key-reveal" id="key-section" style="display:none">
+          <p><strong>Your API key — copy it now, it won't be shown again:</strong></p>
+          <code id="api-key-text"></code>
+          <button class="copy-btn" id="copy-btn">Copy</button>
+        </div>
+        <div class="checkout-msg" id="checkout-section" style="display:none">
+          <p>Redirecting you to Stripe Checkout…<br>
+          If you aren't redirected, <a id="checkout-link" href="#">click here</a>.</p>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+    </footer>
+  </div>
+
+  <script>
+    // Pre-select plan from URL query param.
+    const urlPlan = new URLSearchParams(location.search).get('plan') || 'free';
+    let selectedPlan = urlPlan;
+
+    const tabs = document.querySelectorAll('.plan-tab');
+    function selectPlan(plan) {
+      selectedPlan = plan;
+      tabs.forEach(t => t.classList.toggle('selected', t.dataset.plan === plan));
+    }
+    tabs.forEach(t => t.addEventListener('click', () => selectPlan(t.dataset.plan)));
+    selectPlan(selectedPlan);
+
+    document.getElementById('submit-btn').addEventListener('click', async () => {
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const errEl = document.getElementById('error-msg');
+      errEl.textContent = '';
+
+      if (!name) { errEl.textContent = 'Name is required.'; return; }
+      if (!email) { errEl.textContent = 'Email is required.'; return; }
+
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+
+      try {
+        const res = await fetch('/api/tenants', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, plan: selectedPlan })
+        });
+        const data = await res.json();
+        if (!res.ok) { throw new Error(data.error || 'Signup failed'); }
+
+        document.getElementById('result').style.display = 'block';
+
+        if (data.checkout_url) {
+          document.getElementById('checkout-section').style.display = 'block';
+          document.getElementById('checkout-link').href = data.checkout_url;
+          setTimeout(() => { location.href = data.checkout_url; }, 800);
+        } else if (data.api_key) {
+          document.getElementById('key-section').style.display = 'block';
+          document.getElementById('api-key-text').textContent = data.api_key;
+          document.getElementById('copy-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(data.api_key).then(() => {
+              document.getElementById('copy-btn').textContent = 'Copied!';
+            });
+          });
+          btn.style.display = 'none';
+        }
+      } catch (e) {
+        errEl.textContent = e.message || 'Something went wrong.';
+        btn.disabled = false;
+        btn.textContent = 'Create account';
+      }
+    });
+  </script>
+</body>
+</html>

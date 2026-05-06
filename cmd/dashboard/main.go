@@ -107,23 +107,41 @@ func main() {
 	}
 	fileServer := http.FileServer(http.FS(webSub))
 
-	// Root and known static assets.
+	// servePage returns a handler that serves a single embedded HTML file.
+	servePage := func(name string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			data, err := fs.ReadFile(webSub, name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(data)
+		}
+	}
+
+	// Public pages — no auth required.
+	mux.HandleFunc("/pricing", servePage("pricing.html"))
+	mux.HandleFunc("/privacy", servePage("privacy.html"))
+	mux.HandleFunc("/terms", servePage("terms.html"))
+
+	// App SPA — authenticated dashboard at /app/.
+	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("/app/", servePage("index.html"))
+
+	// Catch-all: landing page for "/" or static assets (CSS/JS/images).
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		// Serve index for root.
-		if path == "/" {
-			r.URL.Path = "/index.html"
+		if r.URL.Path == "/" {
+			servePage("landing.html")(w, r)
+			return
+		}
+		if ext := filepath.Ext(r.URL.Path); ext != "" && !strings.HasPrefix(r.URL.Path, "/api/") {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		// Serve static files that have a file extension.
-		if ext := filepath.Ext(path); ext != "" && !strings.HasPrefix(path, "/api/") {
-			fileServer.ServeHTTP(w, r)
-			return
-		}
-		// SPA fallback — serve index.html.
-		r.URL.Path = "/index.html"
-		fileServer.ServeHTTP(w, r)
+		http.NotFound(w, r)
 	})
 
 	srv := &http.Server{

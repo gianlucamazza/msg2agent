@@ -115,11 +115,11 @@ services:
     env_file:
       - .env
     environment:
-      DASHBOARD_ADDR:  ":8082"
-      RELAY_URL:       "http://relay:8080"
-      BILLING_DB:      "/data/billing.db"
-      BILLING_DRIVER:  "sqlite"
-      # OAuth2 vars come from .env: OAUTH2_ISSUER_URL, OAUTH2_AUDIENCE, OAUTH2_JWKS_URL
+      MSG2AGENT_DASHBOARD_ADDR:  ":8082"
+      MSG2AGENT_RELAY_URL:       "http://relay:8080"
+      MSG2AGENT_BILLING_DB:      "/data/billing.db"
+      MSG2AGENT_BILLING_DRIVER:  "sqlite"
+      # OAuth2 vars come from .env (MSG2AGENT_OAUTH2_*) — same prefix as relay/mcp-server
       # Service token: MSG2AGENT_SERVICE_TOKEN from .env
     volumes:
       - billing-data:/data   # shared read-write with mcp-server (SQLite WAL)

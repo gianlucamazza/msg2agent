@@ -1278,14 +1278,14 @@ func main() {
 		}
 
 		// Optional: JWT validator for OAuth2 WS auth alongside API keys.
-		issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "MSG2AGENT_OAUTH2_ISSUER_URL", "")
+		issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "OAUTH2_ISSUER_URL", "")
 		if issuerURL != "" {
 			jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "", strings.TrimRight(issuerURL, "/")+
 				"/.well-known/jwks.json")
 			oauthCfg := a2a.OAuth2Config{
 				JWKSURL:  jwksURL,
 				Issuer:   issuerURL,
-				Audience: config.FlagOrEnv(*oauth2Audience, "MSG2AGENT_OAUTH2_AUDIENCE", ""),
+				Audience: config.FlagOrEnv(*oauth2Audience, "OAUTH2_AUDIENCE", ""),
 			}
 			hub.jwtValidator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
 			logger.Info("relay OAuth2 JWT auth enabled", "issuer", issuerURL)

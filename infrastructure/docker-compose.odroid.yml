@@ -144,6 +144,7 @@ services:
       start_period: 15s
     networks:
       - msg2agent
+      - services_services   # raggiungibile da NPM per /app e /api/dashboard routing
     restart: unless-stopped
     deploy:
       resources:

@@ -32,10 +32,6 @@ RUN CGO_ENABLED=0 go build \
 
 RUN CGO_ENABLED=0 go build \
     -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
-    -o /out/agent ./cmd/agent
-
-RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
     -o /out/mcp-server ./cmd/mcp-server
 
 RUN CGO_ENABLED=0 go build \
@@ -80,35 +76,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Default command
 ENTRYPOINT ["relay"]
 CMD ["-addr", ":8080", "-store", "sqlite", "-store-file", "/data/relay.db"]
-
-# =============================================================================
-# Agent Image
-# =============================================================================
-FROM alpine:3.20 AS agent
-
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
-
-# Create non-root user
-RUN addgroup -g 1000 msg2agent && \
-    adduser -u 1000 -G msg2agent -s /bin/sh -D msg2agent
-
-# Copy binary
-COPY --from=builder /out/agent /usr/local/bin/agent
-
-# Switch to non-root user
-USER msg2agent
-
-# Expose ports: HTTP (8081), P2P (8082), Metrics (9090)
-EXPOSE 8081 8082 9090
-
-# Health check on metrics port
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:9090/health || exit 1
-
-# Default command
-ENTRYPOINT ["agent"]
-CMD ["-http", ":8081", "-metrics", ":9090"]
 
 # =============================================================================
 # MCP Server Image

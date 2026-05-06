@@ -1,65 +1,54 @@
-# msg2agent Cloud Infrastructure
+# msg2agent Infrastructure
 
-This directory contains the infrastructure configuration for deploying msg2agent as a cloud SaaS.
+Production deployment files for the msg2agent stack on odroid (home lab).
 
 ## Architecture
 
 ```
-Internet → Nginx (TLS) → MCP server (port 3001)
-                       → Relay hub (port 8080) via /ws and /api
+Internet → Nginx Proxy Manager (TLS + Let's Encrypt)
+               → Relay hub        (port 8080, WebSocket)
+               → MCP server       (port 3001, streamable-HTTP)
+               → Dashboard        (port 8082, web UI)
 ```
 
-Three services run together via `docker-compose.cloud.yml`:
+Three services managed by Docker Compose:
 
 | Service | Image | Port | Purpose |
 |---------|-------|------|---------|
-| `relay` | `${RELAY_IMAGE}` | 8080 (internal) | A2A relay hub + WebSocket JSON-RPC |
-| `mcp` | `${MCP_IMAGE}` | 3001 (internal) | MCP streamable-HTTP gateway with billing |
-| `nginx` | `nginx:alpine` | 80, 443 | TLS termination, routing |
+| `relay` | `msg2agent-relay` | 8080 (internal) | A2A relay hub + billing webhook |
+| `mcp-server` | `msg2agent-mcp-server` | 3001 (internal) | MCP streamable-HTTP gateway with billing |
+| `dashboard` | `msg2agent-dashboard` | 8082 (internal) | Tenant/API key management UI |
 
 ## Quick Start
 
 ```bash
-cp .env.cloud.example .env.cloud
-# Edit .env.cloud with your values
-docker compose -f infrastructure/docker-compose.cloud.yml --env-file .env.cloud up -d
+cp .env.example .env
+# Edit .env with your values (Stripe keys, OAuth2, service token)
+docker compose -f infrastructure/docker-compose.odroid.yml up -d
 ```
-
-## Required Environment Variables
-
-See `.env.cloud.example` for the full list. Key variables:
-
-| Variable | Description |
-|----------|-------------|
-| `DOMAIN` | Public domain name (e.g. `relay.msg2agent.io`) |
-| `RELAY_IMAGE` | Docker image for the relay service |
-| `MCP_IMAGE` | Docker image for the MCP gateway |
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.cloud.yml` | Three-service SaaS stack (relay + mcp + nginx) |
-| `nginx/cloud.conf` | Nginx TLS termination + routing config |
-| `agentcard-msg2agent.json` | A2A AgentCard for Marketplace/discovery |
+| `docker-compose.odroid.yml` | Production stack — source of truth, deployed by Drone CI |
+| `agentcard-msg2agent.json` | A2A AgentCard served at `/.well-known/agent.json` |
+| `connector-manifest.json` | Anthropic Connectors directory manifest |
 | `grafana/billing-dashboard.json` | Grafana dashboard for billing metrics |
-| `terraform/` | GCP infrastructure provisioning |
 
 ## AgentCard
 
-`agentcard-msg2agent.json` is the A2A Agent Card served at
-`https://${DOMAIN}/.well-known/agent.json`. It declares:
+`agentcard-msg2agent.json` declares the agent's DID, capabilities, and endpoint.
+The relay serves it at `https://<domain>/.well-known/agent.json` via the `--agent-card` flag.
 
-- **Skills**: discovery, secure-messaging, task-orchestration, inbox
-- **Security**: OAuth2 (Google OIDC) and API key (`sk_live_` prefix)
-- **Endpoint**: `https://${DOMAIN}/`
+## Environment Variables
 
-Update the `url` field in the JSON before deploying to a new domain.
+See `docker-compose.odroid.yml` for the full list. Required secrets (passed via `.env`):
 
-## TLS
-
-The nginx config assumes certificates are mounted at:
-- `/etc/nginx/ssl/cert.pem`
-- `/etc/nginx/ssl/key.pem`
-
-Use Let's Encrypt (certbot) or your own CA. Mount the certs directory into the nginx container via `docker-compose.cloud.yml` volumes.
+| Variable | Description |
+|----------|-------------|
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_live_*` for production) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `STRIPE_PRICE_FREE/STARTER/TEAM/ENTERPRISE` | Stripe price IDs |
+| `MSG2AGENT_SERVICE_TOKEN` | Internal service-to-service bearer token |
+| `MSG2AGENT_OAUTH2_ISSUER_URL` | OAuth2 issuer (optional) |

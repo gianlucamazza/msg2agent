@@ -18,17 +18,17 @@ Before submitting, you need:
 ## Step 1 — Deploy a hosted MCP server
 
 ```bash
-docker compose -f infrastructure/docker-compose.cloud.yml up -d
+docker compose -f infrastructure/docker-compose.odroid.yml up -d
 ```
 
-The cloud stack exposes:
-- `https://relay.your-domain.com/mcp` — MCP Streamable HTTP endpoint (OAuth2-protected)
-- `https://relay.your-domain.com/health` — Health check
-- `https://relay.your-domain.com/.well-known/agent.json` — A2A AgentCard (public)
+The stack exposes:
+- `https://your-domain.com/mcp` — MCP Streamable HTTP endpoint (API key protected)
+- `https://your-domain.com/health` — Health check
+- `https://your-domain.com/.well-known/agent.json` — A2A AgentCard (public)
 
-## Step 2 — Enable OAuth2 on the MCP endpoint
+## Step 2 — Enable API key auth on the MCP endpoint
 
-Set these environment variables in `docker-compose.cloud.yml`:
+Set these environment variables in `docker-compose.odroid.yml`:
 
 ```yaml
 MSG2AGENT_BILLING_DB: /data/billing.db
@@ -46,14 +46,7 @@ MSG2AGENT_BILLING_DB: /data/billing.db
 
 ## Step 3 — Test with Claude Code
 
-```bash
-# Add as custom connector
-claude mcp add msg2agent-cloud \
-  -e MSG2AGENT_API_KEY=msg2a_test_key \
-  -- curl -s https://relay.your-domain.com/mcp
-```
-
-Or add manually in Claude Desktop → Settings → Connectors → Add custom connector → URL: `https://relay.your-domain.com/mcp`.
+Add manually in Claude Desktop → Settings → Connectors → Add custom connector → URL: `https://your-domain.com/mcp`.
 
 Verify all 14 tools appear and `get_self_info` returns your agent's DID.
 
@@ -63,7 +56,7 @@ Verify all 14 tools appear and `get_self_info` returns your agent's DID.
 2. Fill in:
    - **Name**: msg2agent
    - **Category**: Developer Tools / Agent Infrastructure
-   - **MCP endpoint URL**: `https://relay.your-domain.com/mcp`
+   - **MCP endpoint URL**: `https://your-domain.com/mcp`
    - **Auth type**: API Key (Bearer) or OAuth2
    - **Short description** (140 chars):
      > Trustless cross-org agent network. Connect Claude to any DID-based agent — discover, message, delegate tasks.
@@ -92,14 +85,14 @@ Prepare `connector-manifest.json` for the self-serve Connectors directory (separ
   "id": "msg2agent",
   "name": "msg2agent",
   "description": "Trustless agent-to-agent communication with W3C DID identity. Connect Claude to discover and message other AI agents securely.",
-  "url": "https://relay.your-domain.com/mcp",
+  "url": "https://your-domain.com/mcp",
   "auth": {
     "type": "api_key",
     "header": "Authorization",
     "scheme": "Bearer"
   },
   "category": "developer_tools",
-  "logo_url": "https://your-domain.com/logo.png"
+  "logo_url": "https://your-domain.com/static/img/logo.png"
 }
 ```
 

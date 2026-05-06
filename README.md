@@ -61,9 +61,9 @@ See [Architecture docs](docs/architecture.md) for details.
 # Add msg2agent as an MCP server directly from the registry
 claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080
 
-# Or against a hosted relay (get an API key at msg2agent.io)
+# Or against the hosted relay (get an API key at msg2agent.home.gianlucamazza.it)
 claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
-  ./mcp-server -name my-agent -relay wss://relay.msg2agent.io \
+  ./mcp-server -name my-agent -relay wss://msg2agent.home.gianlucamazza.it \
   -transport streamable-http -addr :3001
 ```
 
@@ -84,19 +84,12 @@ Install the published plugin from [ClawHub](https://clawhub.io/skills/msg2agent)
 
 ```bash
 go build -o relay ./cmd/relay
-go build -o agent ./cmd/agent
 go build -o mcp-server ./cmd/mcp-server
 
 # Terminal 1: Start relay
 ./relay -addr :8080
 
-# Terminal 2: Start first agent
-./agent -name alice -relay ws://localhost:8080
-
-# Terminal 3: Start second agent
-./agent -name bob -relay ws://localhost:8080
-
-# Terminal 4 (optional): Start MCP server for Claude / OpenClaw
+# Terminal 2: Start MCP server for Claude / OpenClaw
 ./mcp-server -name my-agent -relay ws://localhost:8080 -transport streamable-http -addr :3001
 ```
 
@@ -115,7 +108,6 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 | [Troubleshooting](docs/operations/troubleshooting.md) | Common issues and solutions             |
 | [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | OpenClaw integration via MCP            |
 | [Anthropic Marketplace](docs/marketplace/anthropic.md) | Publish on Claude Marketplace          |
-| [Google A2A Marketplace](docs/marketplace/google-a2a.md) | Publish on Google Cloud Agent Marketplace |
 | [Billing Setup](docs/marketplace/billing-setup.md)    | Multi-tenant billing: tenants, API keys, usage |
 | [Billing Client Guide](docs/marketplace/billing-client-guide.md) | API key usage, error codes, rate-limit back-off |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |
@@ -124,7 +116,6 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 
 ```
 cmd/
-  agent/          # Agent binary
   relay/          # Relay hub binary
   mcp-server/     # MCP protocol adapter
 pkg/
@@ -145,7 +136,7 @@ pkg/
 adapters/
   a2a/            # A2A protocol adapter
   mcp/            # MCP protocol adapter
-infrastructure/   # Terraform configurations
+infrastructure/   # Docker Compose + agentcard + grafana
 scripts/          # Development/deployment/scenario scripts
 test/             # Integration and E2E tests
 docker-compose*.yml  # Docker Compose configurations

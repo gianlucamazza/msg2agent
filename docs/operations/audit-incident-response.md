@@ -55,8 +55,8 @@ the same timestamp. Look for:
 
 3. If the DB file itself may be compromised, take it offline:
    ```bash
-   # In docker-compose.cloud.yml: remove billing DB volume mount and restart
-   docker compose -f infrastructure/docker-compose.cloud.yml restart relay
+   # In docker-compose.odroid.yml: remove billing DB volume mount and restart
+   docker compose -f infrastructure/docker-compose.odroid.yml restart relay
    ```
 
 ## Recovery
@@ -71,9 +71,9 @@ ls -lt /backups/billing/
 billing-admin verify-audit --db /backups/billing/billing-<date>.db --all-tenants
 
 # Replace live DB (relay must be stopped first)
-docker compose -f infrastructure/docker-compose.cloud.yml stop relay
+docker compose -f infrastructure/docker-compose.odroid.yml stop relay
 cp /backups/billing/billing-<date>.db /data/billing.db
-docker compose -f infrastructure/docker-compose.cloud.yml start relay
+docker compose -f infrastructure/docker-compose.odroid.yml start relay
 ```
 
 Reconcile any events that occurred between the backup and the tamper detection using

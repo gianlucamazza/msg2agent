@@ -21,13 +21,13 @@ git clone https://github.com/gianlucamazza/msg2agent.git
 cd msg2agent
 
 go build -o relay ./cmd/relay
-go build -o agent ./cmd/agent
+go build -o mcp-server ./cmd/mcp-server
 ```
 
 This produces two binaries:
 
 - `relay` - The message routing hub
-- `agent` - A standalone agent
+- `mcp-server` - MCP protocol adapter for Claude / OpenClaw
 
 ## Run Locally
 

@@ -94,10 +94,10 @@ go build -o mcp-server ./cmd/mcp-server
 
 ### Production (Docker Compose)
 
-See [`infrastructure/msg2agent-production.docker-compose.yml`](../../infrastructure/msg2agent-production.docker-compose.yml) for a ready-made stack with relay and MCP server.
+See [`infrastructure/docker-compose.odroid.yml`](../../infrastructure/docker-compose.odroid.yml) for the production stack with relay, MCP server, and dashboard.
 
 ```bash
-docker-compose -f infrastructure/msg2agent-production.docker-compose.yml up -d
+docker compose -f infrastructure/docker-compose.odroid.yml up -d
 ```
 
 The MCP server will be available at `http://<host>:3010/mcp`.

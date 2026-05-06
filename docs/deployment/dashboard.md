@@ -33,13 +33,7 @@ MSG2AGENT_OAUTH_AUTO_PROVISION=free
 
 ## Custom Domain
 
-Add a DNS record pointing to your server and update `nginx/cloud.conf`:
-
-```nginx
-server_name dashboard.example.com;
-```
-
-Or keep the `/app/` prefix on the existing domain — no changes needed beyond the already-configured nginx `location /app/` block.
+Add a DNS record pointing to your server and configure Nginx Proxy Manager (or your reverse proxy of choice) to route `/app/` to `dashboard:8082`.
 
 ## Stripe Proxy
 
@@ -52,7 +46,7 @@ Both the dashboard and the MCP server mount the same `billing-data` volume. SQLi
 ## Starting the Dashboard
 
 ```bash
-docker compose -f infrastructure/docker-compose.cloud.yml up -d dashboard
+docker compose -f infrastructure/docker-compose.odroid.yml up -d dashboard
 ```
 
 Health check: `curl http://localhost:8082/health` → `ok`

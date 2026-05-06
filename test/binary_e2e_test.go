@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// buildBinaries compiles the relay and agent binaries.
+// buildBinaries compiles the relay binary.
 func buildBinaries() error {
 	// Find project root by looking for go.mod
 	projectRoot, err := findProjectRoot()
@@ -58,7 +58,6 @@ func buildBinaries() error {
 		pkg  string
 	}{
 		{"relay", "./cmd/relay"},
-		{"agent", "./cmd/agent"},
 	}
 
 	for _, bin := range binaries {
@@ -314,182 +313,6 @@ func TestRelaySQLiteStore(t *testing.T) {
 	// Verify SQLite database file was created
 	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
 		t.Error("SQLite database file should have been created")
-	}
-}
-
-// TestAgentStartup verifies the agent starts and serves its agent card.
-func TestAgentStartup(t *testing.T) {
-	httpPort, err := getFreePort()
-	if err != nil {
-		t.Fatalf("failed to get free port: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Start agent
-	agentBin := filepath.Join(testBinDir, "agent")
-	cmd := exec.CommandContext(ctx, agentBin,
-		"-name", "test-agent",
-		"-domain", "test.local",
-		"-http", fmt.Sprintf(":%d", httpPort),
-		"-log-level", "error",
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start agent: %v", err)
-	}
-	defer cmd.Process.Kill()
-
-	// Wait for agent card endpoint
-	cardURL := fmt.Sprintf("http://localhost:%d/.well-known/agent.json", httpPort)
-	if err := waitForHTTP(cardURL, 10*time.Second); err != nil {
-		t.Fatalf("agent card check failed: %v", err)
-	}
-
-	// Fetch agent card
-	resp, err := http.Get(cardURL)
-	if err != nil {
-		t.Fatalf("failed to get agent card: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var card map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&card); err != nil {
-		t.Fatalf("failed to decode agent card: %v", err)
-	}
-
-	// Verify card contents
-	if card["name"] != "test-agent" {
-		t.Errorf("agent name = %v, want 'test-agent'", card["name"])
-	}
-
-	did, ok := card["did"].(string)
-	if !ok || !strings.HasPrefix(did, "did:wba:") {
-		t.Errorf("agent DID = %v, want did:wba:...", card["did"])
-	}
-}
-
-// TestAgentHealthEndpoint verifies the agent exposes health endpoints.
-func TestAgentHealthEndpoint(t *testing.T) {
-	httpPort, err := getFreePort()
-	if err != nil {
-		t.Fatalf("failed to get free port: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Start agent
-	agentBin := filepath.Join(testBinDir, "agent")
-	cmd := exec.CommandContext(ctx, agentBin,
-		"-name", "health-test",
-		"-http", fmt.Sprintf(":%d", httpPort),
-		"-log-level", "error",
-	)
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start agent: %v", err)
-	}
-	defer cmd.Process.Kill()
-
-	// Wait for health endpoint
-	healthURL := fmt.Sprintf("http://localhost:%d/health", httpPort)
-	if err := waitForHTTP(healthURL, 10*time.Second); err != nil {
-		t.Fatalf("agent health check failed: %v", err)
-	}
-
-	// Check health response
-	resp, err := http.Get(healthURL)
-	if err != nil {
-		t.Fatalf("failed to get health: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var health map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-		t.Fatalf("failed to decode health: %v", err)
-	}
-
-	if health["status"] != "ok" {
-		t.Errorf("health status = %v, want 'ok'", health["status"])
-	}
-}
-
-// TestAgentWithMetrics verifies the agent metrics server.
-func TestAgentWithMetrics(t *testing.T) {
-	httpPort, err := getFreePort()
-	if err != nil {
-		t.Fatalf("failed to get free port: %v", err)
-	}
-
-	metricsPort, err := getFreePort()
-	if err != nil {
-		t.Fatalf("failed to get free port for metrics: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Start agent with metrics
-	agentBin := filepath.Join(testBinDir, "agent")
-	cmd := exec.CommandContext(ctx, agentBin,
-		"-name", "metrics-test",
-		"-http", fmt.Sprintf(":%d", httpPort),
-		"-metrics", fmt.Sprintf(":%d", metricsPort),
-		"-log-level", "error",
-	)
-
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start agent: %v", err)
-	}
-	defer cmd.Process.Kill()
-
-	// Wait for metrics endpoint
-	metricsURL := fmt.Sprintf("http://localhost:%d/metrics", metricsPort)
-	if err := waitForHTTP(metricsURL, 10*time.Second); err != nil {
-		t.Fatalf("agent metrics check failed: %v", err)
-	}
-
-	// Check metrics response
-	resp, err := http.Get(metricsURL)
-	if err != nil {
-		t.Fatalf("failed to get metrics: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	metrics := string(body)
-
-	// Should contain Go runtime metrics at minimum
-	if !strings.Contains(metrics, "go_goroutines") {
-		t.Error("metrics should contain go_goroutines")
-	}
-
-	// Check metrics server health endpoints
-	healthURL := fmt.Sprintf("http://localhost:%d/health", metricsPort)
-	resp, err = http.Get(healthURL)
-	if err != nil {
-		t.Fatalf("failed to get metrics health: %v", err)
-	}
-	resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("metrics health status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-
-	// Check readiness
-	readyURL := fmt.Sprintf("http://localhost:%d/ready", metricsPort)
-	resp, err = http.Get(readyURL)
-	if err != nil {
-		t.Fatalf("failed to get metrics ready: %v", err)
-	}
-	resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("metrics ready status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 }
 

@@ -12,7 +12,7 @@ BUILD_DIR := ./build
 DIST_DIR  := ./dist
 
 # Binaries
-BINARIES := agent relay mcp-server billing-admin dashboard
+BINARIES := relay mcp-server billing-admin dashboard
 
 # Go commands
 GO      := go
@@ -21,7 +21,7 @@ GOBUILD := $(GO) build $(GOFLAGS) $(LDFLAGS)
 GOVET   := $(GO) vet
 GOFMT   := gofmt
 
-.PHONY: all build build-agent build-relay build-mcp build-billing-admin build-dashboard clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help bootstrap demo smoke
+.PHONY: all build build-relay build-mcp build-billing-admin build-dashboard clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help bootstrap demo smoke
 .PHONY: dev dev-up dev-down dev-logs dev-ps
 .PHONY: scenario-p2p scenario-relay scenario-tls scenario-mcp
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
@@ -32,10 +32,7 @@ GOFMT   := gofmt
 
 all: build
 
-build: build-agent build-relay build-mcp build-billing-admin build-dashboard ## Build all binaries
-
-build-agent: ## Build agent binary
-	$(GOBUILD) -o $(BUILD_DIR)/agent ./cmd/agent
+build: build-relay build-mcp build-billing-admin build-dashboard ## Build all binaries
 
 build-relay: ## Build relay binary
 	$(GOBUILD) -o $(BUILD_DIR)/relay ./cmd/relay
@@ -84,7 +81,6 @@ check: fmt vet lint ## Run all code quality checks
 
 docker-build: ## Build Docker images
 	docker build --target relay -t msg2agent-relay:$(VERSION) -t msg2agent-relay:latest .
-	docker build --target agent -t msg2agent-agent:$(VERSION) -t msg2agent-agent:latest .
 	docker build --target mcp-server -t msg2agent-mcp-server:$(VERSION) -t msg2agent-mcp-server:latest .
 	docker build --target billing-admin -t msg2agent-billing-admin:$(VERSION) -t msg2agent-billing-admin:latest .
 	docker build --target dashboard -t msg2agent-dashboard:$(VERSION) -t msg2agent-dashboard:latest .
@@ -92,8 +88,6 @@ docker-build: ## Build Docker images
 docker-push: ## Push Docker images to registry
 	docker push msg2agent-relay:$(VERSION)
 	docker push msg2agent-relay:latest
-	docker push msg2agent-agent:$(VERSION)
-	docker push msg2agent-agent:latest
 	docker push msg2agent-mcp-server:$(VERSION)
 	docker push msg2agent-mcp-server:latest
 	docker push msg2agent-billing-admin:$(VERSION)
@@ -104,7 +98,6 @@ docker-push: ## Push Docker images to registry
 ## Installation
 
 install: build ## Install binaries to GOPATH/bin
-	$(GO) install ./cmd/agent
 	$(GO) install ./cmd/relay
 	$(GO) install ./cmd/mcp-server
 	$(GO) install ./cmd/billing-admin
@@ -137,8 +130,8 @@ dev-up: docker-build ## Start development environment with Docker Compose
 	@echo ""
 	@echo "Services started. Run 'make dev-logs' to follow logs."
 	@echo "  Relay:        http://localhost:8080/health"
-	@echo "  Alice Card:   http://localhost:8081/.well-known/agent.json"
-	@echo "  Bob Card:     http://localhost:8083/.well-known/agent.json"
+	@echo "  MCP Server:   http://localhost:3001/mcp"
+	@echo "  Dashboard:    http://localhost:8082"
 
 dev-down: ## Stop development environment
 	docker compose down -v

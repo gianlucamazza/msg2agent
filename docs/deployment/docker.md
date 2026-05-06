@@ -24,30 +24,10 @@ ENTRYPOINT ["/usr/local/bin/relay"]
 CMD ["-addr", ":8080"]
 ```
 
-### Agent Image
-
-```dockerfile
-# Dockerfile.agent
-FROM golang:1.23-alpine AS builder
-
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /agent ./cmd/agent
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
-COPY --from=builder /agent /usr/local/bin/agent
-EXPOSE 8081 9090
-ENTRYPOINT ["/usr/local/bin/agent"]
-```
-
-Build the images:
+Build the image:
 
 ```bash
 docker build -f Dockerfile.relay -t msg2agent/relay:latest .
-docker build -f Dockerfile.agent -t msg2agent/agent:latest .
 ```
 
 ## Docker Compose
@@ -72,35 +52,18 @@ services:
       timeout: 5s
       retries: 3
 
-  agent-alice:
-    image: msg2agent/agent:latest
+  mcp-server:
+    image: msg2agent/mcp-server:latest
     depends_on:
       relay:
         condition: service_healthy
     environment:
-      - MSG2AGENT_NAME=alice
-      - MSG2AGENT_DOMAIN=msg2agent.xyz
-      - MSG2AGENT_RELAY=ws://relay:8080
-      - MSG2AGENT_HTTP=:8081
-      - MSG2AGENT_METRICS=:9090
+      - MSG2AGENT_NAME=my-agent
+      - MSG2AGENT_DOMAIN=example.com
+      - MSG2AGENT_RELAY_URL=ws://relay:8080
+      - MSG2AGENT_HTTP_ADDR=:3001
     ports:
-      - "8081:8081"
-      - "9091:9090"
-
-  agent-bob:
-    image: msg2agent/agent:latest
-    depends_on:
-      relay:
-        condition: service_healthy
-    environment:
-      - MSG2AGENT_NAME=bob
-      - MSG2AGENT_DOMAIN=msg2agent.xyz
-      - MSG2AGENT_RELAY=ws://relay:8080
-      - MSG2AGENT_HTTP=:8081
-      - MSG2AGENT_METRICS=:9090
-    ports:
-      - "8082:8081"
-      - "9092:9090"
+      - "3001:3001"
 ```
 
 ### With SQLite Persistence

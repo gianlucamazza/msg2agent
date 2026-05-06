@@ -13,12 +13,10 @@
 #   dashboard  — self-serve web UI, loopback:8082 (LAN only)
 #
 # Secrets: /opt/services/msg2agent/.env (chmod 600, never committed)
-#   MSG2AGENT_SERVICE_TOKEN    — dashboard ↔ relay bearer
-#   MSG2AGENT_OAUTH2_*         — OAuth2 for relay + mcp-server
-#   OAUTH2_*                   — OAuth2 for dashboard (different prefix)
-#   STRIPE_SECRET_KEY          — Stripe billing
-#   STRIPE_WEBHOOK_SECRET
-#   STRIPE_PRICE_{FREE,STARTER,TEAM,ENTERPRISE}
+#   MSG2AGENT_SERVICE_TOKEN                           — dashboard ↔ relay bearer
+#   MSG2AGENT_OAUTH2_{ISSUER_URL,AUDIENCE,JWKS_URL}   — OAuth2 (all three services share this prefix)
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET          — Stripe (relay handles webhook)
+#   STRIPE_PRICE_{FREE,STARTER,TEAM,ENTERPRISE}       — Stripe price IDs (no MSG2AGENT_ prefix)
 
 services:
 

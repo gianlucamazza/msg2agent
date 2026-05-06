@@ -1398,6 +1398,20 @@ func main() {
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", promhttp.Handler())
 
+	// RFC 9728 — OAuth 2.0 Protected Resource Metadata (public, no auth).
+	// Tells MCP clients which Authorization Server manages this resource.
+	// authorization_servers is populated once the OAuth 2.1 AS (Phase B) ships;
+	// for now it is empty so clients fall back to bearer API-key auth.
+	oauthResourceMeta := []byte(`{"resource":"https://msg2agent.home.gianlucamazza.it/mcp","authorization_servers":[],"bearer_methods_supported":["header"],"scopes_supported":["mcp:tools:read","mcp:tools:write","mcp:tools:destructive"]}`)
+	serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(oauthResourceMeta)
+	}
+	mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
+	// RFC 9728 path-appending variant for resource https://.../mcp
+	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
+
 	// A2A AgentCard — public, no auth, served at /.well-known/agent.json
 	if *agentCardPath != "" {
 		mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, r *http.Request) {

@@ -25,7 +25,7 @@ func TenantFromContext(ctx context.Context) *Tenant {
 	return t
 }
 
-// APIKeyMiddleware authenticates requests via a Bearer API key (msg2a_ prefix).
+// APIKeyMiddleware authenticates requests via a Bearer API key (sk_live_, sk_test_, or msg2a_ legacy prefix).
 // It resolves the tenant from the billing Store and stores it in the context.
 // Requests with no Authorization header are rejected with 401 unless allowAnon is true.
 // Metering is handled at the MCP tool level via MCPToolMeterMiddleware, not here.

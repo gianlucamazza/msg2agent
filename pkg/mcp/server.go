@@ -103,6 +103,7 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(mcp.NewTool("list_agents",
 		mcp.WithDescription("List available agents on the network. Usage: Returns a list of agents with their DIDs and names."),
 		mcp.WithString("capability", mcp.Description("Optional capability to filter by")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.listAgentsHandler)
 
 	// Send Message
@@ -111,12 +112,14 @@ func (s *Server) registerTools() {
 		mcp.WithString("to", mcp.Required(), mcp.Description("DID of the recipient agent")),
 		mcp.WithString("method", mcp.Required(), mcp.Description("Method to call")),
 		mcp.WithString("params", mcp.Required(), mcp.Description("JSON string of parameters")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(false), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.sendMessageHandler)
 
 	// Get Agent Info
 	s.mcp.AddTool(mcp.NewTool("get_agent_info",
 		mcp.WithDescription("Get detailed information about a specific agent including capabilities and endpoints."),
 		mcp.WithString("did", mcp.Required(), mcp.Description("DID of the agent to query")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.getAgentInfoHandler)
 
 	// Get Task Status
@@ -124,17 +127,20 @@ func (s *Server) registerTools() {
 		mcp.WithDescription("Get the status of an A2A task by its ID."),
 		mcp.WithString("task_id", mcp.Required(), mcp.Description("ID of the task")),
 		mcp.WithString("agent_did", mcp.Required(), mcp.Description("DID of the agent that owns the task")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.getTaskStatusHandler)
 
 	// Query Capabilities
 	s.mcp.AddTool(mcp.NewTool("query_capabilities",
 		mcp.WithDescription("Find agents that support specific capabilities."),
 		mcp.WithString("capabilities", mcp.Required(), mcp.Description("Comma-separated list of required capabilities")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.queryCapabilitiesHandler)
 
 	// Get Self Info
 	s.mcp.AddTool(mcp.NewTool("get_self_info",
 		mcp.WithDescription("Get information about this agent (self)."),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.getSelfInfoHandler)
 
 	// Submit Task - Create A2A task with session tracking
@@ -143,6 +149,7 @@ func (s *Server) registerTools() {
 		mcp.WithString("agent_did", mcp.Required(), mcp.Description("DID of the target agent")),
 		mcp.WithString("message", mcp.Required(), mcp.Description("JSON message to send to the agent")),
 		mcp.WithString("session_id", mcp.Description("Optional session ID to continue an existing conversation")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(false), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.submitTaskHandler)
 
 	// Cancel Task - Cancel a task in progress
@@ -150,6 +157,7 @@ func (s *Server) registerTools() {
 		mcp.WithDescription("Cancel an A2A task in progress."),
 		mcp.WithString("task_id", mcp.Required(), mcp.Description("ID of the task to cancel")),
 		mcp.WithString("agent_did", mcp.Required(), mcp.Description("DID of the agent that owns the task")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(true), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.cancelTaskHandler)
 
 	// Send Task Input - Send input to a task in input_required state
@@ -158,31 +166,37 @@ func (s *Server) registerTools() {
 		mcp.WithString("task_id", mcp.Required(), mcp.Description("ID of the task")),
 		mcp.WithString("agent_did", mcp.Required(), mcp.Description("DID of the agent that owns the task")),
 		mcp.WithString("message", mcp.Required(), mcp.Description("JSON message with the user input")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(false), OpenWorldHint: mcp.ToBoolPtr(true)}),
 	), s.sendTaskInputHandler)
 
 	// List Tasks - List locally tracked tasks
 	s.mcp.AddTool(mcp.NewTool("list_tasks",
 		mcp.WithDescription("List all locally tracked A2A tasks."),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.listTasksHandler)
 
 	// Inbox tools
 	s.mcp.AddTool(mcp.NewTool("list_messages",
 		mcp.WithDescription("List messages in the inbox. Optionally filter by unread only."),
 		mcp.WithBoolean("unread_only", mcp.Description("If true, only return unread messages")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.listMessagesHandler)
 
 	s.mcp.AddTool(mcp.NewTool("read_message",
 		mcp.WithDescription("Read a specific message by ID. Marks the message as read."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("ID of the message to read")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.readMessageHandler)
 
 	s.mcp.AddTool(mcp.NewTool("delete_message",
 		mcp.WithDescription("Delete a message from the inbox by ID."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("ID of the message to delete")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(false), DestructiveHint: mcp.ToBoolPtr(true), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.deleteMessageHandler)
 
 	s.mcp.AddTool(mcp.NewTool("message_count",
 		mcp.WithDescription("Get the count of messages in the inbox."),
 		mcp.WithBoolean("unread_only", mcp.Description("If true, only count unread messages")),
+		mcp.WithToolAnnotation(mcp.ToolAnnotation{ReadOnlyHint: mcp.ToBoolPtr(true), DestructiveHint: mcp.ToBoolPtr(false), IdempotentHint: mcp.ToBoolPtr(true), OpenWorldHint: mcp.ToBoolPtr(false)}),
 	), s.messageCountHandler)
 }

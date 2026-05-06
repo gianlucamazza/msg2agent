@@ -372,6 +372,17 @@ func main() {
 	// /metrics exposed internally only (not routed through nginx to public).
 	mux.Handle("/metrics", promhttp.Handler())
 
+	// RFC 9728 — OAuth 2.0 Protected Resource Metadata (public, no auth).
+	// authorization_servers is empty until Phase B (OAuth 2.1 AS) ships.
+	oauthResourceMeta := []byte(`{"resource":"https://msg2agent.home.gianlucamazza.it/mcp","authorization_servers":[],"bearer_methods_supported":["header"],"scopes_supported":["mcp:tools:read","mcp:tools:write","mcp:tools:destructive"]}`)
+	serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(oauthResourceMeta)
+	}
+	mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
+	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
+
 	// Stripe webhook is owned by the relay (POST /api/billing/webhook on the
 	// public NPM-exposed port). mcp-server is loopback-only and shares the
 	// billing DB, so it sees relay's writes without needing its own handler.

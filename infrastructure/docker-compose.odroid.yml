@@ -70,6 +70,9 @@ services:
     container_name: msg2agent-mcp-server
     ports:
       - "127.0.0.1:3010:3001"   # loopback only — solo plugin locale
+    # transport flag has no env fallback in cmd/mcp-server/main.go; default=stdio
+    # would skip the HTTP server and fail the healthcheck.
+    command: ["-transport", "streamable-http"]
     env_file:
       - .env
     environment:

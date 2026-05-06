@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -372,36 +371,9 @@ func main() {
 	// /metrics exposed internally only (not routed through nginx to public).
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Stripe webhook receiver — only registered when STRIPE_SECRET_KEY is set.
-	if stripeCfg := billing.StripeConfigFromEnv(); stripeCfg != nil && billingStore != nil {
-		sc := billing.NewStripeClient(*stripeCfg)
-		eventStore, _ := billingStore.(billing.EventStore)
-		mux.HandleFunc("/billing/webhook", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-			if err != nil {
-				http.Error(w, "read error", http.StatusBadRequest)
-				return
-			}
-			event, err := sc.VerifyWebhookSignature(body, r.Header.Get("Stripe-Signature"))
-			if err != nil {
-				logger.Warn("stripe webhook: invalid signature", "error", err)
-				http.Error(w, "invalid signature", http.StatusBadRequest)
-				return
-			}
-			if err := billing.HandleStripeEvent(billingStore, eventStore, event); err != nil {
-				logger.Error("stripe webhook: handle event failed", "type", event.Type, "error", err)
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-			logger.Info("stripe webhook processed", "type", event.Type, "id", event.ID)
-			w.WriteHeader(http.StatusOK)
-		})
-		logger.Info("stripe webhook handler registered", "path", "/billing/webhook")
-	}
+	// Stripe webhook is owned by the relay (POST /api/billing/webhook on the
+	// public NPM-exposed port). mcp-server is loopback-only and shares the
+	// billing DB, so it sees relay's writes without needing its own handler.
 
 	srv := &http.Server{
 		Addr:              listenAddr,

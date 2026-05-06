@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gianlucamazza/msg2agent/pkg/billing"
 )
 
 // OAuth2 validation errors.
@@ -386,6 +388,31 @@ func ClaimsFromContext(ctx context.Context) *Claims {
 type contextKey string
 
 const claimsContextKey contextKey = "oauth2_claims"
+
+// billingValidatorAdapter wraps OAuth2Validator to satisfy billing.JWTValidator
+// without the billing package needing to import adapters/a2a.
+type billingValidatorAdapter struct {
+	v *OAuth2Validator
+}
+
+// NewBillingValidator wraps an OAuth2Validator so it satisfies billing.JWTValidator.
+// Use this when passing an a2a validator to billing.OAuth2Middleware.
+func NewBillingValidator(v *OAuth2Validator) billingValidatorAdapter {
+	return billingValidatorAdapter{v: v}
+}
+
+// ValidateTokenToBillingClaims implements billing.JWTValidator.
+func (a billingValidatorAdapter) ValidateTokenToBillingClaims(token string) (*billing.OAuthClaims, error) {
+	c, err := a.v.ValidateToken(token)
+	if err != nil {
+		return nil, err
+	}
+	return &billing.OAuthClaims{
+		Subject: c.Subject,
+		Issuer:  c.Issuer,
+		Email:   c.Email,
+	}, nil
+}
 
 // base64URLDecode decodes a base64url encoded string (without padding).
 func base64URLDecode(s string) ([]byte, error) {

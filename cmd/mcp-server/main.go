@@ -6,14 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	mcpadapter "github.com/gianlucamazza/msg2agent/adapters/mcp"
 	"github.com/gianlucamazza/msg2agent/pkg/agent"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
@@ -65,6 +68,9 @@ func main() {
 	identFile := flag.String("identity-file", "", "Path to identity key file for persistence")
 	billingDB := flag.String("billing-db", "", "Path to billing SQLite DB (enables API key auth when set)")
 	allowAnon := flag.Bool("allow-anon", false, "Allow unauthenticated MCP requests (only when billing-db is set)")
+	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 OIDC issuer URL (enables JWT auth alongside API keys)")
+	oauth2Audience := flag.String("oauth2-audience", "", "Expected OAuth2 token audience")
+	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "JWKS endpoint URL (default: issuer-url/.well-known/jwks.json)")
 	flag.Parse()
 
 	// Validate transport flag
@@ -251,10 +257,31 @@ func main() {
 		billingOpts...,
 	)
 
-	// Wire HTTP-level API key auth middleware.
+	// Wire HTTP-level auth: API key always, OAuth2 if configured.
 	if billingStore != nil {
-		mcpServer.WithAuthMiddleware(billing.APIKeyMiddleware(billingStore, *allowAnon))
-		logger.Info("API key auth enabled")
+		apiKeyMW := billing.APIKeyMiddleware(billingStore, *allowAnon)
+		if *oauth2IssuerURL != "" {
+			jwksURL := *oauth2JWKSUrl
+			if jwksURL == "" {
+				jwksURL = strings.TrimRight(*oauth2IssuerURL, "/") + "/.well-known/jwks.json"
+			}
+			oauthCfg := a2a.OAuth2Config{
+				JWKSURL:  jwksURL,
+				Issuer:   *oauth2IssuerURL,
+				Audience: *oauth2Audience,
+			}
+			validator := a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
+			autoProvisionPlan := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
+			oauthMW := billing.OAuth2Middleware(validator, billingStore, autoProvisionPlan)
+			// OAuth2 is outer (handles JWTs first), API key is inner (handles sk_live_ tokens).
+			mcpServer.WithAuthMiddleware(func(h http.Handler) http.Handler {
+				return oauthMW(apiKeyMW(h))
+			})
+			logger.Info("OAuth2 + API key auth enabled", "issuer", *oauth2IssuerURL)
+		} else {
+			mcpServer.WithAuthMiddleware(apiKeyMW)
+			logger.Info("API key auth enabled")
+		}
 	}
 
 	// Register catch-all handler for incoming messages

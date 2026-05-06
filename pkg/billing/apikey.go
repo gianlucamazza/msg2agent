@@ -6,19 +6,35 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 )
 
-const apiKeyPrefix = "msg2a_"
+const (
+	apiKeyPrefixLive   = "sk_live_"
+	apiKeyPrefixTest   = "sk_test_"
+	apiKeyPrefixLegacy = "msg2a_"
+)
+
+// keyEnvPrefix returns the prefix for new API keys based on MSG2AGENT_ENV.
+// "test", "dev", "development" → sk_test_; everything else → sk_live_.
+func keyEnvPrefix() string {
+	switch strings.ToLower(os.Getenv("MSG2AGENT_ENV")) {
+	case "test", "development", "dev":
+		return apiKeyPrefixTest
+	default:
+		return apiKeyPrefixLive
+	}
+}
 
 // APIKey represents an issued API key (plaintext only available at creation time).
 type APIKey struct {
 	ID        string     `json:"id"`
 	TenantID  string     `json:"tenant_id"`
-	Name      string     `json:"name"`     // human label, e.g. "production"
-	KeyHash   string     `json:"key_hash"` // SHA-256 of the raw key, stored in DB
-	Prefix    string     `json:"prefix"`   // first 8 chars after "msg2a_", for display
+	Name      string     `json:"name"`
+	KeyHash   string     `json:"key_hash"`
+	Prefix    string     `json:"prefix"`
 	CreatedAt time.Time  `json:"created_at"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
@@ -37,6 +53,7 @@ func (k *APIKey) IsValid() bool {
 
 // GenerateAPIKey generates a new API key and returns the plaintext value and the
 // APIKey record (which stores only the hash — never store the plaintext).
+// The prefix is determined by MSG2AGENT_ENV: "test"|"dev" → sk_test_, default → sk_live_.
 func GenerateAPIKey(tenantID, name string) (plaintext string, record *APIKey, err error) {
 	raw := make([]byte, 32)
 	if _, err = rand.Read(raw); err != nil {
@@ -44,7 +61,7 @@ func GenerateAPIKey(tenantID, name string) (plaintext string, record *APIKey, er
 	}
 
 	encoded := base64.RawURLEncoding.EncodeToString(raw)
-	plaintext = apiKeyPrefix + encoded
+	plaintext = keyEnvPrefix() + encoded
 
 	hash := hashKey(plaintext)
 	if len(encoded) < 8 {
@@ -65,12 +82,15 @@ func GenerateAPIKey(tenantID, name string) (plaintext string, record *APIKey, er
 }
 
 // HashAPIKey returns the SHA-256 hex digest of a plaintext API key.
-// Use this to look up keys in the store without storing the plaintext.
+// Accepts sk_live_, sk_test_, and the legacy msg2a_ prefix.
 func HashAPIKey(plaintext string) (string, error) {
-	if !strings.HasPrefix(plaintext, apiKeyPrefix) {
-		return "", ErrInvalidAPIKey
+	switch {
+	case strings.HasPrefix(plaintext, apiKeyPrefixLive),
+		strings.HasPrefix(plaintext, apiKeyPrefixTest),
+		strings.HasPrefix(plaintext, apiKeyPrefixLegacy):
+		return hashKey(plaintext), nil
 	}
-	return hashKey(plaintext), nil
+	return "", ErrInvalidAPIKey
 }
 
 func hashKey(plaintext string) string {

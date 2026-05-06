@@ -47,7 +47,7 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-				http.Error(w, "invalid Authorization format; expected: Bearer msg2a_...", http.StatusUnauthorized)
+				http.Error(w, "invalid Authorization format; expected: Bearer sk_live_...", http.StatusUnauthorized)
 				return
 			}
 

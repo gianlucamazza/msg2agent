@@ -169,7 +169,7 @@ func TestTenantFromContext_nil(t *testing.T) {
 func TestAPIKeyMiddleware_unknownKey(t *testing.T) {
 	store := NewMemoryStore()
 	// No tenants or keys registered.
-	plaintext := apiKeyPrefix + strings.Repeat("A", 43)
+	plaintext := apiKeyPrefixLive + strings.Repeat("A", 43)
 	mw := APIKeyMiddleware(store, false)
 	h := mw(http.HandlerFunc(okHandler))
 

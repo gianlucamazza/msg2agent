@@ -10,8 +10,8 @@ func TestGenerateAPIKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
-	if !strings.HasPrefix(plaintext, apiKeyPrefix) {
-		t.Errorf("plaintext %q missing prefix %q", plaintext, apiKeyPrefix)
+	if !strings.HasPrefix(plaintext, apiKeyPrefixLive) {
+		t.Errorf("plaintext %q missing prefix %q", plaintext, apiKeyPrefixLive)
 	}
 	if record.TenantID != "t_001" {
 		t.Errorf("TenantID = %q, want %q", record.TenantID, "t_001")
@@ -76,5 +76,35 @@ func TestGenerateAPIKey_uniqueness(t *testing.T) {
 	k2, _, _ := GenerateAPIKey("t_001", "b")
 	if k1 == k2 {
 		t.Error("two generated keys should not be equal")
+	}
+}
+
+func TestHashAPIKey_allPrefixes(t *testing.T) {
+	cases := []struct {
+		key string
+	}{
+		{"sk_live_testonly"},
+		{"sk_test_testonly"},
+		{"msg2a_testonly"},
+	}
+	for _, tc := range cases {
+		hash, err := HashAPIKey(tc.key)
+		if err != nil {
+			t.Errorf("HashAPIKey(%q): unexpected error: %v", tc.key, err)
+		}
+		if hash == "" {
+			t.Errorf("HashAPIKey(%q): empty hash", tc.key)
+		}
+	}
+}
+
+func TestGenerateAPIKey_envPrefix(t *testing.T) {
+	t.Setenv("MSG2AGENT_ENV", "test")
+	plaintext, _, err := GenerateAPIKey("t_001", "env-test")
+	if err != nil {
+		t.Fatalf("GenerateAPIKey: %v", err)
+	}
+	if !strings.HasPrefix(plaintext, apiKeyPrefixTest) {
+		t.Errorf("expected sk_test_ prefix, got %q", plaintext)
 	}
 }

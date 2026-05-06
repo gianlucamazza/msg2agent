@@ -160,11 +160,15 @@ func runIssueKey(store billing.Store, args []string) {
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
 	name := fs.String("name", "default", "key label")
 	ttl := fs.Duration("ttl", 0, "key TTL (e.g. 720h); 0 = no expiry")
+	env := fs.String("env", "", "key environment: live (default) or test")
 	fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
 		os.Exit(1)
+	}
+	if *env != "" {
+		os.Setenv("MSG2AGENT_ENV", *env)
 	}
 
 	plaintext, key, err := billing.GenerateAPIKey(*tenantID, *name)

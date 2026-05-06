@@ -49,11 +49,23 @@ type UsageMeter struct {
 	// optional async persistence
 	eventCh chan auditEvent
 	logger  *slog.Logger
+
+	// optional quota-threshold notifications
+	notifier Notifier
+	notifySt *notifierState
 }
 
 // NewUsageMeter creates an in-memory meter with no persistence.
 func NewUsageMeter() *UsageMeter {
 	return &UsageMeter{counters: make(map[counterKey]*atomic.Int64)}
+}
+
+// WithNotifier registers a Notifier that fires when quota crosses the warn
+// (default 80%, configurable via BILLING_QUOTA_WARN_RATIO) or exceeded (100%) threshold.
+// Idempotent per counterKey+period: each threshold is fired at most once per period.
+func (m *UsageMeter) WithNotifier(n Notifier) {
+	m.notifier = n
+	m.notifySt = newNotifierState()
 }
 
 // WithStore starts the background audit writer that persists events to store.
@@ -147,11 +159,14 @@ func (m *UsageMeter) TryConsume(tenantID string, event UsageEvent, limit, delta 
 		c.Add(-delta)
 		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(1.0)
 		billingQuotaExceeded.WithLabelValues(tenantID, string(event)).Inc()
+		m.maybeNotify(tenantID, event, limit, 1.0)
 		return fmt.Errorf("%w: %s limit %d reached for tenant %s",
 			ErrQuotaExceeded, event, limit, tenantID)
 	}
 	if limit > 0 {
-		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(float64(newVal) / float64(limit))
+		ratio := float64(newVal) / float64(limit)
+		billingQuotaRatio.WithLabelValues(tenantID, string(event)).Set(ratio)
+		m.maybeNotify(tenantID, event, limit, ratio)
 	}
 	return nil
 }
@@ -160,6 +175,37 @@ func (m *UsageMeter) TryConsume(tenantID string, event UsageEvent, limit, delta 
 // when the downstream handler fails and the event should not be billed.
 func (m *UsageMeter) ReleaseQuota(tenantID string, event UsageEvent, delta int64) {
 	m.getOrCreateCounter(tenantID, event).Add(-delta)
+}
+
+// maybeNotify fires the registered Notifier when ratio crosses a threshold for the first
+// time in this period. No-op when no notifier is configured.
+func (m *UsageMeter) maybeNotify(tenantID string, event UsageEvent, limit int64, ratio float64) {
+	if m.notifier == nil {
+		return
+	}
+	k := counterKey{tenantID: tenantID, period: periodKey(time.Now().UTC()), event: event}
+	evType, ok := m.notifySt.shouldNotify(k, ratio)
+	if !ok {
+		return
+	}
+	current := int64(ratio * float64(limit))
+	ev := NotifyEvent{
+		TenantID:  tenantID,
+		Period:    k.period,
+		Event:     event,
+		EventType: evType,
+		Current:   current,
+		Limit:     limit,
+		Ratio:     ratio,
+		Timestamp: time.Now().UTC(),
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := m.notifier.Notify(ctx, ev); err != nil && m.logger != nil {
+			m.logger.Warn("billing: quota notification failed", "tenant", tenantID, "type", evType, "error", err)
+		}
+	}()
 }
 
 // queueAudit sends an audit event to the persistence channel (best-effort) and

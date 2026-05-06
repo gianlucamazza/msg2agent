@@ -229,6 +229,11 @@ func main() {
 		}
 		// Start async audit writer (flushes to DB every 5s).
 		meter.WithStore(ctx, bStore, logger)
+		// Wire quota-threshold webhook notifier if BILLING_WEBHOOK_URL is set.
+		if n := billing.NewWebhookNotifierFromEnv(logger); n != nil {
+			meter.WithNotifier(n)
+			logger.Info("billing webhook notifier enabled", "url", n.URL)
+		}
 		billingOpts = append(billingOpts, server.WithToolHandlerMiddleware(billing.MCPToolMeterMiddleware(meter)))
 		logger.Info("billing enabled", "db", *billingDB, "allow_anon", *allowAnon)
 	}

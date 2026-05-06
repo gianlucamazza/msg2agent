@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>msg2agent Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <nav>
+    <span class="logo">msg2agent</span>
+    <span id="nav-plan"></span>
+  </nav>
+  <main>
+    <section id="section-account">
+      <h2>Account</h2>
+      <div id="account-info">Loading...</div>
+    </section>
+    <section id="section-keys">
+      <h2>API Keys</h2>
+      <button id="btn-create-key">Create Key</button>
+      <div id="keys-list"></div>
+    </section>
+    <section id="section-usage">
+      <h2>Usage</h2>
+      <div id="usage-chart"></div>
+    </section>
+    <section id="section-billing">
+      <h2>Billing</h2>
+      <button id="btn-upgrade-starter">Upgrade to Starter</button>
+      <button id="btn-upgrade-team">Upgrade to Team</button>
+      <button id="btn-portal">Manage Subscription</button>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

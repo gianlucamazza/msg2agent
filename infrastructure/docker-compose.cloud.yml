@@ -61,6 +61,26 @@ services:
       - cloud
     restart: unless-stopped
 
+  dashboard:
+    image: msg2agent/dashboard:latest
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      - MSG2AGENT_DASHBOARD_ADDR=:8082
+      - MSG2AGENT_RELAY_URL=http://relay:8080
+      - MSG2AGENT_BILLING_DB=/data/billing.db
+      - MSG2AGENT_BILLING_DRIVER=sqlite
+      - MSG2AGENT_OAUTH2_ISSUER_URL=${MSG2AGENT_OAUTH2_ISSUER_URL}
+      - MSG2AGENT_OAUTH2_AUDIENCE=${MSG2AGENT_OAUTH2_AUDIENCE}
+      - MSG2AGENT_OAUTH_AUTO_PROVISION=free
+    volumes:
+      - billing-data:/data
+    depends_on:
+      - relay
+    networks:
+      - cloud
+
   nginx:
     image: nginx:1.27-alpine
     container_name: cloud-nginx

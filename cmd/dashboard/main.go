@@ -120,23 +120,14 @@ func main() {
 		}
 	}
 
-	// Public pages — no auth required.
-	mux.HandleFunc("/pricing", servePage("pricing.html"))
-	mux.HandleFunc("/privacy", servePage("privacy.html"))
-	mux.HandleFunc("/terms", servePage("terms.html"))
-
 	// App SPA — authenticated dashboard at /app/.
 	mux.HandleFunc("/app", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("/app/", servePage("index.html"))
 
-	// Catch-all: landing page for "/" or static assets (CSS/JS/images).
+	// Static assets (CSS/JS/images) and redirect root to main domain.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			servePage("landing.html")(w, r)
-			return
-		}
 		if ext := filepath.Ext(r.URL.Path); ext != "" && !strings.HasPrefix(r.URL.Path, "/api/") {
 			fileServer.ServeHTTP(w, r)
 			return

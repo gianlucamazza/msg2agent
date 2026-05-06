@@ -120,7 +120,7 @@ services:
     image: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
     container_name: msg2agent-dashboard
     ports:
-      - "127.0.0.1:8082:8082"   # LAN only — NPM exposure rimandata
+      - "192.168.1.103:8082:8082"   # LAN only — NPM proxies app.msg2agent.home.gianlucamazza.it
     env_file:
       - .env
     environment:

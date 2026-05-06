@@ -4,10 +4,12 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,6 +38,9 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/security"
 	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
+
+//go:embed web
+var webFS embed.FS
 
 var (
 	ErrClientNotRegistered = fmt.Errorf("client not registered")
@@ -1317,7 +1322,54 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", hub.handleWebSocket)
+
+	// Public static pages — served from embedded web/ FS, no auth.
+	webSub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		logger.Error("failed to sub embedded web FS", "error", err)
+		os.Exit(1)
+	}
+	servePage := func(name string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			data, err := fs.ReadFile(webSub, name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write(data)
+		}
+	}
+	serveAsset := func(name, contentType string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			data, err := fs.ReadFile(webSub, name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", contentType)
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			_, _ = w.Write(data)
+		}
+	}
+	mux.HandleFunc("/pricing", servePage("pricing.html"))
+	mux.HandleFunc("/privacy", servePage("privacy.html"))
+	mux.HandleFunc("/terms", servePage("terms.html"))
+	mux.HandleFunc("/favicon.svg", serveAsset("favicon.svg", "image/svg+xml"))
+	mux.HandleFunc("/style.css", serveAsset("style.css", "text/css; charset=utf-8"))
+
+	// Root: WebSocket upgrade for agents, landing page for browsers.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			hub.handleWebSocket(w, r)
+			return
+		}
+		if r.URL.Path == "/" {
+			servePage("landing.html")(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 
 	// Health check endpoint — also verifies billing store if enabled.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

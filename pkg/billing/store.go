@@ -220,6 +220,21 @@ func (s *MemoryStore) MarkStripeEventProcessed(eventID string) (bool, error) {
 	return true, nil
 }
 
+// RecordEvent implements EventStore for MemoryStore (no-op persistence, used in tests).
+func (s *MemoryStore) RecordEvent(tenantID, event, toolName, requestID string) error {
+	return nil
+}
+
+// LoadAggregates implements EventStore for MemoryStore.
+func (s *MemoryStore) LoadAggregates() ([]UsageSnapshot, error) {
+	return nil, nil
+}
+
+// FlushAggregates implements EventStore for MemoryStore.
+func (s *MemoryStore) FlushAggregates(snapshots []UsageSnapshot) error {
+	return nil
+}
+
 func (s *MemoryStore) Ping() error  { return nil }
 func (s *MemoryStore) Close() error { return nil }
 
@@ -468,10 +483,19 @@ func (s *SQLiteStore) UpdateTenant(t *Tenant) error {
 		return err
 	}
 	t.UpdatedAt = time.Now().UTC()
+	var currentPeriodEnd sql.NullString
+	if t.CurrentPeriodEnd != nil {
+		currentPeriodEnd = sql.NullString{String: t.CurrentPeriodEnd.UTC().Format(time.RFC3339), Valid: true}
+	}
 	res, err := s.db.Exec(
-		`UPDATE tenants SET name=?,email=?,plan=?,status=?,quota_json=?,updated_at=? WHERE id=?`,
+		`UPDATE tenants SET name=?,email=?,plan=?,status=?,quota_json=?,updated_at=?,
+		 stripe_customer_id=?,stripe_subscription_id=?,current_period_end=?,billing_status=?
+		 WHERE id=?`,
 		t.Name, t.Email, string(t.Plan), string(t.Status), string(quota),
-		t.UpdatedAt.Format(time.RFC3339), t.ID,
+		t.UpdatedAt.Format(time.RFC3339),
+		sqlNullStr(t.StripeCustomerID), sqlNullStr(t.StripeSubscriptionID),
+		currentPeriodEnd, t.BillingStatus,
+		t.ID,
 	)
 	if err != nil {
 		return err

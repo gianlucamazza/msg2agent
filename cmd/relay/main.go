@@ -1337,6 +1337,22 @@ func main() {
 		logger.Info("signup endpoint enabled", "path", "/api/tenants")
 	}
 
+	// Stripe billing endpoints (opt-in; requires STRIPE_SECRET_KEY env var)
+	if hub.billingStore != nil {
+		if stripeCfg := billing.StripeConfigFromEnv(); stripeCfg != nil {
+			stripeClient := billing.NewStripeClient(*stripeCfg)
+			authMW := billing.APIKeyMiddleware(hub.billingStore, false)
+			mux.Handle("/api/billing/checkout", authMW(checkoutHandler(hub.billingStore, stripeClient, logger)))
+			mux.Handle("/api/billing/portal", authMW(portalHandler(hub.billingStore, stripeClient, logger)))
+			// Webhook has no auth middleware — Stripe verifies via signature.
+			mux.Handle("/api/billing/webhook", stripeWebhookHandler(hub.billingStore, stripeClient, logger))
+			logger.Info("Stripe billing endpoints enabled",
+				"checkout", "/api/billing/checkout",
+				"portal", "/api/billing/portal",
+				"webhook", "/api/billing/webhook")
+		}
+	}
+
 	server := &http.Server{
 		Addr:              listenAddr,
 		Handler:           securityHeaders(mux),

@@ -20,9 +20,10 @@ import (
 type UsageEvent string
 
 const (
-	EventToolCall   UsageEvent = "tool_call"
-	EventMessage    UsageEvent = "message"
-	EventTaskSubmit UsageEvent = "task_submit"
+	EventToolCall      UsageEvent = "tool_call"
+	EventMessage       UsageEvent = "message"
+	EventTaskSubmit    UsageEvent = "task_submit"
+	EventStripeWebhook UsageEvent = "stripe_webhook"
 )
 
 // periodKey produces a YYYY-MM string for monthly bucketing (UTC).

@@ -683,7 +683,7 @@ func TestHandlerWithAgentError(t *testing.T) {
 	}
 }
 
-// TestHandlerNoAgentNoRecipient tests Handler without agent and no recipient.
+// TestHandlerNoAgentNoRecipient tests Handler without agent returns a JSON-RPC error (fail-closed).
 func TestHandlerNoAgentNoRecipient(t *testing.T) {
 	handler := NewHandler() // No agent
 
@@ -695,13 +695,18 @@ func TestHandlerNoAgentNoRecipient(t *testing.T) {
 	}
 
 	result, err := handler.HandleSendMessage(context.Background(), params)
-	if err != nil {
-		t.Fatalf("HandleSendMessage error: %v", err)
+	if err == nil {
+		t.Fatal("HandleSendMessage should return an error when no agent is configured")
 	}
-
-	// Should return completed (stub behavior)
-	if result.Status.State != TaskStateCompleted {
-		t.Errorf("expected completed state, got: %s", result.Status.State)
+	if result != nil {
+		t.Error("result should be nil when no agent is configured")
+	}
+	rpcErr, ok := err.(*JSONRPCError)
+	if !ok {
+		t.Fatalf("error should be *JSONRPCError, got %T", err)
+	}
+	if rpcErr.Code != ErrCodeMethodNotFound {
+		t.Errorf("error code = %d, want %d", rpcErr.Code, ErrCodeMethodNotFound)
 	}
 }
 

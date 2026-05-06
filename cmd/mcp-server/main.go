@@ -14,12 +14,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	mcpadapter "github.com/gianlucamazza/msg2agent/adapters/mcp"
 	"github.com/gianlucamazza/msg2agent/pkg/agent"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/config"
+	"github.com/gianlucamazza/msg2agent/pkg/httputil"
 	"github.com/gianlucamazza/msg2agent/pkg/identity"
 	"github.com/gianlucamazza/msg2agent/pkg/messaging"
 	"github.com/gianlucamazza/msg2agent/pkg/registry"
@@ -60,20 +62,35 @@ func (w *messageWrapper) IsError() bool            { return w.m.IsError() }
 func (w *messageWrapper) RawBody() json.RawMessage { return json.RawMessage(w.m.Body) }
 
 func main() {
-	name := flag.String("name", "mcp-agent", "Agent name")
-	domain := flag.String("domain", "localhost", "Agent domain")
-	relay := flag.String("relay", "ws://localhost:8080", "Relay hub address")
+	// Flags — all accept MSG2AGENT_* env fallback (applied after flag.Parse).
+	name := flag.String("name", "", "Agent name (env: MSG2AGENT_NAME)")
+	domain := flag.String("domain", "", "Agent domain (env: MSG2AGENT_DOMAIN)")
+	relay := flag.String("relay", "", "Relay hub address (env: MSG2AGENT_RELAY_URL)")
 	transport := flag.String("transport", "stdio", "MCP transport: stdio, sse, streamable-http")
-	addr := flag.String("addr", ":8081", "Listen address for SSE/HTTP transports")
+	addr := flag.String("addr", "", "Listen address for SSE/HTTP transports (env: MSG2AGENT_HTTP_ADDR)")
 	identFile := flag.String("identity-file", "", "Path to identity key file for persistence")
-	billingDB := flag.String("billing-db", "", "Path to billing SQLite DB (enables API key auth when set)")
-	allowAnon := flag.Bool("allow-anon", false, "Allow unauthenticated MCP requests (only when billing-db is set)")
-	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 OIDC issuer URL (enables JWT auth alongside API keys)")
-	oauth2Audience := flag.String("oauth2-audience", "", "Expected OAuth2 token audience")
-	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "JWKS endpoint URL (default: issuer-url/.well-known/jwks.json)")
+	billingDB := flag.String("billing-db", "", "Path to billing DB (enables API key auth when set) (env: MSG2AGENT_BILLING_DB)")
+	billingDriver := flag.String("billing-driver", "", "Billing store driver: sqlite, postgres (env: MSG2AGENT_BILLING_DRIVER)")
+	allowAnon := flag.Bool("allow-anon", false, "Allow unauthenticated MCP requests (only valid without --billing-db)")
+	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 OIDC issuer URL (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
+	oauth2Audience := flag.String("oauth2-audience", "", "Expected OAuth2 token audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
+	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "JWKS endpoint URL (env: MSG2AGENT_OAUTH2_JWKS_URL)")
+	shutdownTimeout := flag.Duration("shutdown-timeout", 30*time.Second, "Graceful shutdown timeout for HTTP server")
+	auditVerifierIntervalFlag := flag.Duration("audit-verifier-interval", 6*time.Hour, "Interval for background audit chain verification (0 = disabled)")
 	flag.Parse()
 
-	// Validate transport flag
+	// Apply env fallbacks.
+	agentName := config.FlagOrEnv(*name, "MSG2AGENT_NAME", "mcp-agent")
+	agentDomain := config.FlagOrEnv(*domain, "MSG2AGENT_DOMAIN", "localhost")
+	relayAddr := config.FlagOrEnv(*relay, "MSG2AGENT_RELAY_URL", "ws://localhost:8080")
+	listenAddr := config.FlagOrEnv(*addr, "MSG2AGENT_HTTP_ADDR", ":8081")
+	dbPath := config.FlagOrEnv(*billingDB, "MSG2AGENT_BILLING_DB", "")
+	dbDriver := config.FlagOrEnv(*billingDriver, "MSG2AGENT_BILLING_DRIVER", "sqlite")
+	issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "MSG2AGENT_OAUTH2_ISSUER_URL", "")
+	audience := config.FlagOrEnv(*oauth2Audience, "MSG2AGENT_OAUTH2_AUDIENCE", "")
+	jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "MSG2AGENT_OAUTH2_JWKS_URL", "")
+
+	// Validate transport flag.
 	tp := mcpadapter.TransportType(*transport)
 	switch tp {
 	case mcpadapter.TransportStdio, mcpadapter.TransportSSE, mcpadapter.TransportStreamableHTTP:
@@ -82,25 +99,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup logging to stderr (stdout is used for MCP JSON-RPC in stdio mode)
+	// F5: --allow-anon is mutually exclusive with --billing-db.
+	if dbPath != "" && *allowAnon {
+		fmt.Fprintln(os.Stderr, "error: --allow-anon and --billing-db are mutually exclusive; "+
+			"--allow-anon bypasses billing enforcement. Remove one of these flags.")
+		os.Exit(1)
+	}
+
+	// Setup logging to stderr (stdout is used for MCP JSON-RPC in stdio mode).
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})
 	logger := slog.New(handler)
 
-	// Load or create persistent identity
+	// Load or create persistent identity.
 	keyPath := *identFile
 	if keyPath == "" {
 		home, _ := os.UserHomeDir()
-		keyPath = filepath.Join(home, ".msg2agent", *name+".key")
+		keyPath = filepath.Join(home, ".msg2agent", agentName+".key")
 	}
 
 	var ident *identity.Identity
-	if existing, err := identity.LoadFromFile(keyPath, *domain, *name); err == nil {
+	if existing, err := identity.LoadFromFile(keyPath, agentDomain, agentName); err == nil {
 		ident = existing
 		logger.Info("loaded identity from file", "path", keyPath)
 	} else {
-		ident, err = identity.NewIdentity(*domain, *name)
+		ident, err = identity.NewIdentity(agentDomain, agentName)
 		if err != nil {
 			logger.Error("failed to create identity", "error", err)
 			os.Exit(1)
@@ -114,12 +138,12 @@ func main() {
 		}
 	}
 
-	// Create agent
+	// Create agent.
 	cfg := agent.Config{
-		Domain:      *domain,
-		AgentID:     *name,
-		DisplayName: *name,
-		RelayAddr:   *relay,
+		Domain:      agentDomain,
+		AgentID:     agentName,
+		DisplayName: agentName,
+		RelayAddr:   relayAddr,
 		Logger:      logger,
 		Identity:    ident,
 	}
@@ -139,14 +163,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Connect to relay and register with DID ownership proof
-	logger.Info("connecting to relay", "addr", *relay)
-	if err := a.Connect(ctx, *relay); err != nil {
+	// Connect to relay and register with DID ownership proof.
+	logger.Info("connecting to relay", "addr", relayAddr)
+	if err := a.Connect(ctx, relayAddr); err != nil {
 		logger.Error("failed to connect to relay", "error", err)
 		os.Exit(1)
 	}
 
-	// Register with relay (proof of DID ownership)
+	// Register with relay (proof of DID ownership).
 	{
 		ts := time.Now().Unix()
 		proofMessage := fmt.Sprintf("%s:%d", a.DID(), ts)
@@ -172,7 +196,7 @@ func main() {
 		logger.Info("registered with relay", "result", string(result))
 	}
 
-	// Discover existing peers for signature verification
+	// Discover existing peers for signature verification.
 	{
 		discoverResult, err := a.CallRelay(ctx, "relay.discover", nil)
 		if err != nil {
@@ -214,77 +238,82 @@ func main() {
 		}
 	}
 
-	// Prepare billing when a billing DB path is provided (streamable-http only).
-	var billingOpts []server.ServerOption
+	// Prepare billing when a DB path is provided (streamable-http only).
 	var billingStore billing.Store
+	var billingCloser func() error
 
-	if *billingDB != "" && tp == mcpadapter.TransportStreamableHTTP {
-		if *allowAnon {
-			logger.Warn("SECURITY: --allow-anon is set with billing enabled; unauthenticated requests bypass billing")
-		}
-		bStore, err := billing.NewSQLiteStore(*billingDB)
+	if dbPath != "" && tp == mcpadapter.TransportStreamableHTTP {
+		bStore, _, err := billing.NewStore(dbDriver, dbPath)
 		if err != nil {
-			logger.Error("failed to open billing store", "path", *billingDB, "error", err)
+			logger.Error("failed to open billing store", "driver", dbDriver, "path", dbPath, "error", err)
 			os.Exit(1)
 		}
 		billingStore = bStore
+		if c, ok := bStore.(interface{ Close() error }); ok {
+			billingCloser = c.Close
+		}
+
+		auditInterval := *auditVerifierIntervalFlag
+		if auditInterval > 0 {
+			bAdmin, _ := bStore.(billing.AdminStore) // *SQLiteStore implements AdminStore
+			billing.StartPeriodicVerifier(ctx, billingStore, bAdmin, auditInterval, logger)
+			logger.Info("audit chain verifier started", "interval", auditInterval)
+		}
+		eventStore, ok := bStore.(billing.EventStore)
+		if !ok {
+			logger.Error("billing store does not implement EventStore")
+			os.Exit(1)
+		}
 		meter := billing.NewUsageMeter()
-		// Restore monthly counters from persisted aggregates (crash-safe restart).
-		if err := meter.RestoreFromAggregates(bStore); err != nil {
+		if err := meter.RestoreFromAggregates(eventStore); err != nil {
 			logger.Warn("billing: failed to restore usage counters", "error", err)
 		}
-		// Start async audit writer (flushes to DB every 5s).
-		meter.WithStore(ctx, bStore, logger)
-		// Wire quota-threshold webhook notifier if BILLING_WEBHOOK_URL is set.
+		meter.WithStore(ctx, eventStore, logger)
 		if n := billing.NewWebhookNotifierFromEnv(logger); n != nil {
 			meter.WithNotifier(n)
 			logger.Info("billing webhook notifier enabled", "url", n.URL)
 		}
-		billingOpts = append(billingOpts, server.WithToolHandlerMiddleware(billing.MCPToolMeterMiddleware(meter)))
-		logger.Info("billing enabled", "db", *billingDB, "allow_anon", *allowAnon)
+		logger.Info("billing enabled", "driver", dbDriver, "db", dbPath)
 	}
 
-	// Create MCP server via adapter (tool middleware injected via billingOpts).
+	// Create MCP server via adapter.
 	mcpServer := mcpadapter.NewMCPServer(
 		&agentBridge{a: a},
 		mcpadapter.ServerConfig{
-			Name:      *name,
+			Name:      agentName,
 			Version:   "0.1.0",
 			Transport: tp,
-			Addr:      *addr,
+			Addr:      listenAddr,
 		},
 		logger,
-		billingOpts...,
 	)
 
 	// Wire HTTP-level auth: API key always, OAuth2 if configured.
 	if billingStore != nil {
-		apiKeyMW := billing.APIKeyMiddleware(billingStore, *allowAnon)
-		if *oauth2IssuerURL != "" {
-			jwksURL := *oauth2JWKSUrl
+		apiKeyMW := billing.APIKeyMiddleware(billingStore, false)
+		if issuerURL != "" {
 			if jwksURL == "" {
-				jwksURL = strings.TrimRight(*oauth2IssuerURL, "/") + "/.well-known/jwks.json"
+				jwksURL = strings.TrimRight(issuerURL, "/") + "/.well-known/jwks.json"
 			}
 			oauthCfg := a2a.OAuth2Config{
 				JWKSURL:  jwksURL,
-				Issuer:   *oauth2IssuerURL,
-				Audience: *oauth2Audience,
+				Issuer:   issuerURL,
+				Audience: audience,
 			}
 			validator := a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
 			autoProvisionPlan := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
 			oauthMW := billing.OAuth2Middleware(validator, billingStore, autoProvisionPlan)
-			// OAuth2 is outer (handles JWTs first), API key is inner (handles sk_live_ tokens).
 			mcpServer.WithAuthMiddleware(func(h http.Handler) http.Handler {
 				return oauthMW(apiKeyMW(h))
 			})
-			logger.Info("OAuth2 + API key auth enabled", "issuer", *oauth2IssuerURL)
+			logger.Info("OAuth2 + API key auth enabled", "issuer", issuerURL)
 		} else {
 			mcpServer.WithAuthMiddleware(apiKeyMW)
 			logger.Info("API key auth enabled")
 		}
 	}
 
-	// Register catch-all handler for incoming messages
+	// Register catch-all handler for incoming messages.
 	a.RegisterMethod("*", func(ctx context.Context, params json.RawMessage) (any, error) {
 		from := agent.MessageFrom(ctx)
 		method := agent.MessageMethod(ctx)
@@ -298,23 +327,83 @@ func main() {
 		return map[string]string{"status": "received"}, nil
 	})
 
-	// Handle shutdown signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		logger.Info("shutting down...")
-		if err := a.Stop(); err != nil {
-			logger.Error("agent stop error", "error", err)
+	// For non-HTTP transports, use simple Serve() (stdio/SSE handle their own lifecycle).
+	if tp != mcpadapter.TransportStreamableHTTP {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-sigCh
+			logger.Info("shutting down...")
+			_ = a.Stop()
+			cancel()
+		}()
+		logger.Info("starting MCP server", "transport", *transport)
+		if err := mcpServer.Serve(); err != nil {
+			logger.Error("mcp server error", "error", err)
+			os.Exit(1)
 		}
-		cancel()
-		os.Exit(0)
+		return
+	}
+
+	// F1: Build HTTP mux with health/ready/metrics alongside /mcp.
+	mux := http.NewServeMux()
+	mcpServer.RegisterWithMux(mux, "/mcp")
+
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if billingStore != nil {
+			if err := billingStore.Ping(); err != nil {
+				http.Error(w, "billing store unavailable: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	mux.HandleFunc("/ready", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":    "ready",
+			"agent_did": a.DID(),
+		})
+	})
+
+	// /metrics exposed internally only (not routed through nginx to public).
+	mux.Handle("/metrics", promhttp.Handler())
+
+	srv := &http.Server{
+		Addr:              listenAddr,
+		Handler:           httputil.SecurityHeaders(mux),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() {
+		logger.Info("starting MCP server", "transport", *transport, "addr", listenAddr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error("mcp server error", "error", err)
+			os.Exit(1)
+		}
 	}()
 
-	// Start MCP server (blocks)
-	logger.Info("starting MCP server", "transport", *transport, "addr", *addr)
-	if err := mcpServer.Serve(); err != nil {
-		logger.Error("mcp server error", "error", err)
-		os.Exit(1)
+	// F2: Wait for signal then drain in-flight requests before exiting.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+
+	logger.Info("shutting down...")
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), *shutdownTimeout)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("http server shutdown error", "error", err)
 	}
+
+	if err := a.Stop(); err != nil {
+		logger.Error("agent stop error", "error", err)
+	}
+	if billingCloser != nil {
+		if err := billingCloser(); err != nil {
+			logger.Error("billing store close error", "error", err)
+		}
+	}
+	cancel()
 }

@@ -476,14 +476,18 @@ func (h *Handler) HandleSendMessage(ctx context.Context, params *SendMessagePara
 		sessionID = uuid.New().String()
 	}
 
+	// Fail closed: an agent must be configured to handle send_message.
+	if h.agent == nil {
+		return nil, &JSONRPCError{Code: ErrCodeMethodNotFound, Message: "no agent configured to handle send_message"}
+	}
+
 	// Check if we need to route to a remote agent
 	recipient := h.resolveRecipient(params)
-	if recipient != "" && h.agent != nil {
+	if recipient != "" {
 		return h.handleRemoteMessage(ctx, taskID, sessionID, recipient, params)
 	}
 
-	// No remote routing - return basic acknowledgment
-	// This is the stub behavior when no agent is configured
+	// Agent is configured but no remote recipient — return basic acknowledgment.
 	return &SendMessageResult{
 		ID:        taskID,
 		SessionID: sessionID,

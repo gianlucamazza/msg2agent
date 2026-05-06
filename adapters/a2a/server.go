@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"sync"
 	"time"
@@ -48,6 +49,16 @@ var (
 	ErrTaskNotCancelable = errors.New("task cannot be canceled")
 	ErrSessionNotFound   = errors.New("session not found")
 )
+
+// JSONRPCError is a sentinel error carrying a JSON-RPC error code and message.
+type JSONRPCError struct {
+	Code    int
+	Message string
+}
+
+func (e *JSONRPCError) Error() string {
+	return fmt.Sprintf("jsonrpc error %d: %s", e.Code, e.Message)
+}
 
 // TaskStoreConfig configures the TaskStore.
 type TaskStoreConfig struct {

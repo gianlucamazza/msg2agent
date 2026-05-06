@@ -35,6 +35,16 @@ var (
 		Name: "billing_audit_chain_tampered_total",
 		Help: "Audit chain divergences detected by VerifyAuditChain",
 	}, []string{"tenant_id"})
+
+	billingWebhookDelivery = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "billing_webhook_delivery_total",
+		Help: "Webhook delivery outcomes",
+	}, []string{"status"})
+
+	billingWebhookDropped = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "billing_webhook_dropped_total",
+		Help: "Webhook events dropped after all retries exhausted",
+	})
 )
 
 // RecordQuotaExceeded increments the quota-exceeded counter for external callers
@@ -52,4 +62,14 @@ func RecordRateLimited(tenantID string) {
 // RecordAuditChainTampered increments the tamper counter for a tenant.
 func RecordAuditChainTampered(tenantID string) {
 	billingAuditChainTampered.WithLabelValues(tenantID).Inc()
+}
+
+// RecordWebhookDelivery increments the webhook delivery counter with the given status ("success" or "failure").
+func RecordWebhookDelivery(status string) {
+	billingWebhookDelivery.WithLabelValues(status).Inc()
+}
+
+// RecordWebhookDropped increments the dropped counter when all retries are exhausted.
+func RecordWebhookDropped() {
+	billingWebhookDropped.Inc()
 }

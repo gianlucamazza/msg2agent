@@ -205,7 +205,7 @@ func TestNewHandler(t *testing.T) {
 	}
 }
 
-// TestHandleSendMessage tests the SendMessage handler.
+// TestHandleSendMessage tests that HandleSendMessage returns an error when no agent is configured.
 func TestHandleSendMessage(t *testing.T) {
 	handler := NewHandler()
 
@@ -219,22 +219,22 @@ func TestHandleSendMessage(t *testing.T) {
 	}
 
 	result, err := handler.HandleSendMessage(context.Background(), params)
-	if err != nil {
-		t.Fatalf("HandleSendMessage failed: %v", err)
+	if err == nil {
+		t.Fatal("HandleSendMessage should return an error when no agent is configured")
 	}
-
-	if result.ID != "custom-id" {
-		t.Errorf("ID = %q, want %q", result.ID, "custom-id")
+	if result != nil {
+		t.Error("result should be nil when no agent is configured")
 	}
-	if result.SessionID != "session-1" {
-		t.Errorf("SessionID = %q, want %q", result.SessionID, "session-1")
+	rpcErr, ok := err.(*JSONRPCError)
+	if !ok {
+		t.Fatalf("error should be *JSONRPCError, got %T", err)
 	}
-	if result.Status.State != "completed" {
-		t.Errorf("State = %q, want %q", result.Status.State, "completed")
+	if rpcErr.Code != ErrCodeMethodNotFound {
+		t.Errorf("error code = %d, want %d", rpcErr.Code, ErrCodeMethodNotFound)
 	}
 }
 
-// TestHandleSendMessageGenerateID tests ID generation when not provided.
+// TestHandleSendMessageGenerateID tests that HandleSendMessage returns an error (not a result) when no agent is configured.
 func TestHandleSendMessageGenerateID(t *testing.T) {
 	handler := NewHandler()
 
@@ -246,12 +246,11 @@ func TestHandleSendMessageGenerateID(t *testing.T) {
 	}
 
 	result, err := handler.HandleSendMessage(context.Background(), params)
-	if err != nil {
-		t.Fatalf("HandleSendMessage failed: %v", err)
+	if err == nil {
+		t.Fatal("HandleSendMessage should return an error when no agent is configured")
 	}
-
-	if result.ID == "" {
-		t.Error("ID should be generated when not provided")
+	if result != nil {
+		t.Error("result should be nil when no agent is configured")
 	}
 }
 

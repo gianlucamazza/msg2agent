@@ -52,30 +52,71 @@ func NewWebhookNotifierFromEnv(logger *slog.Logger) *WebhookNotifier {
 	}
 }
 
-// Notify sends ev to the webhook URL with up to 2 retries on transport failure.
+// maxWebhookAttempts is the total number of attempts (1 initial + 2 retries).
+const maxWebhookAttempts = 3
+
+// webhookPerAttemptTimeout is the HTTP client timeout for each attempt.
+const webhookPerAttemptTimeout = 3 * time.Second
+
+// Notify sends ev to the webhook URL. On 5xx responses it retries up to
+// maxWebhookAttempts times total with exponential backoff (1s, 2s between).
+// On 4xx responses it stops immediately (client error, no retry).
+// On 2xx the delivery is counted as a success.
 func (n *WebhookNotifier) Notify(ctx context.Context, ev NotifyEvent) error {
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return fmt.Errorf("billing: notify marshal: %w", err)
 	}
+
+	client := &http.Client{Timeout: webhookPerAttemptTimeout}
+
+	backoff := []time.Duration{1 * time.Second, 2 * time.Second}
 	var lastErr error
-	for attempt := range 3 {
+
+	for attempt := range maxWebhookAttempts {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.URL, bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("billing: notify request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := n.Client.Do(req)
-		if err == nil {
+
+		resp, err := client.Do(req)
+		if err != nil {
+			// Transport-level failure — retry.
+			lastErr = err
+			if n.Logger != nil {
+				n.Logger.Warn("billing: webhook transport error", "attempt", attempt+1, "error", err)
+			}
+		} else {
+			statusCode := resp.StatusCode
 			_ = resp.Body.Close()
-			return nil
+
+			switch {
+			case statusCode >= 200 && statusCode < 300:
+				RecordWebhookDelivery("success")
+				return nil
+			case statusCode >= 400 && statusCode < 500:
+				// Client error — do not retry.
+				err := fmt.Errorf("billing: webhook 4xx response: %d", statusCode)
+				RecordWebhookDelivery("failure")
+				return err
+			default:
+				// 5xx or unexpected — retry.
+				lastErr = fmt.Errorf("billing: webhook %d response", statusCode)
+				if n.Logger != nil {
+					n.Logger.Warn("billing: webhook server error", "attempt", attempt+1, "status", statusCode)
+				}
+			}
 		}
-		lastErr = err
-		if n.Logger != nil {
-			n.Logger.Warn("billing: webhook notify failed", "attempt", attempt+1, "error", err)
+
+		// Sleep before next retry (skip sleep after last attempt).
+		if attempt < maxWebhookAttempts-1 {
+			time.Sleep(backoff[attempt])
 		}
-		time.Sleep(time.Duration(1<<attempt) * 500 * time.Millisecond)
 	}
+
+	RecordWebhookDelivery("failure")
+	RecordWebhookDropped()
 	return fmt.Errorf("billing: notify after retries: %w", lastErr)
 }
 

@@ -27,6 +27,7 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/crypto"
+	"github.com/gianlucamazza/msg2agent/pkg/httputil"
 	"github.com/gianlucamazza/msg2agent/pkg/identity"
 	"github.com/gianlucamazza/msg2agent/pkg/messaging"
 	"github.com/gianlucamazza/msg2agent/pkg/protocol"
@@ -1014,14 +1015,7 @@ func (c *Client) sendErrorWithData(id any, code int, message string, errData any
 }
 
 // securityHeaders wraps an http.Handler and sets security-related response headers.
-func securityHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		next.ServeHTTP(w, r)
-	})
-}
+var securityHeaders = httputil.SecurityHeaders
 
 func main() {
 	// Define flags with defaults that can be overridden by env vars
@@ -1054,6 +1048,7 @@ func main() {
 
 	// Billing (optional)
 	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
+	auditVerifierIntervalFlag := flag.Duration("audit-verifier-interval", 6*time.Hour, "Interval for background audit chain verification (0 = disabled)")
 
 	// OAuth2 (optional; enables JWT auth on WS in addition to API keys)
 	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL for JWT validation on relay WS (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
@@ -1272,6 +1267,13 @@ func main() {
 		hub.billingStore = bStore
 		hub.tenantPool = billing.NewTenantRateLimiterPool(bStore)
 		logger.Info("relay billing enabled", "db", billingDBStr)
+
+		auditInterval := *auditVerifierIntervalFlag
+		if auditInterval > 0 {
+			// bStore is *billing.SQLiteStore which implements billing.AdminStore directly.
+			billing.StartPeriodicVerifier(hub.ctx, hub.billingStore, bStore, auditInterval, logger)
+			logger.Info("audit chain verifier started", "interval", auditInterval)
+		}
 
 		// Optional: JWT validator for OAuth2 WS auth alongside API keys.
 		issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "MSG2AGENT_OAUTH2_ISSUER_URL", "")

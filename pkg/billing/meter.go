@@ -303,7 +303,9 @@ func MCPToolMeterMiddleware(meter *UsageMeter) server.ToolHandlerMiddleware {
 				limit = tenant.Quota.MaxMessagesPerMonth
 			}
 			if err := meter.TryConsume(tenant.ID, event, limit, 1); err != nil {
-				return mcp.NewToolResultError(err.Error()), nil
+				current := meter.Current(tenant.ID, event)
+				data := FormatQuotaErrorData(string(tenant.Plan), tenant.ID, current, limit)
+				return NewQuotaErrorToolResult(event, data), nil
 			}
 
 			result, err := next(ctx, req)

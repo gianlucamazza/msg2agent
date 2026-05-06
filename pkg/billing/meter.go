@@ -265,6 +265,19 @@ func (m *UsageMeter) RestoreFromAggregates(store EventStore) error {
 	return nil
 }
 
+// ResetTenant zeroes all in-memory counters for the given tenant for the current period.
+// It does NOT affect persisted aggregates; those are updated on the next FlushAggregates call.
+func (m *UsageMeter) ResetTenant(tenantID string) {
+	period := periodKey(time.Now().UTC())
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for k, c := range m.counters {
+		if k.tenantID == tenantID && k.period == period {
+			c.Store(0)
+		}
+	}
+}
+
 // Current returns the count for a tenant/event in the current calendar month.
 func (m *UsageMeter) Current(tenantID string, event UsageEvent) int64 {
 	k := counterKey{tenantID: tenantID, period: periodKey(time.Now().UTC()), event: event}
@@ -335,6 +348,42 @@ func ExportCSV(w io.Writer, period string, store EventStore) error {
 		fmt.Fprintf(w, "%s,%s,%s,%d\n", s.TenantID, s.Period, string(s.Event), s.Count)
 	}
 	return nil
+}
+
+// StartPeriodRolloverChecker launches a goroutine that checks every hour
+// whether any tenant's current_period_end has passed and resets usage counters.
+// For tenants without Stripe (Free plan), resets on the 1st of each month.
+func StartPeriodRolloverChecker(ctx context.Context, store Store, meter *UsageMeter, logger *slog.Logger) {
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				checkRollover(ctx, store, meter, logger)
+			}
+		}
+	}()
+}
+
+func checkRollover(_ context.Context, store Store, meter *UsageMeter, logger *slog.Logger) {
+	now := time.Now().UTC()
+	tenants, err := store.ListTenants()
+	if err != nil {
+		logger.Error("period rollover: list tenants failed", "error", err)
+		return
+	}
+	for _, t := range tenants {
+		if t.CurrentPeriodEnd != nil && now.After(*t.CurrentPeriodEnd) {
+			meter.ResetTenant(t.ID)
+			logger.Info("period rolled over, usage counters reset", "tenant_id", t.ID)
+		} else if t.CurrentPeriodEnd == nil && now.Day() == 1 && now.Hour() == 0 {
+			// Free tenants: reset on 1st of month at the hourly tick closest to midnight.
+			meter.ResetTenant(t.ID)
+		}
+	}
 }
 
 // messageTools are the MCP tool names counted as EventMessage (relay traffic).

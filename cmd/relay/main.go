@@ -1049,6 +1049,8 @@ func main() {
 	// Billing (optional)
 	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
 	auditVerifierIntervalFlag := flag.Duration("audit-verifier-interval", 6*time.Hour, "Interval for background audit chain verification (0 = disabled)")
+	stripeReconcileInterval := flag.Duration("stripe-reconcile-interval", time.Hour, "Interval for Stripe subscription reconciler (0 = disabled)")
+	stripeAutoReconcile := flag.Bool("stripe-auto-reconcile", false, "Automatically fix divergent billing state during reconciliation")
 
 	// OAuth2 (optional; enables JWT auth on WS in addition to API keys)
 	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL for JWT validation on relay WS (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
@@ -1339,8 +1341,21 @@ func main() {
 
 	// Stripe billing endpoints (opt-in; requires STRIPE_SECRET_KEY env var)
 	if hub.billingStore != nil {
+		// Period rollover checker: resets usage counters when billing periods end.
+		meter := billing.NewUsageMeter()
+		billing.StartPeriodRolloverChecker(hub.ctx, hub.billingStore, meter, logger)
+
 		if stripeCfg := billing.StripeConfigFromEnv(); stripeCfg != nil {
 			stripeClient := billing.NewStripeClient(*stripeCfg)
+
+			// Stripe reconciler: periodically syncs subscription state from Stripe.
+			billing.StartStripeReconciler(hub.ctx, hub.billingStore, stripeClient, *stripeReconcileInterval, *stripeAutoReconcile, logger)
+			if *stripeReconcileInterval > 0 {
+				logger.Info("Stripe reconciler started",
+					"interval", *stripeReconcileInterval,
+					"auto_fix", *stripeAutoReconcile)
+			}
+
 			authMW := billing.APIKeyMiddleware(hub.billingStore, false)
 			mux.Handle("/api/billing/checkout", authMW(checkoutHandler(hub.billingStore, stripeClient, logger)))
 			mux.Handle("/api/billing/portal", authMW(portalHandler(hub.billingStore, stripeClient, logger)))

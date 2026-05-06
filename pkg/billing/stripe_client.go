@@ -3,11 +3,13 @@ package billing
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/stripe/stripe-go/v82"
 	portalsession "github.com/stripe/stripe-go/v82/billingportal/session"
 	checkoutsession "github.com/stripe/stripe-go/v82/checkout/session"
 	"github.com/stripe/stripe-go/v82/customer"
+	stripesubscription "github.com/stripe/stripe-go/v82/subscription"
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
@@ -108,4 +110,25 @@ func (c *StripeClient) VerifyWebhookSignature(payload []byte, sigHeader string) 
 		return stripe.Event{}, fmt.Errorf("stripe: webhook signature verification failed: %w", err)
 	}
 	return event, nil
+}
+
+// GetSubscription fetches a Stripe subscription by ID and returns a StripeSubscriptionState.
+// This implements StripeReconcilerClient.
+func (c *StripeClient) GetSubscription(subscriptionID string) (*StripeSubscriptionState, error) {
+	sub, err := stripesubscription.Get(subscriptionID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("stripe: get subscription %s: %w", subscriptionID, err)
+	}
+
+	state := &StripeSubscriptionState{
+		Status: string(sub.Status),
+	}
+	// In Stripe v82, CurrentPeriodEnd lives on SubscriptionItem, not Subscription.
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		if pe := sub.Items.Data[0].CurrentPeriodEnd; pe > 0 {
+			t := time.Unix(pe, 0).UTC()
+			state.CurrentPeriodEnd = &t
+		}
+	}
+	return state, nil
 }

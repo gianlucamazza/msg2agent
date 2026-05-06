@@ -11,6 +11,9 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/stripe/stripe-go/v82"
+	stripesubscription "github.com/stripe/stripe-go/v82/subscription"
+
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 )
 
@@ -34,6 +37,9 @@ Commands:
   backup          Write a consistent snapshot of the billing DB to a new file
   verify          Print a health summary of the billing DB
   verify-audit    Walk the audit hash chain and report any tampering
+  attach-stripe   Set StripeCustomerID on a tenant
+  sync-subscription Sync Stripe subscription state to local tenant record
+  list-stripe     Print Stripe fields for a tenant
 
 Flags:
   -db string    Path to billing SQLite database (required)
@@ -96,6 +102,12 @@ func main() {
 		runVerify(store)
 	case "verify-audit":
 		runVerifyAudit(store, cmdArgs)
+	case "attach-stripe":
+		runAttachStripe(store, cmdArgs)
+	case "sync-subscription":
+		runSyncSubscription(store, cmdArgs)
+	case "list-stripe":
+		runListStripe(store, cmdArgs)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
 		usage()
@@ -458,4 +470,143 @@ func runVerify(store *billing.SQLiteStore) {
 	fmt.Printf("tenants        : %d\n", r.TenantCount)
 	fmt.Printf("active keys    : %d\n", r.KeyCount)
 	fmt.Printf("aggregates     : %d\n", r.AggregateCount)
+}
+
+// runAttachStripe sets StripeCustomerID on a tenant.
+// Usage: billing-admin -db <path> attach-stripe --tenant <id> --customer <cus_xxx>
+func runAttachStripe(store billing.Store, args []string) {
+	fs := flag.NewFlagSet("attach-stripe", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "tenant ID (required)")
+	customerID := fs.String("customer", "", "Stripe customer ID, e.g. cus_xxx (required)")
+	fs.Parse(args)
+
+	if *tenantID == "" || *customerID == "" {
+		fmt.Fprintln(os.Stderr, "error: -tenant and -customer are required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	t, err := store.GetTenant(*tenantID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: get tenant: %v\n", err)
+		os.Exit(1)
+	}
+	t.StripeCustomerID = *customerID
+	if err := store.UpdateTenant(t); err != nil {
+		fmt.Fprintf(os.Stderr, "error: update tenant: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("tenant %s: stripe_customer_id set to %s\n", t.ID, t.StripeCustomerID)
+}
+
+// runSyncSubscription reads Stripe subscription state and reconciles the local tenant record.
+// Requires STRIPE_SECRET_KEY env var.
+// Usage: billing-admin -db <path> sync-subscription --tenant <id>
+func runSyncSubscription(store billing.Store, args []string) {
+	fs := flag.NewFlagSet("sync-subscription", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "tenant ID (required)")
+	fs.Parse(args)
+
+	if *tenantID == "" {
+		fmt.Fprintln(os.Stderr, "error: -tenant is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	secretKey := os.Getenv("STRIPE_SECRET_KEY")
+	if secretKey == "" {
+		fmt.Fprintln(os.Stderr, "error: STRIPE_SECRET_KEY environment variable is required")
+		os.Exit(1)
+	}
+	stripe.Key = secretKey
+
+	t, err := store.GetTenant(*tenantID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: get tenant: %v\n", err)
+		os.Exit(1)
+	}
+	if t.StripeSubscriptionID == "" {
+		fmt.Fprintln(os.Stderr, "error: tenant has no stripe_subscription_id")
+		os.Exit(1)
+	}
+
+	sub, err := stripesubscription.Get(t.StripeSubscriptionID, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: fetch subscription from Stripe: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Resolve billing status from Stripe subscription status.
+	newStatus := string(sub.Status)
+	switch sub.Status {
+	case stripe.SubscriptionStatusActive:
+		newStatus = "active"
+	case stripe.SubscriptionStatusPastDue:
+		newStatus = "past_due"
+	case stripe.SubscriptionStatusCanceled:
+		newStatus = "canceled"
+	case stripe.SubscriptionStatusIncomplete:
+		newStatus = "incomplete"
+	}
+
+	// Resolve current period end from subscription items (Stripe v82 API).
+	var newPeriodEnd *time.Time
+	if sub.Items != nil && len(sub.Items.Data) > 0 {
+		if pe := sub.Items.Data[0].CurrentPeriodEnd; pe > 0 {
+			t2 := time.Unix(pe, 0).UTC()
+			newPeriodEnd = &t2
+		}
+	}
+
+	// Print diff before applying.
+	fmt.Printf("tenant           : %s\n", t.ID)
+	fmt.Printf("subscription_id  : %s\n", t.StripeSubscriptionID)
+	fmt.Printf("billing_status   : %s → %s\n", t.BillingStatus, newStatus)
+	oldPeriod := "<nil>"
+	if t.CurrentPeriodEnd != nil {
+		oldPeriod = t.CurrentPeriodEnd.Format(time.RFC3339)
+	}
+	newPeriod := "<nil>"
+	if newPeriodEnd != nil {
+		newPeriod = newPeriodEnd.Format(time.RFC3339)
+	}
+	fmt.Printf("current_period_end: %s → %s\n", oldPeriod, newPeriod)
+
+	t.BillingStatus = newStatus
+	t.CurrentPeriodEnd = newPeriodEnd
+	if err := store.UpdateTenant(t); err != nil {
+		fmt.Fprintf(os.Stderr, "error: update tenant: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("tenant updated")
+}
+
+// runListStripe prints Stripe billing fields for a tenant.
+// Usage: billing-admin -db <path> list-stripe --tenant <id>
+func runListStripe(store billing.Store, args []string) {
+	fs := flag.NewFlagSet("list-stripe", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "tenant ID (required)")
+	fs.Parse(args)
+
+	if *tenantID == "" {
+		fmt.Fprintln(os.Stderr, "error: -tenant is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	t, err := store.GetTenant(*tenantID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: get tenant: %v\n", err)
+		os.Exit(1)
+	}
+
+	periodEnd := "<nil>"
+	if t.CurrentPeriodEnd != nil {
+		periodEnd = t.CurrentPeriodEnd.Format(time.RFC3339)
+	}
+
+	fmt.Printf("stripe_customer_id     : %s\n", t.StripeCustomerID)
+	fmt.Printf("stripe_subscription_id : %s\n", t.StripeSubscriptionID)
+	fmt.Printf("billing_status         : %s\n", t.BillingStatus)
+	fmt.Printf("current_period_end     : %s\n", periodEnd)
 }

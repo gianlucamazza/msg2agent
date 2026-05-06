@@ -89,6 +89,18 @@ var pgMigrations = []pgMigration{
 		);
 		CREATE INDEX IF NOT EXISTS oauth_identities_tenant ON oauth_identities(tenant_id);
 	`},
+	// V4: Stripe billing state on tenants + idempotent webhook event log.
+	{4, `
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS current_period_end TIMESTAMPTZ;
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_status TEXT NOT NULL DEFAULT 'active';
+		CREATE UNIQUE INDEX IF NOT EXISTS tenants_stripe_customer ON tenants(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+		CREATE TABLE IF NOT EXISTS stripe_events_processed (
+			event_id     TEXT PRIMARY KEY,
+			processed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+	`},
 }
 
 // NewPostgresStore opens a billing Postgres database at dsn and runs migrations.
@@ -156,29 +168,44 @@ func (s *PostgresStore) PutTenant(t *Tenant) error {
 	if err != nil {
 		return err
 	}
+	var currentPeriodEnd interface{}
+	if t.CurrentPeriodEnd != nil {
+		currentPeriodEnd = t.CurrentPeriodEnd.UTC()
+	}
 	_, err = s.db.Exec(`
-		INSERT INTO tenants(id,name,email,plan,status,quota,created_at,updated_at)
-		VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+		INSERT INTO tenants(id,name,email,plan,status,quota,created_at,updated_at,
+		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status)
+		VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		ON CONFLICT(id) DO UPDATE SET
 			name=EXCLUDED.name, email=EXCLUDED.email, plan=EXCLUDED.plan,
 			status=EXCLUDED.status, quota=EXCLUDED.quota,
-			updated_at=EXCLUDED.updated_at`,
+			updated_at=EXCLUDED.updated_at,
+			stripe_customer_id=EXCLUDED.stripe_customer_id,
+			stripe_subscription_id=EXCLUDED.stripe_subscription_id,
+			current_period_end=EXCLUDED.current_period_end,
+			billing_status=EXCLUDED.billing_status`,
 		t.ID, t.Name, t.Email, string(t.Plan), string(t.Status),
 		string(quota), t.CreatedAt.UTC(), t.UpdatedAt.UTC(),
+		pgNullStr(t.StripeCustomerID), pgNullStr(t.StripeSubscriptionID),
+		currentPeriodEnd, t.BillingStatus,
 	)
 	return err
 }
 
 func (s *PostgresStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
-		`SELECT id,name,email,plan,status,quota,created_at,updated_at FROM tenants WHERE id=$1`, id,
+		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		 FROM tenants WHERE id=$1`, id,
 	)
 	return pgScanTenant(row)
 }
 
 func (s *PostgresStore) ListTenants() ([]*Tenant, error) {
 	rows, err := s.db.Query(
-		`SELECT id,name,email,plan,status,quota,created_at,updated_at FROM tenants`,
+		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		 FROM tenants`,
 	)
 	if err != nil {
 		return nil, err
@@ -340,6 +367,21 @@ func (s *PostgresStore) GetOAuthIdentityTenant(provider, sub string) (string, er
 // -------------------------------------------------------------------------
 // Store interface — Ping / Close
 // -------------------------------------------------------------------------
+
+// MarkStripeEventProcessed records a Stripe webhook event ID for idempotency.
+// Returns true if the event was newly inserted, false if it was already present.
+func (s *PostgresStore) MarkStripeEventProcessed(eventID string) (bool, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO stripe_events_processed(event_id, processed_at) VALUES($1, NOW())
+		 ON CONFLICT(event_id) DO NOTHING`,
+		eventID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
 
 func (s *PostgresStore) Ping() error  { return s.db.Ping() }
 func (s *PostgresStore) Close() error { return s.db.Close() }
@@ -623,8 +665,11 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	var t Tenant
 	var quotaJSON string
 	var createdAt, updatedAt time.Time
+	var stripeCustomerID, stripeSubscriptionID sql.NullString
+	var currentPeriodEnd sql.NullTime
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
-		&quotaJSON, &createdAt, &updatedAt)
+		&quotaJSON, &createdAt, &updatedAt,
+		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEnd, &t.BillingStatus)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -636,7 +681,22 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	}
 	t.CreatedAt = createdAt.UTC()
 	t.UpdatedAt = updatedAt.UTC()
+	if stripeCustomerID.Valid {
+		t.StripeCustomerID = stripeCustomerID.String
+	}
+	if stripeSubscriptionID.Valid {
+		t.StripeSubscriptionID = stripeSubscriptionID.String
+	}
+	if currentPeriodEnd.Valid {
+		ts := currentPeriodEnd.Time.UTC()
+		t.CurrentPeriodEnd = &ts
+	}
 	return &t, nil
+}
+
+// pgNullStr converts a possibly-empty string into a sql.NullString.
+func pgNullStr(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }
 
 func pgScanAPIKey(row scanner) (*APIKey, error) {

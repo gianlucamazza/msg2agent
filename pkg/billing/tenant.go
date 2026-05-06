@@ -135,6 +135,12 @@ type Tenant struct {
 	Quota     QuotaConfig  `json:"quota"`
 	CreatedAt time.Time    `json:"created_at"`
 	UpdatedAt time.Time    `json:"updated_at"`
+
+	// Stripe billing state.
+	StripeCustomerID     string     `json:"stripe_customer_id,omitempty" db:"stripe_customer_id"`
+	StripeSubscriptionID string     `json:"stripe_subscription_id,omitempty" db:"stripe_subscription_id"`
+	CurrentPeriodEnd     *time.Time `json:"current_period_end,omitempty" db:"current_period_end"`
+	BillingStatus        string     `json:"billing_status,omitempty" db:"billing_status"` // active|past_due|canceled|incomplete
 }
 
 // Billing errors.
@@ -152,14 +158,15 @@ var (
 func NewTenant(name, email string, plan Plan) *Tenant {
 	now := time.Now().UTC()
 	return &Tenant{
-		ID:        newID("t"),
-		Name:      name,
-		Email:     email,
-		Plan:      plan,
-		Status:    TenantStatusActive,
-		Quota:     DefaultQuota(plan),
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:            newID("t"),
+		Name:          name,
+		Email:         email,
+		Plan:          plan,
+		Status:        TenantStatusActive,
+		Quota:         DefaultQuota(plan),
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		BillingStatus: "active",
 	}
 }
 

@@ -37,6 +37,10 @@ type Store interface {
 	PutOAuthIdentity(provider, sub, tenantID, email string) error
 	GetOAuthIdentityTenant(provider, sub string) (string, error)
 
+	// MarkStripeEventProcessed records a Stripe webhook event ID for idempotency.
+	// Returns true if the event was newly inserted, false if it was already present.
+	MarkStripeEventProcessed(eventID string) (bool, error)
+
 	// Ping checks whether the store is reachable/healthy.
 	Ping() error
 
@@ -68,18 +72,20 @@ type EventStore interface {
 
 // MemoryStore is an in-memory Store for testing and local single-tenant use.
 type MemoryStore struct {
-	mu       sync.RWMutex
-	tenants  map[string]*Tenant
-	keys     map[string]*APIKey // keyed by hash
-	oauthIds map[string]string  // keyed by "provider:sub" → tenantID
+	mu               sync.RWMutex
+	tenants          map[string]*Tenant
+	keys             map[string]*APIKey  // keyed by hash
+	oauthIds         map[string]string   // keyed by "provider:sub" → tenantID
+	stripeEventsSeen map[string]struct{} // stripe event IDs already processed
 }
 
 // NewMemoryStore creates an empty in-memory billing store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		tenants:  make(map[string]*Tenant),
-		keys:     make(map[string]*APIKey),
-		oauthIds: make(map[string]string),
+		tenants:          make(map[string]*Tenant),
+		keys:             make(map[string]*APIKey),
+		oauthIds:         make(map[string]string),
+		stripeEventsSeen: make(map[string]struct{}),
 	}
 }
 
@@ -204,6 +210,16 @@ func (s *MemoryStore) GetOAuthIdentityTenant(provider, sub string) (string, erro
 	return id, nil
 }
 
+func (s *MemoryStore) MarkStripeEventProcessed(eventID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.stripeEventsSeen[eventID]; exists {
+		return false, nil
+	}
+	s.stripeEventsSeen[eventID] = struct{}{}
+	return true, nil
+}
+
 func (s *MemoryStore) Ping() error  { return nil }
 func (s *MemoryStore) Close() error { return nil }
 
@@ -291,6 +307,25 @@ var migrations = []migration{
 		);
 		CREATE INDEX IF NOT EXISTS oauth_identities_tenant ON oauth_identities(tenant_id);
 	`},
+	// V4: Stripe billing state on tenants + idempotent webhook event log.
+	// Each ALTER TABLE is run individually; duplicate-column errors are ignored
+	// because SQLite does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
+	{4, `_stripe_v4`},
+}
+
+// stripeV4Stmts are the individual SQL statements for the V4 migration.
+// They are run one-by-one so that ALTER TABLE "duplicate column" errors can be
+// suppressed (SQLite does not support ALTER TABLE … ADD COLUMN IF NOT EXISTS).
+var stripeV4Stmts = []string{
+	`ALTER TABLE tenants ADD COLUMN stripe_customer_id TEXT`,
+	`ALTER TABLE tenants ADD COLUMN stripe_subscription_id TEXT`,
+	`ALTER TABLE tenants ADD COLUMN current_period_end TEXT`,
+	`ALTER TABLE tenants ADD COLUMN billing_status TEXT NOT NULL DEFAULT 'active'`,
+	`CREATE UNIQUE INDEX IF NOT EXISTS tenants_stripe_customer ON tenants(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL`,
+	`CREATE TABLE IF NOT EXISTS stripe_events_processed (
+		event_id     TEXT PRIMARY KEY,
+		processed_at TEXT NOT NULL
+	)`,
 }
 
 func (s *SQLiteStore) migrate() error {
@@ -314,23 +349,55 @@ func (s *SQLiteStore) migrate() error {
 		if m.version <= current {
 			continue
 		}
-		tx, err := s.db.Begin()
-		if err != nil {
-			return fmt.Errorf("billing: begin migration v%d: %w", m.version, err)
+
+		// V4 uses individual statements to allow idempotent ALTER TABLE on SQLite.
+		if m.sql == "_stripe_v4" {
+			if err := s.migrateStripeV4(); err != nil {
+				return err
+			}
+		} else {
+			tx, err := s.db.Begin()
+			if err != nil {
+				return fmt.Errorf("billing: begin migration v%d: %w", m.version, err)
+			}
+			if _, err := tx.Exec(m.sql); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("billing: migrate v%d: %w", m.version, err)
+			}
+			if _, err := tx.Exec(
+				`INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`,
+				m.version, time.Now().UTC().Format(time.RFC3339),
+			); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("billing: record migration v%d: %w", m.version, err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("billing: commit migration v%d: %w", m.version, err)
+			}
+			continue
 		}
-		if _, err := tx.Exec(m.sql); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("billing: migrate v%d: %w", m.version, err)
-		}
-		if _, err := tx.Exec(
+
+		// Record V4 (and any future sentinel-based migrations) as applied.
+		if _, err := s.db.Exec(
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`,
 			m.version, time.Now().UTC().Format(time.RFC3339),
 		); err != nil {
-			_ = tx.Rollback()
 			return fmt.Errorf("billing: record migration v%d: %w", m.version, err)
 		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("billing: commit migration v%d: %w", m.version, err)
+	}
+	return nil
+}
+
+// migrateStripeV4 applies the V4 Stripe schema changes one statement at a time,
+// ignoring "duplicate column name" errors from ALTER TABLE so the migration is
+// idempotent even if it was previously partially applied.
+func (s *SQLiteStore) migrateStripeV4() error {
+	for _, stmt := range stripeV4Stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue // column already exists — safe to skip
+			}
+			return fmt.Errorf("billing: migrate v4: %w", err)
 		}
 	}
 	return nil
@@ -341,28 +408,45 @@ func (s *SQLiteStore) PutTenant(t *Tenant) error {
 	if err != nil {
 		return err
 	}
+	var currentPeriodEnd sql.NullString
+	if t.CurrentPeriodEnd != nil {
+		currentPeriodEnd = sql.NullString{String: t.CurrentPeriodEnd.UTC().Format(time.RFC3339), Valid: true}
+	}
 	_, err = s.db.Exec(`
-		INSERT INTO tenants(id,name,email,plan,status,quota_json,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?)
+		INSERT INTO tenants(id,name,email,plan,status,quota_json,created_at,updated_at,
+		                    stripe_customer_id,stripe_subscription_id,current_period_end,billing_status)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(id) DO UPDATE SET
 			name=excluded.name, email=excluded.email, plan=excluded.plan,
 			status=excluded.status, quota_json=excluded.quota_json,
-			updated_at=excluded.updated_at`,
+			updated_at=excluded.updated_at,
+			stripe_customer_id=excluded.stripe_customer_id,
+			stripe_subscription_id=excluded.stripe_subscription_id,
+			current_period_end=excluded.current_period_end,
+			billing_status=excluded.billing_status`,
 		t.ID, t.Name, t.Email, string(t.Plan), string(t.Status),
 		string(quota), t.CreatedAt.Format(time.RFC3339), t.UpdatedAt.Format(time.RFC3339),
+		sqlNullStr(t.StripeCustomerID), sqlNullStr(t.StripeSubscriptionID),
+		currentPeriodEnd, t.BillingStatus,
 	)
 	return err
 }
 
 func (s *SQLiteStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
-		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at FROM tenants WHERE id=?`, id,
+		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		 FROM tenants WHERE id=?`, id,
 	)
 	return scanTenant(row)
 }
 
 func (s *SQLiteStore) ListTenants() ([]*Tenant, error) {
-	rows, err := s.db.Query(`SELECT id,name,email,plan,status,quota_json,created_at,updated_at FROM tenants`)
+	rows, err := s.db.Query(
+		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status
+		 FROM tenants`,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -717,8 +801,10 @@ type scanner interface {
 func scanTenant(row scanner) (*Tenant, error) {
 	var t Tenant
 	var quotaJSON, createdStr, updatedStr string
+	var stripeCustomerID, stripeSubscriptionID, currentPeriodEndStr sql.NullString
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
-		&quotaJSON, &createdStr, &updatedStr)
+		&quotaJSON, &createdStr, &updatedStr,
+		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEndStr, &t.BillingStatus)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -730,7 +816,22 @@ func scanTenant(row scanner) (*Tenant, error) {
 	}
 	t.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
 	t.UpdatedAt, _ = time.Parse(time.RFC3339, updatedStr)
+	if stripeCustomerID.Valid {
+		t.StripeCustomerID = stripeCustomerID.String
+	}
+	if stripeSubscriptionID.Valid {
+		t.StripeSubscriptionID = stripeSubscriptionID.String
+	}
+	if currentPeriodEndStr.Valid && currentPeriodEndStr.String != "" {
+		ts, _ := time.Parse(time.RFC3339, currentPeriodEndStr.String)
+		t.CurrentPeriodEnd = &ts
+	}
 	return &t, nil
+}
+
+// sqlNullStr converts a possibly-empty string into a sql.NullString.
+func sqlNullStr(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }
 
 func (s *SQLiteStore) PutAPIKey(k *APIKey) error {
@@ -810,6 +911,21 @@ func (s *SQLiteStore) GetOAuthIdentityTenant(provider, sub string) (string, erro
 		return "", ErrOAuthIdentityNotFound
 	}
 	return tenantID, err
+}
+
+// MarkStripeEventProcessed records a Stripe webhook event ID to ensure idempotency.
+// Returns true if the event was newly inserted, false if it was already present.
+func (s *SQLiteStore) MarkStripeEventProcessed(eventID string) (bool, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO stripe_events_processed(event_id, processed_at) VALUES(?, ?)
+		 ON CONFLICT(event_id) DO NOTHING`,
+		eventID, time.Now().UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }

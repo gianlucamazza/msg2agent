@@ -323,6 +323,41 @@ func TestSQLiteStore_OAuthIdentity_FK(t *testing.T) {
 	}
 }
 
+func TestStore_MarkStripeEventProcessed(t *testing.T) {
+	for _, f := range factories(t) {
+		t.Run(f.name, func(t *testing.T) {
+			s := f.factory(t)
+
+			// First call: newly inserted → true.
+			inserted, err := s.MarkStripeEventProcessed("evt_test_001")
+			if err != nil {
+				t.Fatalf("MarkStripeEventProcessed (first): %v", err)
+			}
+			if !inserted {
+				t.Error("first call: want true (newly inserted), got false")
+			}
+
+			// Second call with same ID: already exists → false.
+			inserted2, err := s.MarkStripeEventProcessed("evt_test_001")
+			if err != nil {
+				t.Fatalf("MarkStripeEventProcessed (second): %v", err)
+			}
+			if inserted2 {
+				t.Error("second call: want false (already exists), got true")
+			}
+
+			// Different event ID → true again.
+			inserted3, err := s.MarkStripeEventProcessed("evt_test_002")
+			if err != nil {
+				t.Fatalf("MarkStripeEventProcessed (different id): %v", err)
+			}
+			if !inserted3 {
+				t.Error("different event ID: want true (newly inserted), got false")
+			}
+		})
+	}
+}
+
 func TestSQLiteStore_SchemaVersioning(t *testing.T) {
 	s, err := NewSQLiteStore(":memory:")
 	if err != nil {

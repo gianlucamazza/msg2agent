@@ -33,6 +33,10 @@ type Store interface {
 	ListAPIKeysActive(tenantID string) ([]*APIKey, error)
 	RevokeAPIKey(id string) error
 
+	// OAuth identity operations (maps OAuth provider+sub → tenant).
+	PutOAuthIdentity(provider, sub, tenantID, email string) error
+	GetOAuthIdentityTenant(provider, sub string) (string, error)
+
 	// Ping checks whether the store is reachable/healthy.
 	Ping() error
 
@@ -54,16 +58,18 @@ type EventStore interface {
 
 // MemoryStore is an in-memory Store for testing and local single-tenant use.
 type MemoryStore struct {
-	mu      sync.RWMutex
-	tenants map[string]*Tenant
-	keys    map[string]*APIKey // keyed by hash
+	mu       sync.RWMutex
+	tenants  map[string]*Tenant
+	keys     map[string]*APIKey // keyed by hash
+	oauthIds map[string]string  // keyed by "provider:sub" → tenantID
 }
 
 // NewMemoryStore creates an empty in-memory billing store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		tenants: make(map[string]*Tenant),
-		keys:    make(map[string]*APIKey),
+		tenants:  make(map[string]*Tenant),
+		keys:     make(map[string]*APIKey),
+		oauthIds: make(map[string]string),
 	}
 }
 
@@ -171,6 +177,23 @@ func (s *MemoryStore) RevokeAPIKey(id string) error {
 	return ErrAPIKeyNotFound
 }
 
+func (s *MemoryStore) PutOAuthIdentity(provider, sub, tenantID, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.oauthIds[provider+":"+sub] = tenantID
+	return nil
+}
+
+func (s *MemoryStore) GetOAuthIdentityTenant(provider, sub string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.oauthIds[provider+":"+sub]
+	if !ok {
+		return "", ErrOAuthIdentityNotFound
+	}
+	return id, nil
+}
+
 func (s *MemoryStore) Ping() error  { return nil }
 func (s *MemoryStore) Close() error { return nil }
 
@@ -246,6 +269,18 @@ var migrations = []migration{
 	`},
 	// V2: add prev_hash column to usage_events for tamper-evidence hash chain.
 	{2, `ALTER TABLE usage_events ADD COLUMN prev_hash TEXT NOT NULL DEFAULT ''`},
+	// V3: OAuth identity → tenant mapping for OIDC login.
+	{3, `
+		CREATE TABLE IF NOT EXISTS oauth_identities (
+			provider   TEXT NOT NULL,
+			sub        TEXT NOT NULL,
+			tenant_id  TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			email      TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (provider, sub)
+		);
+		CREATE INDEX IF NOT EXISTS oauth_identities_tenant ON oauth_identities(tenant_id);
+	`},
 }
 
 func (s *SQLiteStore) migrate() error {
@@ -742,6 +777,28 @@ func (s *SQLiteStore) RevokeAPIKey(id string) error {
 		return ErrAPIKeyNotFound
 	}
 	return nil
+}
+
+func (s *SQLiteStore) PutOAuthIdentity(provider, sub, tenantID, email string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO oauth_identities(provider,sub,tenant_id,email,created_at)
+		 VALUES(?,?,?,?,?)
+		 ON CONFLICT(provider,sub) DO UPDATE SET tenant_id=excluded.tenant_id, email=excluded.email`,
+		provider, sub, tenantID, email, time.Now().UTC().Format(time.RFC3339),
+	)
+	return err
+}
+
+func (s *SQLiteStore) GetOAuthIdentityTenant(provider, sub string) (string, error) {
+	var tenantID string
+	err := s.db.QueryRow(
+		`SELECT tenant_id FROM oauth_identities WHERE provider=? AND sub=?`,
+		provider, sub,
+	).Scan(&tenantID)
+	if err == sql.ErrNoRows {
+		return "", ErrOAuthIdentityNotFound
+	}
+	return tenantID, err
 }
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }

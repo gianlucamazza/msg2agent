@@ -274,6 +274,55 @@ func TestSQLiteStore_WALAndFK(t *testing.T) {
 	}
 }
 
+func TestStore_OAuthIdentity(t *testing.T) {
+	for _, f := range factories(t) {
+		t.Run(f.name, func(t *testing.T) {
+			store := f.factory(t)
+			tenant := NewTenant("OAuth Corp", "oauth@example.com", PlanFree)
+			if err := store.PutTenant(tenant); err != nil {
+				t.Fatalf("PutTenant: %v", err)
+			}
+
+			// Insert identity and retrieve tenant.
+			if err := store.PutOAuthIdentity("google", "sub-123", tenant.ID, "oauth@example.com"); err != nil {
+				t.Fatalf("PutOAuthIdentity: %v", err)
+			}
+			got, err := store.GetOAuthIdentityTenant("google", "sub-123")
+			if err != nil {
+				t.Fatalf("GetOAuthIdentityTenant: %v", err)
+			}
+			if got != tenant.ID {
+				t.Errorf("tenantID = %q, want %q", got, tenant.ID)
+			}
+
+			// Unknown identity returns ErrOAuthIdentityNotFound.
+			if _, err := store.GetOAuthIdentityTenant("google", "unknown"); err != ErrOAuthIdentityNotFound {
+				t.Errorf("unknown sub: want ErrOAuthIdentityNotFound, got %v", err)
+			}
+
+			// Upsert updates email.
+			if err := store.PutOAuthIdentity("google", "sub-123", tenant.ID, "new@example.com"); err != nil {
+				t.Fatalf("PutOAuthIdentity upsert: %v", err)
+			}
+		})
+	}
+}
+
+func TestSQLiteStore_OAuthIdentity_FK(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewSQLiteStore(dir + "/billing_fk_test.db")
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// Inserting with a non-existent tenant_id must fail (FK constraint).
+	err = s.PutOAuthIdentity("google", "sub-nonexistent", "nonexistent_tenant", "x@x.com")
+	if err == nil {
+		t.Error("expected FK constraint violation, got nil")
+	}
+}
+
 func TestSQLiteStore_SchemaVersioning(t *testing.T) {
 	s, err := NewSQLiteStore(":memory:")
 	if err != nil {

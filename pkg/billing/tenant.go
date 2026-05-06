@@ -139,12 +139,13 @@ type Tenant struct {
 
 // Billing errors.
 var (
-	ErrTenantNotFound  = errors.New("tenant not found")
-	ErrTenantSuspended = errors.New("tenant account is suspended")
-	ErrQuotaExceeded   = errors.New("quota exceeded for current billing period")
-	ErrAPIKeyNotFound  = errors.New("API key not found")
-	ErrAPIKeyRevoked   = errors.New("API key has been revoked")
-	ErrInvalidAPIKey   = errors.New("invalid API key format")
+	ErrTenantNotFound        = errors.New("tenant not found")
+	ErrTenantSuspended       = errors.New("tenant account is suspended")
+	ErrQuotaExceeded         = errors.New("quota exceeded for current billing period")
+	ErrAPIKeyNotFound        = errors.New("API key not found")
+	ErrAPIKeyRevoked         = errors.New("API key has been revoked")
+	ErrInvalidAPIKey         = errors.New("invalid API key format")
+	ErrOAuthIdentityNotFound = errors.New("OAuth identity not found")
 )
 
 // NewTenant creates a new tenant with a generated ID.

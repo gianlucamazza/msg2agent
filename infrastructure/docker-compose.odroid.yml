@@ -38,9 +38,12 @@ services:
       MSG2AGENT_MAX_CONNECTIONS: "100"
       MSG2AGENT_MSG_RATE:        "20"
       MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw,did:wba:msg2agent.home.gianlucamazza.it:agent:gianluca-local,did:wba:msg2agent.home.gianlucamazza.it:agent:claude-desktop"
+      MSG2AGENT_BILLING_DB:      "/billing/billing.db"   # shared with mcp-server; relay owns Stripe webhook
       # OAuth2 vars come from .env: MSG2AGENT_OAUTH2_ISSUER_URL, MSG2AGENT_OAUTH2_AUDIENCE, MSG2AGENT_OAUTH2_JWKS_URL
+      # Stripe vars come from .env: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_*
     volumes:
       - relay-data:/data
+      - billing-data:/billing   # shared SQLite billing DB (WAL mode handles concurrent access)
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
@@ -78,7 +81,7 @@ services:
       MSG2AGENT_HTTP_ADDR:             ":3001"
       MSG2AGENT_BILLING_DB:            "/data/billing.db"
       MSG2AGENT_BILLING_DRIVER:        "sqlite"
-      MSG2AGENT_BILLING_QUOTA_WARN_RATIO: "0.8"
+      BILLING_QUOTA_WARN_RATIO:        "0.8"   # bare key — pkg/billing reads directly
       # OAuth2 + Stripe keys come from .env (STRIPE_*, MSG2AGENT_OAUTH2_*)
     volumes:
       - billing-data:/data

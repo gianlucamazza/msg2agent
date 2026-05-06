@@ -167,3 +167,64 @@ func TestBillingE2E_QuotaExceeded(t *testing.T) {
 		t.Error("expected quota exceeded error, got nil")
 	}
 }
+
+// TestBillingE2E_QueryEvents verifies dispute-resolution query returns correct rows.
+func TestBillingE2E_QueryEvents(t *testing.T) {
+	dir := t.TempDir()
+	store, err := billing.NewSQLiteStore(filepath.Join(dir, "billing.db"))
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	defer store.Close()
+
+	tenant := billing.NewTenant("Dispute Corp", "dispute@example.com", billing.PlanStarter)
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	// Record 7 message events and 3 tool_call events.
+	for range 7 {
+		if err := store.RecordEvent(tenant.ID, "message", "send_message", "req-msg"); err != nil {
+			t.Fatalf("RecordEvent (message): %v", err)
+		}
+	}
+	for range 3 {
+		if err := store.RecordEvent(tenant.ID, "tool_call", "list_agents", "req-tc"); err != nil {
+			t.Fatalf("RecordEvent (tool_call): %v", err)
+		}
+	}
+
+	// Query all events for the tenant.
+	all, err := store.QueryEvents(billing.EventFilter{TenantID: tenant.ID})
+	if err != nil {
+		t.Fatalf("QueryEvents all: %v", err)
+	}
+	if len(all) != 10 {
+		t.Errorf("QueryEvents all: got %d events, want 10", len(all))
+	}
+
+	// Filter by event type.
+	msgs, err := store.QueryEvents(billing.EventFilter{TenantID: tenant.ID, Event: "message"})
+	if err != nil {
+		t.Fatalf("QueryEvents messages: %v", err)
+	}
+	if len(msgs) != 7 {
+		t.Errorf("QueryEvents message: got %d, want 7", len(msgs))
+	}
+
+	// Results must be ordered by timestamp ascending.
+	for i := 1; i < len(all); i++ {
+		if all[i].Timestamp.Before(all[i-1].Timestamp) {
+			t.Errorf("events not ordered: [%d].ts %s < [%d].ts %s", i, all[i].Timestamp, i-1, all[i-1].Timestamp)
+		}
+	}
+
+	// Limit enforcement.
+	limited, err := store.QueryEvents(billing.EventFilter{TenantID: tenant.ID, Limit: 3})
+	if err != nil {
+		t.Fatalf("QueryEvents limit: %v", err)
+	}
+	if len(limited) != 3 {
+		t.Errorf("QueryEvents limit=3: got %d, want 3", len(limited))
+	}
+}

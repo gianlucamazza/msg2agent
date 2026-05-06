@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -29,6 +30,7 @@ Commands:
   list-usage      Show usage aggregates for a tenant/period
   export-csv      Export usage CSV to stdout
   purge-events    Delete raw audit events older than a date (aggregates preserved)
+  query-events    Query raw audit events for a tenant (for dispute resolution)
   backup          Write a consistent snapshot of the billing DB to a new file
   verify          Print a health summary of the billing DB
 
@@ -85,6 +87,8 @@ func main() {
 		runExportCSV(store, cmdArgs)
 	case "purge-events":
 		runPurgeEvents(store, cmdArgs)
+	case "query-events":
+		runQueryEvents(store, cmdArgs)
 	case "backup":
 		runBackup(store, cmdArgs)
 	case "verify":
@@ -309,6 +313,89 @@ func runPurgeEvents(store *billing.SQLiteStore, args []string) {
 		os.Exit(1)
 	}
 	fmt.Printf("deleted %d audit event(s) before %s (usage_aggregates preserved)\n", n, cutoff.Format("2006-01-02"))
+}
+
+func runQueryEvents(store *billing.SQLiteStore, args []string) {
+	fs := flag.NewFlagSet("query-events", flag.ExitOnError)
+	tenantID := fs.String("tenant", "", "tenant ID (required)")
+	event := fs.String("event", "", "filter by event type (message|tool_call|task_submit)")
+	from := fs.String("from", "", "start date inclusive (YYYY-MM-DD or RFC3339)")
+	to := fs.String("to", "", "end date inclusive (YYYY-MM-DD or RFC3339)")
+	format := fs.String("format", "table", "output format: table|json|csv|tsv")
+	limit := fs.Int("limit", 10000, "maximum rows to return")
+	fs.Parse(args)
+
+	if *tenantID == "" {
+		fmt.Fprintln(os.Stderr, "error: -tenant is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	parseDate := func(s string) time.Time {
+		if s == "" {
+			return time.Time{}
+		}
+		for _, layout := range []string{"2006-01-02", time.RFC3339} {
+			if t, err := time.Parse(layout, s); err == nil {
+				return t
+			}
+		}
+		fmt.Fprintf(os.Stderr, "error: invalid date %q\n", s)
+		os.Exit(1)
+		return time.Time{}
+	}
+
+	f := billing.EventFilter{
+		TenantID: *tenantID,
+		Event:    *event,
+		From:     parseDate(*from),
+		To:       parseDate(*to),
+		Limit:    *limit,
+	}
+
+	events, err := store.QueryEvents(f)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch *format {
+	case "json":
+		type row struct {
+			ID        string `json:"id"`
+			TenantID  string `json:"tenant_id"`
+			Event     string `json:"event"`
+			ToolName  string `json:"tool_name"`
+			RequestID string `json:"request_id"`
+			Timestamp string `json:"ts"`
+		}
+		rows := make([]row, len(events))
+		for i, ev := range events {
+			rows[i] = row{ev.ID, ev.TenantID, ev.Event, ev.ToolName, ev.RequestID, ev.Timestamp.Format(time.RFC3339)}
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(rows)
+	case "csv":
+		fmt.Println("id,tenant_id,event,tool_name,request_id,ts")
+		for _, ev := range events {
+			fmt.Printf("%s,%s,%s,%s,%s,%s\n", ev.ID, ev.TenantID, ev.Event, ev.ToolName, ev.RequestID, ev.Timestamp.Format(time.RFC3339))
+		}
+	case "tsv":
+		fmt.Println("id\ttenant_id\tevent\ttool_name\trequest_id\tts")
+		for _, ev := range events {
+			fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\n", ev.ID, ev.TenantID, ev.Event, ev.ToolName, ev.RequestID, ev.Timestamp.Format(time.RFC3339))
+		}
+	default: // table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "ID\tTENANT\tEVENT\tTOOL\tTS")
+		for _, ev := range events {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				ev.ID, ev.TenantID, ev.Event, ev.ToolName, ev.Timestamp.Format("2006-01-02T15:04:05Z"))
+		}
+		w.Flush()
+	}
+	fmt.Fprintf(os.Stderr, "(%d event(s))\n", len(events))
 }
 
 func runBackup(store *billing.SQLiteStore, args []string) {

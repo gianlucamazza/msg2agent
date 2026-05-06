@@ -469,6 +469,69 @@ func (s *SQLiteStore) Ping() error {
 	return s.db.Ping()
 }
 
+// EventFilter constrains a QueryEvents call.
+type EventFilter struct {
+	TenantID string    // required
+	Event    string    // optional; empty = all event types
+	From     time.Time // zero = open-ended
+	To       time.Time // zero = open-ended
+	Limit    int       // 0 → default 10000
+}
+
+// AuditEvent is a row from usage_events with a parsed timestamp.
+type AuditEvent struct {
+	ID        string
+	TenantID  string
+	Event     string
+	ToolName  string
+	RequestID string
+	Timestamp time.Time
+}
+
+// QueryEvents returns raw audit events matching filter, ordered by timestamp ASC.
+// It uses the usage_events_tenant_ts index. Maximum 10000 rows unless filter.Limit is set.
+func (s *SQLiteStore) QueryEvents(f EventFilter) ([]AuditEvent, error) {
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 10000
+	}
+
+	q := `SELECT id,tenant_id,event,tool_name,request_id,ts FROM usage_events WHERE tenant_id=?`
+	args := []any{f.TenantID}
+	if f.Event != "" {
+		q += ` AND event=?`
+		args = append(args, f.Event)
+	}
+	if !f.From.IsZero() {
+		q += ` AND ts >= ?`
+		args = append(args, f.From.UTC().Format(time.RFC3339))
+	}
+	if !f.To.IsZero() {
+		q += ` AND ts <= ?`
+		args = append(args, f.To.UTC().Format(time.RFC3339))
+	}
+	q += ` ORDER BY ts ASC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("billing: query events: %w", err)
+	}
+	defer rows.Close()
+
+	var out []AuditEvent
+	for rows.Next() {
+		var ev AuditEvent
+		var tsStr string
+		if err := rows.Scan(&ev.ID, &ev.TenantID, &ev.Event, &ev.ToolName, &ev.RequestID, &tsStr); err != nil {
+			return nil, err
+		}
+		ev.Timestamp, _ = time.Parse(time.RFC3339, tsStr)
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
 // PurgeEvents deletes audit events older than before from usage_events.
 // usage_aggregates (the source of truth for invoicing) is left intact.
 // Returns the number of rows deleted.

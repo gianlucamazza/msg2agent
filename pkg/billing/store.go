@@ -43,6 +43,16 @@ type Store interface {
 	Close() error
 }
 
+// AdminStore provides audit and maintenance operations.
+// *SQLiteStore implements both Store and AdminStore.
+type AdminStore interface {
+	VerifyAuditChain(tenantID string) ([]AuditChainResult, error)
+	QueryEvents(f EventFilter) ([]AuditEvent, error)
+	Verify() (*VerifyReport, error)
+	PurgeEvents(before time.Time) (int64, error)
+	Backup(destPath string) error
+}
+
 // EventStore persists billing audit events and aggregated usage for recovery.
 // It is separate from Store so self-hosted deployments can opt out.
 type EventStore interface {

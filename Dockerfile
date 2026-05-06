@@ -38,6 +38,10 @@ RUN CGO_ENABLED=0 go build \
     -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
     -o /out/mcp-server ./cmd/mcp-server
 
+RUN CGO_ENABLED=0 go build \
+    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -o /out/billing-admin ./cmd/billing-admin
+
 # =============================================================================
 # Relay Image
 # =============================================================================
@@ -131,3 +135,22 @@ VOLUME ["/home/msg2agent/.msg2agent"]
 # Default command
 ENTRYPOINT ["mcp-server"]
 CMD []
+
+# =============================================================================
+# Billing Admin Image
+# =============================================================================
+FROM alpine:3.20 AS billing-admin
+
+RUN apk add --no-cache ca-certificates tzdata
+
+RUN addgroup -g 1000 msg2agent && \
+    adduser -u 1000 -G msg2agent -s /bin/sh -D msg2agent
+
+COPY --from=builder /out/billing-admin /usr/local/bin/billing-admin
+
+USER msg2agent
+
+VOLUME ["/data"]
+
+ENTRYPOINT ["billing-admin"]
+CMD ["-help"]

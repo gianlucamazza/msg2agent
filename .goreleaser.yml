@@ -65,6 +65,24 @@ builds:
       - -X main.Commit={{.Commit}}
       - -X main.Date={{.Date}}
 
+  - id: billing-admin
+    main: ./cmd/billing-admin
+    binary: billing-admin
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.Date={{.Date}}
+
 archives:
   - id: default
     format: tar.gz

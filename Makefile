@@ -12,7 +12,7 @@ BUILD_DIR := ./build
 DIST_DIR  := ./dist
 
 # Binaries
-BINARIES := agent relay mcp-server
+BINARIES := agent relay mcp-server billing-admin
 
 # Go commands
 GO      := go
@@ -21,7 +21,7 @@ GOBUILD := $(GO) build $(GOFLAGS) $(LDFLAGS)
 GOVET   := $(GO) vet
 GOFMT   := gofmt
 
-.PHONY: all build build-agent build-relay build-mcp clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help
+.PHONY: all build build-agent build-relay build-mcp build-billing-admin clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help
 .PHONY: dev dev-up dev-down dev-logs dev-ps
 .PHONY: scenario-p2p scenario-relay scenario-tls scenario-mcp
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
@@ -32,7 +32,7 @@ GOFMT   := gofmt
 
 all: build
 
-build: build-agent build-relay build-mcp ## Build all binaries
+build: build-agent build-relay build-mcp build-billing-admin ## Build all binaries
 
 build-agent: ## Build agent binary
 	$(GOBUILD) -o $(BUILD_DIR)/agent ./cmd/agent
@@ -42,6 +42,9 @@ build-relay: ## Build relay binary
 
 build-mcp: ## Build mcp-server binary
 	$(GOBUILD) -o $(BUILD_DIR)/mcp-server ./cmd/mcp-server
+
+build-billing-admin: ## Build billing-admin CLI
+	$(GOBUILD) -o $(BUILD_DIR)/billing-admin ./cmd/billing-admin
 
 ## Testing
 
@@ -80,6 +83,7 @@ docker-build: ## Build Docker images
 	docker build --target relay -t msg2agent-relay:$(VERSION) -t msg2agent-relay:latest .
 	docker build --target agent -t msg2agent-agent:$(VERSION) -t msg2agent-agent:latest .
 	docker build --target mcp-server -t msg2agent-mcp-server:$(VERSION) -t msg2agent-mcp-server:latest .
+	docker build --target billing-admin -t msg2agent-billing-admin:$(VERSION) -t msg2agent-billing-admin:latest .
 
 docker-push: ## Push Docker images to registry
 	docker push msg2agent-relay:$(VERSION)
@@ -95,6 +99,7 @@ install: build ## Install binaries to GOPATH/bin
 	$(GO) install ./cmd/agent
 	$(GO) install ./cmd/relay
 	$(GO) install ./cmd/mcp-server
+	$(GO) install ./cmd/billing-admin
 
 ## Cleanup
 

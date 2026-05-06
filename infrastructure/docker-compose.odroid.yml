@@ -73,7 +73,7 @@ services:
     image: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
     container_name: msg2agent-mcp-server
     ports:
-      - "127.0.0.1:3010:3001"   # loopback only — solo plugin locale
+      - "192.168.1.103:3010:3001"   # LAN only — NPM proxies /mcp to this port
     # transport flag has no env fallback in cmd/mcp-server/main.go; default=stdio
     # would skip the HTTP server and fail the healthcheck.
     command: ["-transport", "streamable-http"]
@@ -102,6 +102,7 @@ services:
       start_period: 20s
     networks:
       - msg2agent
+      - services_services   # raggiungibile da NPM per /mcp routing
     restart: unless-stopped
     deploy:
       resources:

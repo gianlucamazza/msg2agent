@@ -46,8 +46,12 @@ resource "google_compute_instance_template" "relay_template" {
 
   metadata = {
     user-data = templatefile("${path.module}/cloud-config.yaml", {
-      relay_image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repo_name}/relay:${var.image_tag}"
-      agent_image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repo_name}/agent:${var.image_tag}"
+      project_id     = var.project_id
+      region         = var.region
+      domain_name    = var.domain_name
+      relay_image     = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repo_name}/relay:${var.image_tag}"
+      mcp_image       = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repo_name}/mcp-server:${coalesce(var.mcp_image_tag, var.image_tag)}"
+      dashboard_image = "${var.region}-docker.pkg.dev/${var.project_id}/${var.repo_name}/dashboard:${coalesce(var.dashboard_image_tag, var.image_tag)}"
     })
     google-logging-enabled = "true"
   }
@@ -70,7 +74,7 @@ resource "google_compute_instance_group_manager" "relay_mig" {
 
   named_port {
     name = "http"
-    port = 8081
+    port = 8080
   }
 
   # Stateful Disk

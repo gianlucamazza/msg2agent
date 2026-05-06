@@ -21,6 +21,18 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "mcp_image_tag" {
+  description = "Docker image tag for mcp-server (defaults to image_tag)"
+  type        = string
+  default     = ""
+}
+
+variable "dashboard_image_tag" {
+  description = "Docker image tag for dashboard (defaults to image_tag)"
+  type        = string
+  default     = ""
+}
+
 variable "domain_name" {
   description = "The domain name for the service (managed SSL)"
   type        = string

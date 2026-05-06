@@ -1,0 +1,160 @@
+# msg2agent Production Stack — odroid (home lab)
+#
+# Managed by Drone CI — source of truth is in the repo at
+# infrastructure/docker-compose.odroid.yml. The deploy step
+# copies this file to /opt/services/msg2agent/docker-compose.yml
+# before running `docker compose up -d --no-build`.
+#
+# Architecture:
+#   relay      — WS hub, LAN:8080, TLS terminated by NPM
+#                → msg2agent.home.gianlucamazza.it
+#   mcp-server — billing-instrumented MCP endpoint, loopback:3010
+#                → OpenClaw plugin (Claude Desktop / IDE)
+#   dashboard  — self-serve web UI, loopback:8082 (LAN only)
+#
+# Secrets: /opt/services/msg2agent/.env (chmod 600, never committed)
+#   MSG2AGENT_SERVICE_TOKEN    — dashboard ↔ relay bearer
+#   MSG2AGENT_OAUTH2_*         — OAuth2 for relay + mcp-server
+#   OAUTH2_*                   — OAuth2 for dashboard (different prefix)
+#   STRIPE_SECRET_KEY          — Stripe billing
+#   STRIPE_WEBHOOK_SECRET
+#   STRIPE_PRICE_{FREE,STARTER,TEAM,ENTERPRISE}
+
+services:
+
+  # ── Relay Hub ──────────────────────────────────────────────────────────────
+  relay:
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-relay:latest
+    container_name: msg2agent-relay
+    ports:
+      - "192.168.1.103:8080:8080"   # LAN only — NPM fa proxy pubblico
+    env_file:
+      - .env
+    environment:
+      MSG2AGENT_RELAY_ADDR:      ":8080"
+      MSG2AGENT_STORE:           "sqlite"
+      MSG2AGENT_STORE_FILE:      "/data/relay.db"
+      MSG2AGENT_LOG_LEVEL:       "info"
+      MSG2AGENT_MAX_CONNECTIONS: "100"
+      MSG2AGENT_MSG_RATE:        "20"
+      MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw,did:wba:msg2agent.home.gianlucamazza.it:agent:gianluca-local,did:wba:msg2agent.home.gianlucamazza.it:agent:claude-desktop"
+      # OAuth2 vars come from .env: MSG2AGENT_OAUTH2_ISSUER_URL, MSG2AGENT_OAUTH2_AUDIENCE, MSG2AGENT_OAUTH2_JWKS_URL
+    volumes:
+      - relay-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - msg2agent
+      - services_services   # raggiungibile da NPM
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── MCP Server (OpenClaw plugin endpoint) ─────────────────────────────────
+  mcp-server:
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
+    container_name: msg2agent-mcp-server
+    ports:
+      - "127.0.0.1:3010:3001"   # loopback only — solo plugin locale
+    env_file:
+      - .env
+    environment:
+      MSG2AGENT_NAME:                  "openclaw"
+      MSG2AGENT_DOMAIN:                "msg2agent.home.gianlucamazza.it"
+      MSG2AGENT_RELAY_URL:             "ws://relay:8080"
+      MSG2AGENT_HTTP_ADDR:             ":3001"
+      MSG2AGENT_BILLING_DB:            "/data/billing.db"
+      MSG2AGENT_BILLING_DRIVER:        "sqlite"
+      MSG2AGENT_BILLING_QUOTA_WARN_RATIO: "0.8"
+      # OAuth2 + Stripe keys come from .env (STRIPE_*, MSG2AGENT_OAUTH2_*)
+    volumes:
+      - billing-data:/data
+    depends_on:
+      relay:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - msg2agent
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Dashboard (self-serve web UI, LAN only) ────────────────────────────────
+  dashboard:
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
+    container_name: msg2agent-dashboard
+    ports:
+      - "127.0.0.1:8082:8082"   # LAN only — NPM exposure rimandata
+    env_file:
+      - .env
+    environment:
+      DASHBOARD_ADDR:  ":8082"
+      RELAY_URL:       "http://relay:8080"
+      BILLING_DB:      "/data/billing.db"
+      BILLING_DRIVER:  "sqlite"
+      # OAuth2 vars come from .env: OAUTH2_ISSUER_URL, OAUTH2_AUDIENCE, OAUTH2_JWKS_URL
+      # Service token: MSG2AGENT_SERVICE_TOKEN from .env
+    volumes:
+      - billing-data:/data   # shared read-write with mcp-server (SQLite WAL)
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - msg2agent
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  relay-data:
+    # SQLite relay store (agent registry + message queue)
+  billing-data:
+    # SQLite billing DB shared by mcp-server and dashboard
+
+networks:
+  msg2agent:
+    driver: bridge
+  services_services:
+    external: true   # rete condivisa con NPM per proxy pubblico

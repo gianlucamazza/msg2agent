@@ -106,6 +106,44 @@ steps:
       - name: docker_sock
         path: /var/run/docker.sock
 
+  - name: docker-build-push-billing-admin
+    image: plugins/docker
+    settings:
+      daemon_off: true
+      registry: registry.home.gianlucamazza.it
+      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin
+      dockerfile: Dockerfile
+      target: billing-admin
+      tags:
+        - latest
+        - ${DRONE_COMMIT_SHA}
+      username:
+        from_secret: REGISTRY_USERNAME
+      password:
+        from_secret: REGISTRY_PASSWORD
+    volumes:
+      - name: docker_sock
+        path: /var/run/docker.sock
+
+  - name: docker-build-push-dashboard
+    image: plugins/docker
+    settings:
+      daemon_off: true
+      registry: registry.home.gianlucamazza.it
+      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard
+      dockerfile: Dockerfile
+      target: dashboard
+      tags:
+        - latest
+        - ${DRONE_COMMIT_SHA}
+      username:
+        from_secret: REGISTRY_USERNAME
+      password:
+        from_secret: REGISTRY_PASSWORD
+    volumes:
+      - name: docker_sock
+        path: /var/run/docker.sock
+
   - name: deploy
     image: docker:cli
     environment:
@@ -124,6 +162,9 @@ steps:
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-relay:latest
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-agent:latest
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin:latest
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
+      - cp /drone/src/infrastructure/docker-compose.odroid.yml /opt/services/msg2agent/docker-compose.yml
       - docker compose -f /opt/services/msg2agent/docker-compose.yml up -d --no-build
 
 volumes:

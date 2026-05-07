@@ -46,11 +46,11 @@ const (
 
 // QuotaConfig defines the limits for a plan.
 type QuotaConfig struct {
-	MaxAgentDIDs         int     // max registered agent DIDs
-	MaxMessagesPerMonth  int64   // relay messages / calendar month
-	MaxToolCallsPerMonth int64   // MCP tool calls / calendar month
-	RateLimitMsgPerSec   float64 // token-bucket rate (messages/sec)
-	RateLimitBurstSize   float64 // token-bucket burst
+	MaxAgentDIDs         int     `json:"max_agent_dids"`           // max registered agent DIDs
+	MaxMessagesPerMonth  int64   `json:"max_messages_per_month"`   // relay messages / calendar month
+	MaxToolCallsPerMonth int64   `json:"max_tool_calls_per_month"` // MCP tool calls / calendar month
+	RateLimitMsgPerSec   float64 `json:"rate_limit_msg_per_sec"`   // token-bucket rate (messages/sec)
+	RateLimitBurstSize   float64 `json:"rate_limit_burst_size"`    // token-bucket burst
 }
 
 // hardcodedQuota returns the built-in quota defaults per plan.

@@ -1,0 +1,60 @@
+# Version control and local agent state
+.git/
+.github/
+.claude/
+
+# Local editor and tool caches
+.idea/
+.vscode/
+.ruff_cache/
+tmp/
+
+# Local environment and credentials
+.env
+.env.local
+.env.*.local
+.mcp.json
+credentials.json
+secrets.yaml
+*.pem
+*.key
+*.crt
+
+# Keep documented, non-secret examples available in the build context.
+!.env.example
+!.env.cloud.example
+
+# Build outputs and local binaries
+agent
+relay
+mcp-server
+billing-admin
+dashboard
+bin/
+build/
+dist/
+
+# Test and coverage artifacts
+*.out
+coverage.*
+coverage/
+*.test
+*.log
+*.tmp
+
+# Local data stores
+*.db
+*.sqlite
+*.sqlite3
+relay-agents.json
+
+# Go dependency vendoring is not used by this Dockerfile.
+vendor/
+
+# Terraform local state
+infrastructure/terraform/.terraform/
+infrastructure/terraform/.terraform.lock.hcl
+infrastructure/terraform/terraform.tfstate
+infrastructure/terraform/terraform.tfstate.backup
+infrastructure/terraform/*.tfstate.lock.info
+infrastructure/terraform/*.log

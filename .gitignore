@@ -2,12 +2,16 @@
 /agent
 /relay
 /mcp-server
+/billing-admin
+/dashboard
 bin/
 /build/
 /dist/
 
 # Local config
 .mcp.json
+.claude/
+.ruff_cache/
 
 # Test artifacts
 *.out

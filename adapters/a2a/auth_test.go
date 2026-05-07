@@ -2,6 +2,7 @@ package a2a_test
 
 import (
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -417,5 +418,99 @@ func TestBillingValidatorAdapterPropagatesError(t *testing.T) {
 	_, err := adapter.ValidateTokenToBillingClaims(token)
 	if err == nil {
 		t.Fatal("expected error for wrong audience via adapter, got nil")
+	}
+}
+
+// edTestKey holds an Ed25519 key pair for signing test JWTs (alg=EdDSA, RFC 8037).
+type edTestKey struct {
+	priv ed25519.PrivateKey
+	pub  ed25519.PublicKey
+	kid  string
+}
+
+func newEdTestKey(t *testing.T) *edTestKey {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("ed25519.GenerateKey: %v", err)
+	}
+	return &edTestKey{priv: priv, pub: pub, kid: "ed-key-1"}
+}
+
+func (k *edTestKey) jwksHandler() http.HandlerFunc {
+	x := b64url(k.pub)
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := fmt.Sprintf(`{"keys":[{"kty":"OKP","crv":"Ed25519","alg":"EdDSA","use":"sig","kid":%q,"x":%q}]}`,
+			k.kid, x)
+		_, _ = w.Write([]byte(resp))
+	}
+}
+
+func (k *edTestKey) signJWT(t *testing.T, payload map[string]any) string {
+	t.Helper()
+	headerJSON, _ := json.Marshal(map[string]string{
+		"alg": "EdDSA",
+		"typ": "JWT",
+		"kid": k.kid,
+	})
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	signingInput := b64url(headerJSON) + "." + b64url(payloadJSON)
+	sig := ed25519.Sign(k.priv, []byte(signingInput))
+	return signingInput + "." + b64url(sig)
+}
+
+// TestValidToken_EdDSA covers the OKP/Ed25519 path used by msg2agent's own
+// authorization server. Without it, every token issued by the AS is rejected
+// because the legacy validator hard-coded RS256.
+func TestValidToken_EdDSA(t *testing.T) {
+	k := newEdTestKey(t)
+	srv := httptest.NewServer(k.jwksHandler())
+	defer srv.Close()
+
+	const (
+		issuer   = "https://msg2agent.example.com"
+		audience = "https://msg2agent.example.com/mcp"
+		subject  = "t_abc123"
+		email    = "alice@example.com"
+	)
+
+	token := k.signJWT(t, validPayload(issuer, audience, subject, email))
+	v := newValidator(srv.URL, issuer, audience)
+
+	claims, err := v.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken: unexpected error: %v", err)
+	}
+	if claims.Subject != subject {
+		t.Errorf("Subject = %q, want %q", claims.Subject, subject)
+	}
+	if claims.Issuer != issuer {
+		t.Errorf("Issuer = %q, want %q", claims.Issuer, issuer)
+	}
+	if claims.Email != email {
+		t.Errorf("Email = %q, want %q", claims.Email, email)
+	}
+}
+
+// TestEdDSA_InvalidSignature ensures tampered EdDSA tokens are rejected and
+// don't sneak through under "unknown alg" or similar.
+func TestEdDSA_InvalidSignature(t *testing.T) {
+	k := newEdTestKey(t)
+	srv := httptest.NewServer(k.jwksHandler())
+	defer srv.Close()
+
+	const issuer = "https://msg2agent.example.com"
+	const audience = "https://msg2agent.example.com/mcp"
+
+	token := k.signJWT(t, validPayload(issuer, audience, "t_x", ""))
+	tampered := tamperPayload(token, validPayload(issuer, audience, "t_y", "other@example.com"))
+
+	v := newValidator(srv.URL, issuer, audience)
+	if _, err := v.ValidateToken(tampered); err == nil {
+		t.Fatal("expected error for tampered EdDSA token, got nil")
 	}
 }

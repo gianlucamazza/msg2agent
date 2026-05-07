@@ -2,7 +2,24 @@ package oauth
 
 import "html/template"
 
-var consentTmpl = template.Must(template.New("consent").Parse(`<!DOCTYPE html>
+// scopeDescriptions maps internal scope tokens to human-readable labels for the
+// consent screen. Unknown scopes fall through to the raw token.
+var scopeDescriptions = map[string]string{
+	"mcp:tools:read":        "Read MCP tools and their schemas",
+	"mcp:tools:write":       "Invoke MCP tools (read and write)",
+	"mcp:tools:destructive": "Invoke MCP tools that may modify or delete data",
+}
+
+func describeScope(scope string) string {
+	if d, ok := scopeDescriptions[scope]; ok {
+		return d
+	}
+	return scope
+}
+
+var consentTmpl = template.Must(template.New("consent").Funcs(template.FuncMap{
+	"scopeDescription": describeScope,
+}).Parse(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -19,10 +36,14 @@ var consentTmpl = template.Must(template.New("consent").Parse(`<!DOCTYPE html>
     </div>
     <h1><span class="app-name">{{.ClientName}}</span> wants to access msg2agent</h1>
     <p class="tenant-name">Signed in as <strong>{{.TenantName}}</strong></p>
+    {{if .Scopes}}
     <p class="consent-intro">The application is requesting:</p>
     <ul class="scope-list">
-      {{range .Scopes}}<li>{{.}}</li>{{end}}
+      {{range .Scopes}}<li>{{scopeDescription .}}</li>{{end}}
     </ul>
+    {{else}}
+    <p class="consent-intro">{{.ClientName}} will be able to sign you in to your msg2agent account and read your tenant profile.</p>
+    {{end}}
     <form method="POST" action="/oauth/authorize/confirm">
       <input type="hidden" name="session" value="{{.SessionToken}}">
       <input type="hidden" name="client_id" value="{{.ClientID}}">

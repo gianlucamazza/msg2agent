@@ -4,6 +4,7 @@ package a2a
 import (
 	"context"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -142,14 +143,16 @@ type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
-// JWK represents a JSON Web Key.
+// JWK represents a JSON Web Key. Supports RSA (RS256) and OKP/Ed25519 (EdDSA).
 type JWK struct {
-	Kid string `json:"kid"` // Key ID
-	Kty string `json:"kty"` // Key Type (RSA)
-	Alg string `json:"alg"` // Algorithm (RS256)
-	Use string `json:"use"` // Key Use (sig)
-	N   string `json:"n"`   // Modulus (base64url)
-	E   string `json:"e"`   // Exponent (base64url)
+	Kid string `json:"kid"`           // Key ID
+	Kty string `json:"kty"`           // Key Type ("RSA" or "OKP")
+	Alg string `json:"alg"`           // Algorithm ("RS256" or "EdDSA")
+	Use string `json:"use"`           // Key Use (sig)
+	N   string `json:"n,omitempty"`   // RSA modulus (base64url)
+	E   string `json:"e,omitempty"`   // RSA exponent (base64url)
+	Crv string `json:"crv,omitempty"` // OKP curve ("Ed25519")
+	X   string `json:"x,omitempty"`   // OKP public key (base64url)
 }
 
 // NewOAuth2Validator creates a new OAuth2 token validator.
@@ -246,7 +249,8 @@ func (v *OAuth2Validator) ValidateToken(token string) (*Claims, error) {
 
 	// Verify signature
 	if v.config.JWKSURL != "" {
-		if err := v.verifySignature(parts[0]+"."+parts[1], parts[2], kid); err != nil {
+		alg, _ := headerMap["alg"].(string)
+		if err := v.verifySignature(parts[0]+"."+parts[1], parts[2], kid, alg); err != nil {
 			return nil, err
 		}
 	}
@@ -254,8 +258,10 @@ func (v *OAuth2Validator) ValidateToken(token string) (*Claims, error) {
 	return &claims, nil
 }
 
-// verifySignature verifies the JWT signature using JWKS.
-func (v *OAuth2Validator) verifySignature(signingInput, signature, kid string) error {
+// verifySignature verifies the JWT signature using JWKS. Supports RS256 (RSA)
+// and EdDSA (Ed25519); the algorithm is selected by the JWT header `alg` and
+// the JWK `kty` (RSA → RS256, OKP → EdDSA).
+func (v *OAuth2Validator) verifySignature(signingInput, signature, kid, alg string) error {
 	// Get JWKS (with caching)
 	jwks, err := v.getJWKS()
 	if err != nil {
@@ -280,15 +286,25 @@ func (v *OAuth2Validator) verifySignature(signingInput, signature, kid string) e
 		return fmt.Errorf("%w: invalid signature encoding", ErrInvalidSignature)
 	}
 
-	// Build RSA public key
-	pubKey, err := jwkToRSAPublicKey(key)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
-	}
-
-	// Verify RS256 signature
-	if err := verifyRS256([]byte(signingInput), sig, pubKey); err != nil {
-		return ErrInvalidSignature
+	switch {
+	case alg == "EdDSA" || key.Kty == "OKP":
+		pubKey, err := jwkToEd25519PublicKey(key)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
+		}
+		if !ed25519.Verify(pubKey, []byte(signingInput), sig) {
+			return ErrInvalidSignature
+		}
+	case alg == "RS256" || key.Kty == "RSA":
+		pubKey, err := jwkToRSAPublicKey(key)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidSignature, err)
+		}
+		if err := verifyRS256([]byte(signingInput), sig, pubKey); err != nil {
+			return ErrInvalidSignature
+		}
+	default:
+		return fmt.Errorf("%w: unsupported alg %q / kty %q", ErrInvalidSignature, alg, key.Kty)
 	}
 
 	return nil
@@ -456,4 +472,23 @@ func jwkToRSAPublicKey(jwk *JWK) (*rsa.PublicKey, error) {
 func verifyRS256(message, signature []byte, pubKey *rsa.PublicKey) error {
 	hash := sha256.Sum256(message)
 	return rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], signature)
+}
+
+// jwkToEd25519PublicKey converts an OKP/Ed25519 JWK (RFC 8037) to an
+// ed25519.PublicKey. The `x` field carries the 32-byte public key, base64url-encoded.
+func jwkToEd25519PublicKey(jwk *JWK) (ed25519.PublicKey, error) {
+	if jwk.Kty != "OKP" {
+		return nil, fmt.Errorf("unsupported key type for Ed25519: %s", jwk.Kty)
+	}
+	if jwk.Crv != "" && jwk.Crv != "Ed25519" {
+		return nil, fmt.Errorf("unsupported OKP curve: %s", jwk.Crv)
+	}
+	xBytes, err := base64URLDecode(jwk.X)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Ed25519 public key: %w", err)
+	}
+	if len(xBytes) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("invalid Ed25519 public key length: %d", len(xBytes))
+	}
+	return ed25519.PublicKey(xBytes), nil
 }

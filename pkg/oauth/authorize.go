@@ -36,14 +36,22 @@ type TenantLookup interface {
 	GetTenantByID(id string) (*TenantBrief, error)
 }
 
+// IdentityRegistrar persists the link (provider, subject) → tenantID so that
+// downstream JWT verifiers can resolve first-party access tokens back to a
+// billing tenant. The call is idempotent (upsert semantics).
+type IdentityRegistrar interface {
+	RegisterIdentity(provider, subject, tenantID, email string) error
+}
+
 // AuthorizeServer groups the dependencies for all three authorize sub-handlers.
 type AuthorizeServer struct {
-	store    Store
-	idp      IdentityProvider
-	tenants  TenantLookup
-	issuer   *JWTIssuer
-	verifier *JWTVerifier
-	baseURL  string // e.g. "https://msg2agent.example.com"
+	store      Store
+	idp        IdentityProvider
+	tenants    TenantLookup
+	identities IdentityRegistrar // optional; registers (issuer,sub)→tenantID on sign-in
+	issuer     *JWTIssuer
+	verifier   *JWTVerifier
+	baseURL    string // e.g. "https://msg2agent.example.com"
 }
 
 // NewAuthorizeServer creates an AuthorizeServer wiring all dependencies.
@@ -63,6 +71,14 @@ func NewAuthorizeServer(
 		verifier: verifier,
 		baseURL:  strings.TrimRight(baseURL, "/"),
 	}
+}
+
+// WithIdentityRegistrar attaches an IdentityRegistrar so that each successful
+// Google sign-in writes a (issuer, tenantID) → tenantID row, allowing the
+// billing OAuth2Middleware to resolve access tokens back to tenants.
+func (s *AuthorizeServer) WithIdentityRegistrar(r IdentityRegistrar) *AuthorizeServer {
+	s.identities = r
+	return s
 }
 
 // HandleAuthorize serves GET /oauth/authorize.
@@ -144,6 +160,12 @@ func (s *AuthorizeServer) HandleGoogleCallback(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		renderError(w, http.StatusForbidden, "No account found", "There's no msg2agent account for this email. Sign up at "+s.baseURL+"/pricing.")
 		return
+	}
+
+	// Register first-party identity so the billing OAuth2Middleware can resolve
+	// the access token (iss=baseURL, sub=tenantID) back to a billing.Tenant.
+	if s.identities != nil {
+		_ = s.identities.RegisterIdentity(s.baseURL, tenant.ID, tenant.ID, tenant.Email)
 	}
 
 	sessionToken, err := s.issuer.IssueSessionCookie(tenant.ID)

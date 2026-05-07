@@ -35,3 +35,13 @@ func (l *billingTenantLookup) GetTenantByID(id string) (*oauth.TenantBrief, erro
 	}
 	return &oauth.TenantBrief{ID: t.ID, Name: t.Name, Email: t.Email}, nil
 }
+
+// billingIdentityRegistrar wraps billingOAuthStore to satisfy oauth.IdentityRegistrar.
+type billingIdentityRegistrar struct{ store billingOAuthStore }
+
+// RegisterIdentity upserts an (provider, subject) → tenantID row in the billing
+// store. Errors are non-fatal (sign-in should not fail due to registration
+// failure) so callers may ignore the error if desired.
+func (r *billingIdentityRegistrar) RegisterIdentity(provider, subject, tenantID, email string) error {
+	return r.store.PutOAuthIdentity(provider, subject, tenantID, email)
+}

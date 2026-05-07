@@ -366,8 +366,10 @@ func main() {
 		}
 
 		tenantLookup := &billingTenantLookup{store: oauthCombinedStore}
+		identityReg := &billingIdentityRegistrar{store: oauthCombinedStore}
 		oauthStore := oauth.Store(oauthCombinedStore)
-		oauthAuthzSrv = oauth.NewAuthorizeServer(oauthStore, idp, tenantLookup, jwtIssuer, jwtVerifier, oauthASBaseURLStr)
+		oauthAuthzSrv = oauth.NewAuthorizeServer(oauthStore, idp, tenantLookup, jwtIssuer, jwtVerifier, oauthASBaseURLStr).
+			WithIdentityRegistrar(identityReg)
 		oauthJWKSHandler = oauth.JWKSHandler(jwkSet)
 		oauthDCRHandler = oauth.DCRHandler(oauthStore)
 		oauthTokenHandler = oauth.TokenHandler(oauthStore, jwtIssuer, oauthASBaseURLStr+"/mcp", tenantLookup)

@@ -4,7 +4,7 @@
 
 **Do not open a public issue for security vulnerabilities.**
 
-Email **security@msg2agent.io** with the following information:
+Email **security@msg2agent.xyz** with the following information:
 
 - Description of the vulnerability and its potential impact
 - Steps to reproduce or proof-of-concept

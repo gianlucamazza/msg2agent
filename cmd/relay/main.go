@@ -482,7 +482,7 @@ func main() {
 			Scopes               []string `json:"scopes_supported"`
 		}
 		m := rsMeta{
-			Resource:      "https://msg2agent.home.gianlucamazza.it/mcp",
+			Resource:      oauthASBaseURLStr + "/mcp",
 			BearerMethods: []string{"header"},
 			Scopes:        []string{"mcp:tools:read", "mcp:tools:write", "mcp:tools:destructive"},
 		}

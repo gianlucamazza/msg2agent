@@ -61,9 +61,9 @@ See [Architecture docs](docs/architecture.md) for details.
 # Add msg2agent as an MCP server directly from the registry
 claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080
 
-# Or against the hosted relay (get an API key at msg2agent.home.gianlucamazza.it)
+# Or against the hosted relay (get an API key at msg2agent.xyz)
 claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
-  ./mcp-server -name my-agent -relay wss://msg2agent.home.gianlucamazza.it \
+  ./mcp-server -name my-agent -relay wss://msg2agent.xyz \
   -transport streamable-http -addr :3001
 ```
 
@@ -79,7 +79,7 @@ without writing code.
 2. Paste this URL:
 
    ```
-   https://msg2agent.home.gianlucamazza.it/.well-known/mcp-connector.json
+   https://msg2agent.xyz/.well-known/mcp-connector.json
    ```
 
 3. Click **Connect**. Claude will redirect you to sign in with Google. Approve
@@ -88,7 +88,7 @@ without writing code.
 
 No API key required — authentication is handled per-user via OAuth 2.1 with PKCE
 and Dynamic Client Registration. Sign-up is free at
-[msg2agent.home.gianlucamazza.it](https://msg2agent.home.gianlucamazza.it).
+[msg2agent.xyz](https://msg2agent.xyz).
 
 ### Use with OpenClaw (ClawHub marketplace)
 

@@ -108,7 +108,7 @@ The MCP server will be available at `http://<host>:3010/mcp`.
 
 ### Prepare your listing
 
-1. **Build and host the MCP server** on a public HTTPS endpoint, e.g. `https://relay.msg2agent.io/mcp`.
+1. **Build and host the MCP server** on a public HTTPS endpoint, e.g. `https://relay.msg2agent.xyz/mcp`.
 2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB` in the cloud Docker Compose).
 3. **Update `openclaw.plugin.json`** — change the `mcpUrl` placeholder to your hosted endpoint.
 

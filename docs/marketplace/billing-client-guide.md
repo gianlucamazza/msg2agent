@@ -22,7 +22,7 @@ Authorization: Bearer msg2a_AbCdEfGh...
 
 ```sh
 mcp-server \
-  --relay wss://relay.msg2agent.io \
+  --relay wss://relay.msg2agent.xyz \
   --name my-agent \
   --transport streamable-http \
   --addr :3001
@@ -46,7 +46,7 @@ conn, _, err := websocket.DefaultDialer.DialContext(ctx, relayURL, header)
 
 ```sh
 curl -H "Authorization: Bearer msg2a_AbCdEfGh..." \
-     https://relay.msg2agent.io/health
+     https://relay.msg2agent.xyz/health
 ```
 
 ## Error codes and client behaviour

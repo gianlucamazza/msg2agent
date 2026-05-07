@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Migrated production domain from `msg2agent.home.gianlucamazza.it` to `msg2agent.xyz`. Dashboard remains path-based at `/app/` under the apex.
+- **Breaking (DID identity)**: gateway AgentCard DID changes from `did:wba:msg2agent.home.gianlucamazza.it:agent:gateway` to `did:wba:msg2agent.xyz:agent:gateway`. Consumers of `/.well-known/agent.json` must update their peer registries.
+- Removed hardcoded domain from RFC 9728 metadata in relay and mcp-server — both now derive `resource` from `MSG2AGENT_OAUTH_AS_BASE_URL` at startup.
+
 ## [0.1.0] - 2026-05-06
 
 ### Added

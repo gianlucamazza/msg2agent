@@ -142,7 +142,7 @@ func (s *AuthorizeServer) HandleGoogleCallback(w http.ResponseWriter, r *http.Re
 
 	tenant, err := s.tenants.GetTenantByEmail(email)
 	if err != nil {
-		renderError(w, http.StatusForbidden, "No account found", "There's no msg2agent account for this email. Sign up at msg2agent.home.gianlucamazza.it/pricing.")
+		renderError(w, http.StatusForbidden, "No account found", "There's no msg2agent account for this email. Sign up at "+s.baseURL+"/pricing.")
 		return
 	}
 

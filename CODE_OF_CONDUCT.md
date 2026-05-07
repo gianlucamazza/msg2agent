@@ -24,7 +24,7 @@ Examples of unacceptable behavior:
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team at **conduct@msg2agent.io**. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported by contacting the project team at **conduct@msg2agent.xyz**. All complaints will be reviewed and investigated promptly and fairly.
 
 Project maintainers have the right and responsibility to remove, edit, or reject comments, commits, code, and other contributions that are not aligned with this Code of Conduct.
 

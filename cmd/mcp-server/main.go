@@ -409,15 +409,31 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// RFC 9728 — OAuth 2.0 Protected Resource Metadata (public, no auth).
-	// authorization_servers is empty until Phase B (OAuth 2.1 AS) ships.
-	oauthResourceMeta := []byte(`{"resource":"https://msg2agent.home.gianlucamazza.it/mcp","authorization_servers":[],"bearer_methods_supported":["header"],"scopes_supported":["mcp:tools:read","mcp:tools:write","mcp:tools:destructive"]}`)
-	serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(oauthResourceMeta)
+	{
+		type rsMeta struct {
+			Resource             string   `json:"resource"`
+			AuthorizationServers []string `json:"authorization_servers"`
+			BearerMethods        []string `json:"bearer_methods_supported"`
+			Scopes               []string `json:"scopes_supported"`
+		}
+		asBase := config.FlagOrEnv(*oauthASBaseURL, "OAUTH_AS_BASE_URL", "")
+		m := rsMeta{
+			Resource:      asBase + "/mcp",
+			BearerMethods: []string{"header"},
+			Scopes:        []string{"mcp:tools:read", "mcp:tools:write", "mcp:tools:destructive"},
+		}
+		if asBase != "" {
+			m.AuthorizationServers = []string{asBase}
+		}
+		oauthResourceMeta, _ := json.Marshal(m)
+		serveOAuthResource := func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-cache")
+			_, _ = w.Write(oauthResourceMeta)
+		}
+		mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
+		mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
 	}
-	mux.HandleFunc("/.well-known/oauth-protected-resource", serveOAuthResource)
-	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", serveOAuthResource)
 
 	// Stripe webhook is owned by the relay (POST /api/billing/webhook on the
 	// public NPM-exposed port). mcp-server is loopback-only and shares the

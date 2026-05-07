@@ -7,7 +7,7 @@
 #
 # Architecture:
 #   relay      — WS hub, LAN:8080, TLS terminated by NPM
-#                → msg2agent.home.gianlucamazza.it
+#                → msg2agent.xyz
 #   mcp-server — billing-instrumented MCP endpoint, loopback:3010
 #                → OpenClaw plugin (Claude Desktop / IDE)
 #   dashboard  — self-serve web UI, loopback:8082 (LAN only)
@@ -38,9 +38,9 @@ services:
       MSG2AGENT_LOG_LEVEL:       "info"
       MSG2AGENT_MAX_CONNECTIONS: "100"
       MSG2AGENT_MSG_RATE:        "20"
-      MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.home.gianlucamazza.it:agent:openclaw,did:wba:msg2agent.home.gianlucamazza.it:agent:gianluca-local,did:wba:msg2agent.home.gianlucamazza.it:agent:claude-desktop,did:wba:msg2agent.home.gianlucamazza.it:tenant:*"
+      MSG2AGENT_ALLOWED_DIDS:    "did:wba:msg2agent.xyz:agent:openclaw,did:wba:msg2agent.xyz:agent:gianluca-local,did:wba:msg2agent.xyz:agent:claude-desktop,did:wba:msg2agent.xyz:tenant:*"
       MSG2AGENT_BILLING_DB:      "/billing/billing.db"   # shared with mcp-server; relay owns Stripe webhook
-      MSG2AGENT_OAUTH_AS_BASE_URL:  "https://msg2agent.home.gianlucamazza.it"
+      MSG2AGENT_OAUTH_AS_BASE_URL:  "https://msg2agent.xyz"
       MSG2AGENT_OAUTH_SIGNING_KEY:  "/billing/oauth-signing-key.pem"
       # OAuth2 vars come from .env: MSG2AGENT_OAUTH2_ISSUER_URL, MSG2AGENT_OAUTH2_AUDIENCE, MSG2AGENT_OAUTH2_JWKS_URL
       # OAuth2 AS Google IDP from .env: MSG2AGENT_OAUTH_GOOGLE_CLIENT_ID, MSG2AGENT_OAUTH_GOOGLE_CLIENT_SECRET
@@ -85,12 +85,12 @@ services:
       - .env
     environment:
       MSG2AGENT_NAME:                  "openclaw"
-      MSG2AGENT_DOMAIN:                "msg2agent.home.gianlucamazza.it"
+      MSG2AGENT_DOMAIN:                "msg2agent.xyz"
       MSG2AGENT_RELAY_URL:             "ws://relay:8080"
       MSG2AGENT_HTTP_ADDR:             ":3001"
       MSG2AGENT_BILLING_DB:            "/data/billing.db"
       MSG2AGENT_BILLING_DRIVER:        "sqlite"
-      MSG2AGENT_OAUTH_AS_BASE_URL:     "https://msg2agent.home.gianlucamazza.it"
+      MSG2AGENT_OAUTH_AS_BASE_URL:     "https://msg2agent.xyz"
       MSG2AGENT_OAUTH_SIGNING_KEY:     "/data/oauth-signing-key.pem"
       BILLING_QUOTA_WARN_RATIO:        "0.8"   # bare key — pkg/billing reads directly
       # OAuth2 + Stripe keys come from .env (STRIPE_*, MSG2AGENT_OAUTH2_*)
@@ -127,7 +127,7 @@ services:
     image: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
     container_name: msg2agent-dashboard
     ports:
-      - "192.168.1.103:8082:8082"   # LAN only — NPM proxies app.msg2agent.home.gianlucamazza.it
+      - "192.168.1.103:8082:8082"   # LAN only — NPM proxies /app and /api/dashboard under msg2agent.xyz
     env_file:
       - .env
     environment:

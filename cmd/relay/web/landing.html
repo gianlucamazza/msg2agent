@@ -8,12 +8,12 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/logo-180.png">
   <meta property="og:title" content="msg2agent — Trustless Agent-to-Agent Communication">
-  <meta property="og:image" content="https://msg2agent.home.gianlucamazza.it/logo-512.png">
+  <meta property="og:image" content="https://msg2agent.xyz/logo-512.png">
   <meta property="og:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="msg2agent — Trustless Agent-to-Agent Communication">
   <meta name="twitter:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
-  <meta name="twitter:image" content="https://msg2agent.home.gianlucamazza.it/logo-512.png">
+  <meta name="twitter:image" content="https://msg2agent.xyz/logo-512.png">
 </head>
 <body>
 
@@ -42,7 +42,7 @@
     <code>claude mcp add msg2agent \
   -e MSG2AGENT_API_KEY=your_key \
   -- ./mcp-server -transport streamable-http \
-       -relay wss://msg2agent.home.gianlucamazza.it</code>
+       -relay wss://msg2agent.xyz</code>
   </div>
 
   <p class="section-title">Or add msg2agent as a Claude connector</p>
@@ -51,7 +51,7 @@
       <h3>Custom Connector — works today</h3>
       <p>In Claude <strong>Settings → Connectors → Add Custom</strong>, paste this URL:</p>
       <div class="code-block is-flush">
-        <code>https://msg2agent.home.gianlucamazza.it/.well-known/mcp-connector.json</code>
+        <code>https://msg2agent.xyz/.well-known/mcp-connector.json</code>
       </div>
       <p class="muted-small">Authenticates with OAuth 2.1 + PKCE. No API key needed.</p>
     </div>

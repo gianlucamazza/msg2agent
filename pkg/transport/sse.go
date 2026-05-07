@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -171,20 +172,18 @@ func (c *SSEClient) ReceiveEvent(ctx context.Context) (*SSEEvent, error) {
 		}
 
 		// Parse field
-		if bytes.HasPrefix(line, []byte("data:")) {
-			data := bytes.TrimPrefix(line, []byte("data:"))
-			data = bytes.TrimPrefix(data, []byte(" "))
+		if after, ok := bytes.CutPrefix(line, []byte("data:")); ok {
+			after = bytes.TrimPrefix(after, []byte(" "))
 			if dataBuffer.Len() > 0 {
 				dataBuffer.WriteByte('\n')
 			}
-			dataBuffer.Write(data)
-		} else if bytes.HasPrefix(line, []byte("event:")) {
-			event.Event = string(bytes.TrimSpace(bytes.TrimPrefix(line, []byte("event:"))))
-		} else if bytes.HasPrefix(line, []byte("id:")) {
-			event.ID = string(bytes.TrimSpace(bytes.TrimPrefix(line, []byte("id:"))))
-		} else if bytes.HasPrefix(line, []byte("retry:")) {
-			retryStr := string(bytes.TrimSpace(bytes.TrimPrefix(line, []byte("retry:"))))
-			event.Retry = atoi(retryStr)
+			dataBuffer.Write(after)
+		} else if after, ok := bytes.CutPrefix(line, []byte("event:")); ok {
+			event.Event = string(bytes.TrimSpace(after))
+		} else if after, ok := bytes.CutPrefix(line, []byte("id:")); ok {
+			event.ID = string(bytes.TrimSpace(after))
+		} else if after, ok := bytes.CutPrefix(line, []byte("retry:")); ok {
+			event.Retry = atoi(string(bytes.TrimSpace(after)))
 		}
 		// Ignore comments (lines starting with :)
 	}
@@ -253,8 +252,7 @@ func (s *SSEWriter) WriteEvent(event *SSEEvent) error {
 	}
 
 	// Write data lines
-	lines := bytes.Split(event.Data, []byte("\n"))
-	for _, line := range lines {
+	for line := range bytes.SplitSeq(event.Data, []byte("\n")) {
 		fmt.Fprintf(&buf, "data: %s\n", line)
 	}
 
@@ -318,7 +316,11 @@ func (s *SSEServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if s.handler != nil {
-		_ = s.handler(ctx, writer, r) // Handler errors are not propagated in SSE
+		if err := s.handler(ctx, writer, r); err != nil {
+			// After SSE headers are flushed we can't change the HTTP status,
+			// so log at debug level for diagnostics.
+			slog.Default().Debug("sse handler error", "remote", r.RemoteAddr, "error", err)
+		}
 	} else {
 		// Default: keep connection open until client disconnects
 		<-ctx.Done()

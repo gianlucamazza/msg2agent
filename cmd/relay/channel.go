@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -543,6 +542,3 @@ func (c *Client) handleSenderKeyDistribute(req *protocol.JSONRPCRequest) {
 
 	c.sendResult(req.ID, map[string]string{"status": "distributed"})
 }
-
-// Placeholder for JSON import usage check
-var _ = json.Marshal

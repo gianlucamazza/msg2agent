@@ -22,6 +22,12 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/security"
 )
 
+const (
+	queueCleanupInterval = time.Hour
+	stopGraceTimeout     = 5 * time.Second
+	wsSendBufferSize     = 256
+)
+
 // RelayHub manages connections between agents.
 type RelayHub struct {
 	config      RelayConfig
@@ -96,7 +102,7 @@ func NewRelayHubWithStore(config RelayConfig, store registry.Store, queueStore q
 
 // queueCleanupLoop periodically cleans up expired messages.
 func (h *RelayHub) queueCleanupLoop() {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(queueCleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -145,7 +151,7 @@ func (h *RelayHub) Stop() {
 		select {
 		case <-done:
 			h.logger.Info("all goroutines stopped")
-		case <-time.After(5 * time.Second):
+		case <-time.After(stopGraceTimeout):
 			h.logger.Warn("goroutine shutdown timeout")
 		}
 
@@ -407,7 +413,7 @@ func (h *RelayHub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		TenantID:        tenantID,
 		logger:          clientLogger,
 		Conn:            conn,
-		SendCh:          make(chan []byte, 256),
+		SendCh:          make(chan []byte, wsSendBufferSize),
 		hub:             h,
 		msgLimiter:      messaging.NewRateLimiter(h.config.MessageRateLimit, h.config.MessageBurstSize),
 		registerLimiter: messaging.NewRateLimiter(h.config.RegisterRateLimit, 2),

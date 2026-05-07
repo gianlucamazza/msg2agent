@@ -1182,6 +1182,7 @@ func main() {
 
 	// A2A AgentCard — served at /.well-known/agent.json (public, no auth)
 	agentCardPath := flag.String("agent-card", "", "Path to agent card JSON file to serve at /.well-known/agent.json")
+	connectorManifestPath := flag.String("connector-manifest", "", "Path to connector manifest JSON to serve at /.well-known/mcp-connector.json")
 
 	// Self-service signup (optional; requires billing store)
 	enableSignup := flag.Bool("enable-signup", false, "Enable self-service tenant signup endpoint POST /api/tenants (requires --billing-db)")
@@ -1620,6 +1621,21 @@ func main() {
 			_, _ = w.Write(data)
 		})
 		logger.Info("agent card endpoint enabled", "path", "/.well-known/agent.json", "file", *agentCardPath)
+	}
+
+	// Connector manifest — Anthropic Connector Directory discovery
+	if *connectorManifestPath != "" {
+		manifestBytes, err := os.ReadFile(*connectorManifestPath)
+		if err != nil {
+			logger.Warn("connector manifest not found, endpoint disabled", "file", *connectorManifestPath, "err", err)
+		} else {
+			mux.HandleFunc("/.well-known/mcp-connector.json", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Cache-Control", "public, max-age=300")
+				_, _ = w.Write(manifestBytes)
+			})
+			logger.Info("connector manifest endpoint enabled", "path", "/.well-known/mcp-connector.json", "file", *connectorManifestPath)
+		}
 	}
 
 	// Stripe billing endpoints (opt-in; requires STRIPE_SECRET_KEY env var)

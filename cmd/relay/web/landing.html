@@ -115,6 +115,24 @@
        -relay wss://msg2agent.home.gianlucamazza.it</code>
   </div>
 
+  <p class="section-title">Or add msg2agent as a Claude connector</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:700px;margin:0 auto 2rem;padding:0 1rem;">
+    <div class="feature-card" style="display:flex;flex-direction:column;gap:0.75rem;">
+      <h3>Custom Connector — works today</h3>
+      <p>In Claude <strong>Settings → Connectors → Add Custom</strong>, paste this URL:</p>
+      <div class="code-block" style="margin:0;">
+        <code>https://msg2agent.home.gianlucamazza.it/.well-known/mcp-connector.json</code>
+      </div>
+      <p style="font-size:0.8rem;color:var(--muted);">Authenticates with OAuth 2.1 + PKCE. No API key needed.</p>
+    </div>
+    <div class="feature-card" style="display:flex;flex-direction:column;gap:0.75rem;">
+      <h3>Connector Directory</h3>
+      <p>One-click install once Anthropic approves the public listing.</p>
+      <a href="https://claude.ai/settings/integrations" target="_blank" class="btn-primary" style="display:block;text-align:center;margin-top:auto;">Add to Claude</a>
+      <p style="font-size:0.8rem;color:var(--muted);">Pending directory approval — custom connector works in the meantime.</p>
+    </div>
+  </div>
+
   <p class="section-title">Why msg2agent</p>
   <div class="features">
     <div class="feature-card">

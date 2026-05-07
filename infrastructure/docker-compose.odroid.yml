@@ -26,7 +26,7 @@ services:
     container_name: msg2agent-relay
     # Override CMD to enable signup endpoint and AgentCard discovery.
     # All other config is picked up from MSG2AGENT_* env vars.
-    command: ["--enable-signup", "--agent-card", "/etc/msg2agent/agentcard.json"]
+    command: ["--enable-signup", "--agent-card", "/etc/msg2agent/agentcard.json", "--connector-manifest", "/etc/msg2agent/connector-manifest.json"]
     ports:
       - "192.168.1.103:8080:8080"   # LAN only — NPM fa proxy pubblico
     env_file:
@@ -49,6 +49,7 @@ services:
       - relay-data:/data
       - billing-data:/billing   # shared SQLite billing DB (WAL mode handles concurrent access)
       - ./agentcard.json:/etc/msg2agent/agentcard.json:ro
+      - ./connector-manifest.json:/etc/msg2agent/connector-manifest.json:ro
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s

@@ -146,6 +146,7 @@ steps:
       - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
       - cp /drone/src/infrastructure/docker-compose.odroid.yml /opt/services/msg2agent/docker-compose.yml
       - cp /drone/src/infrastructure/agentcard-msg2agent.json /opt/services/msg2agent/agentcard.json
+      - cp /drone/src/infrastructure/connector-manifest.json /opt/services/msg2agent/connector-manifest.json
       - docker compose -f /opt/services/msg2agent/docker-compose.yml up -d --no-build --force-recreate
 
 volumes:

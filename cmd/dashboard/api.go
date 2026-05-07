@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +57,47 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+const (
+	defaultPageLimit = 100
+	maxPageLimit     = 500
+)
+
+// page wraps a paginated list response.
+type page[T any] struct {
+	Items  []T `json:"items"`
+	Total  int `json:"total"`
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+// paginate reads ?limit= and ?offset= from the request, slices items, and
+// returns a page envelope ready for JSON encoding.
+func paginate[T any](r *http.Request, items []T) page[T] {
+	limit, offset := defaultPageLimit, 0
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > maxPageLimit {
+		limit = maxPageLimit
+	}
+	if v := r.URL.Query().Get("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+	total := len(items)
+	if offset >= total {
+		return page[T]{Items: []T{}, Total: total, Limit: limit, Offset: offset}
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return page[T]{Items: items[offset:end], Total: total, Limit: limit, Offset: offset}
 }
 
 // --- GET /api/dashboard/me ---
@@ -138,7 +180,7 @@ func (app *application) handleKeys(w http.ResponseWriter, r *http.Request) {
 				KeyPrefix: prefix,
 			})
 		}
-		writeJSON(w, http.StatusOK, items)
+		writeJSON(w, http.StatusOK, paginate(r, items))
 
 	case http.MethodPost:
 		var req createKeyRequest
@@ -265,7 +307,7 @@ func (app *application) handleUsage(w http.ResponseWriter, r *http.Request) {
 			Count:  s.Count,
 		})
 	}
-	writeJSON(w, http.StatusOK, rows)
+	writeJSON(w, http.StatusOK, paginate(r, rows))
 }
 
 // --- POST /api/dashboard/checkout ---

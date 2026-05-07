@@ -97,12 +97,15 @@ func TestHandleKeys_getEmpty(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status %d, want 200", rr.Code)
 	}
-	var items []keyListItem
-	if err := json.Unmarshal(rr.Body.Bytes(), &items); err != nil {
+	var resp page[keyListItem]
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(items) != 0 {
-		t.Fatalf("expected 0 keys, got %d", len(items))
+	if resp.Total != 0 {
+		t.Fatalf("expected total=0, got %d", resp.Total)
+	}
+	if len(resp.Items) != 0 {
+		t.Fatalf("expected 0 items, got %d", len(resp.Items))
 	}
 }
 
@@ -140,15 +143,91 @@ func TestHandleKeys_createAndList(t *testing.T) {
 	if getRR.Code != http.StatusOK {
 		t.Fatalf("GET status %d, want 200", getRR.Code)
 	}
-	var items []keyListItem
-	if err := json.Unmarshal(getRR.Body.Bytes(), &items); err != nil {
+	var resp page[keyListItem]
+	if err := json.Unmarshal(getRR.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 key, got %d", len(items))
+	if resp.Total != 1 {
+		t.Fatalf("expected total=1, got %d", resp.Total)
 	}
-	if items[0].Label != "my-key" {
-		t.Fatalf("label %q, want my-key", items[0].Label)
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(resp.Items))
+	}
+	if resp.Items[0].Label != "my-key" {
+		t.Fatalf("label %q, want my-key", resp.Items[0].Label)
+	}
+}
+
+func TestHandleKeys_pagination(t *testing.T) {
+	app, store := testApp(t)
+	tenant := billing.NewTenant("Pager", "pager@example.com", billing.PlanFree)
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	// Create 3 keys directly in the store.
+	for _, label := range []string{"k1", "k2", "k3"} {
+		_, key, err := billing.GenerateAPIKey(tenant.ID, label)
+		if err != nil {
+			t.Fatalf("GenerateAPIKey(%s): %v", label, err)
+		}
+		if err := store.PutAPIKey(key); err != nil {
+			t.Fatalf("PutAPIKey: %v", err)
+		}
+	}
+
+	// First page: limit=2, offset=0 → 2 items, total=3.
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/keys?limit=2&offset=0", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleKeys(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200", rr.Code)
+	}
+	var p1 page[keyListItem]
+	if err := json.Unmarshal(rr.Body.Bytes(), &p1); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if p1.Total != 3 {
+		t.Fatalf("total=%d, want 3", p1.Total)
+	}
+	if len(p1.Items) != 2 {
+		t.Fatalf("items=%d, want 2", len(p1.Items))
+	}
+
+	// Second page: limit=2, offset=2 → 1 item, total=3.
+	req2 := httptest.NewRequest(http.MethodGet, "/api/dashboard/keys?limit=2&offset=2", nil)
+	req2 = req2.WithContext(withTenant(req2.Context(), tenant))
+	rr2 := httptest.NewRecorder()
+	app.handleKeys(rr2, req2)
+
+	var p2 page[keyListItem]
+	if err := json.Unmarshal(rr2.Body.Bytes(), &p2); err != nil {
+		t.Fatalf("decode page2: %v", err)
+	}
+	if p2.Total != 3 {
+		t.Fatalf("page2 total=%d, want 3", p2.Total)
+	}
+	if len(p2.Items) != 1 {
+		t.Fatalf("page2 items=%d, want 1", len(p2.Items))
+	}
+
+	// Beyond end: offset=10 → 0 items, total=3.
+	req3 := httptest.NewRequest(http.MethodGet, "/api/dashboard/keys?offset=10", nil)
+	req3 = req3.WithContext(withTenant(req3.Context(), tenant))
+	rr3 := httptest.NewRecorder()
+	app.handleKeys(rr3, req3)
+
+	var p3 page[keyListItem]
+	if err := json.Unmarshal(rr3.Body.Bytes(), &p3); err != nil {
+		t.Fatalf("decode page3: %v", err)
+	}
+	if p3.Total != 3 {
+		t.Fatalf("page3 total=%d, want 3", p3.Total)
+	}
+	if len(p3.Items) != 0 {
+		t.Fatalf("page3 items=%d, want 0", len(p3.Items))
 	}
 }
 

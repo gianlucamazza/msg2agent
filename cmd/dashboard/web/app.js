@@ -1,8 +1,164 @@
 // msg2agent Dashboard — vanilla JS, no build step
+//
+// OAuth 2.1 PKCE client (public, token_endpoint_auth_method=none) against the
+// msg2agent relay AS at the same origin. Dynamic client registration on first
+// load; client_id persisted in localStorage. Access/refresh tokens kept in
+// sessionStorage so a closed tab requires a fresh sign-in.
 
-const api = (path, opts = {}) =>
-  fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts })
-    .then(r => r.ok ? r.json() : r.json().then(e => Promise.reject(e)));
+const OAuth = {
+  AS: location.origin,
+  REDIRECT_URI: location.origin + '/app/',
+
+  get token()    { return sessionStorage.getItem('m2a_access_token'); },
+  set token(v)   { v ? sessionStorage.setItem('m2a_access_token', v) : sessionStorage.removeItem('m2a_access_token'); },
+  get refresh()  { return sessionStorage.getItem('m2a_refresh_token'); },
+  set refresh(v) { v ? sessionStorage.setItem('m2a_refresh_token', v) : sessionStorage.removeItem('m2a_refresh_token'); },
+  get clientId() { return localStorage.getItem('m2a_client_id'); },
+  set clientId(v){ v ? localStorage.setItem('m2a_client_id', v) : localStorage.removeItem('m2a_client_id'); },
+  get verifier() { return sessionStorage.getItem('m2a_pkce_verifier'); },
+  set verifier(v){ v ? sessionStorage.setItem('m2a_pkce_verifier', v) : sessionStorage.removeItem('m2a_pkce_verifier'); },
+  get state()    { return sessionStorage.getItem('m2a_oauth_state'); },
+  set state(v)   { v ? sessionStorage.setItem('m2a_oauth_state', v) : sessionStorage.removeItem('m2a_oauth_state'); },
+
+  b64url(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  },
+  random(len = 32) {
+    const buf = new Uint8Array(len);
+    crypto.getRandomValues(buf);
+    return this.b64url(buf);
+  },
+  async sha256(s) {
+    return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)));
+  },
+
+  async ensureClient() {
+    if (this.clientId) return this.clientId;
+    const r = await fetch(this.AS + '/oauth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_name: 'msg2agent dashboard',
+        redirect_uris: [this.REDIRECT_URI],
+        grant_types: ['authorization_code', 'refresh_token'],
+        token_endpoint_auth_method: 'none',
+      }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error('client registration failed: ' + (err.error_description || r.status));
+    }
+    const data = await r.json();
+    this.clientId = data.client_id;
+    return data.client_id;
+  },
+
+  async signIn() {
+    const clientId = await this.ensureClient();
+    const verifier = this.random(32);
+    const challenge = this.b64url(await this.sha256(verifier));
+    const state = this.random(16);
+    this.verifier = verifier;
+    this.state = state;
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: this.REDIRECT_URI,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      state,
+    });
+    location.href = this.AS + '/oauth/authorize?' + params.toString();
+  },
+
+  async handleCallback() {
+    const url = new URL(location.href);
+    const errCode = url.searchParams.get('error');
+    if (errCode) {
+      this.verifier = null; this.state = null;
+      history.replaceState(null, '', this.REDIRECT_URI);
+      throw new Error(url.searchParams.get('error_description') || errCode);
+    }
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    if (!code || !state) return false;
+    if (state !== this.state) {
+      this.verifier = null; this.state = null;
+      throw new Error('OAuth state mismatch');
+    }
+    const verifier = this.verifier;
+    const clientId = this.clientId;
+    if (!verifier || !clientId) throw new Error('OAuth session lost; sign in again');
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: this.REDIRECT_URI,
+      client_id: clientId,
+      code_verifier: verifier,
+    });
+    const r = await fetch(this.AS + '/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    this.verifier = null; this.state = null;
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      history.replaceState(null, '', this.REDIRECT_URI);
+      throw new Error('token exchange failed: ' + (err.error_description || r.status));
+    }
+    const data = await r.json();
+    this.token = data.access_token;
+    if (data.refresh_token) this.refresh = data.refresh_token;
+    history.replaceState(null, '', this.REDIRECT_URI);
+    return true;
+  },
+
+  async tryRefresh() {
+    if (!this.refresh || !this.clientId) return false;
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: this.refresh,
+      client_id: this.clientId,
+    });
+    const r = await fetch(this.AS + '/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!r.ok) {
+      this.token = null; this.refresh = null;
+      return false;
+    }
+    const data = await r.json();
+    this.token = data.access_token;
+    if (data.refresh_token) this.refresh = data.refresh_token;
+    return true;
+  },
+
+  signOut() {
+    this.token = null;
+    this.refresh = null;
+    location.href = this.REDIRECT_URI;
+  },
+};
+
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (OAuth.token) headers.Authorization = 'Bearer ' + OAuth.token;
+  let r = await fetch(path, { ...opts, headers });
+  if (r.status === 401 && await OAuth.tryRefresh()) {
+    headers.Authorization = 'Bearer ' + OAuth.token;
+    r = await fetch(path, { ...opts, headers });
+  }
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: r.statusText }));
+    return Promise.reject(err);
+  }
+  return r.status === 204 ? null : r.json();
+}
 
 function showKey(key) {
   const banner = document.createElement('div');
@@ -13,7 +169,8 @@ function showKey(key) {
   banner.querySelector('#dismiss-key').addEventListener('click', () => banner.remove());
 }
 
-function renderKeys(keys) {
+function renderKeys(payload) {
+  const keys = Array.isArray(payload) ? payload : (payload.items || []);
   const el = document.getElementById('keys-list');
   if (!keys.length) { el.innerHTML = '<p>No API keys yet.</p>'; return; }
   el.innerHTML = `<table><thead><tr>
@@ -34,7 +191,8 @@ function renderKeys(keys) {
   });
 }
 
-function renderUsage(rows) {
+function renderUsage(payload) {
+  const rows = Array.isArray(payload) ? payload : (payload.items || []);
   const el = document.getElementById('usage-chart');
   if (!rows.length) { el.innerHTML = '<p>No usage data yet.</p>'; return; }
   el.innerHTML = `<table><thead><tr><th>Period</th><th>Event</th><th>Count</th></tr></thead>
@@ -47,18 +205,39 @@ function loadKeys() {
   });
 }
 
-function showAuthGate() {
+function showAuthGate(message) {
   document.getElementById('auth-gate').hidden = false;
   document.getElementById('main-content').style.display = 'none';
+  document.getElementById('btn-signout').hidden = true;
+  if (message) {
+    const el = document.getElementById('auth-error');
+    el.textContent = message;
+    el.hidden = false;
+  }
 }
 
 async function init() {
+  document.getElementById('btn-signin').addEventListener('click', () => {
+    OAuth.signIn().catch(e => showAuthGate(e.message));
+  });
+  document.getElementById('btn-signout').addEventListener('click', () => OAuth.signOut());
+
+  // Step 1: handle OAuth callback if URL carries ?code=&state=
+  try {
+    await OAuth.handleCallback();
+  } catch (e) {
+    showAuthGate(e.message);
+    return;
+  }
+
+  // Step 2: load /me with the token (if any)
   const me = await api('/api/dashboard/me').catch(() => null);
   if (!me) {
     showAuthGate();
     return;
   }
 
+  document.getElementById('btn-signout').hidden = false;
   document.getElementById('nav-plan').textContent = me.plan;
   document.getElementById('account-info').innerHTML =
     `<p><strong>${me.name}</strong> &lt;${me.email}&gt;</p>

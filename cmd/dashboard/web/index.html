@@ -11,16 +11,17 @@
   <nav>
     <a href="/" class="logo">msg2agent</a>
     <span id="nav-plan"></span>
+    <button id="btn-signout" hidden style="margin-left:auto;">Sign Out</button>
   </nav>
 
   <div id="auth-gate" hidden>
     <div style="max-width:480px;margin:5rem auto;padding:0 1rem;text-align:center;">
-      <h2 style="font-size:1.4rem;margin-bottom:1rem;color:var(--text);text-transform:none;letter-spacing:0;">Not signed in</h2>
+      <h2 style="font-size:1.4rem;margin-bottom:1rem;color:var(--text);text-transform:none;letter-spacing:0;">Sign in</h2>
       <p style="color:var(--muted);margin-bottom:2rem;font-size:0.95rem;">
-        This dashboard requires a Bearer token from the msg2agent OAuth 2.1 flow.
-        Get your API key first, then access the dashboard via your configured client.
+        Authenticate with Google to access your msg2agent dashboard.
       </p>
-      <a href="/pricing" class="btn-primary">Get API Key</a>
+      <button id="btn-signin" class="btn-primary">Sign in with Google</button>
+      <p id="auth-error" hidden style="color:#dc2626;margin-top:1.5rem;font-size:0.9rem;"></p>
     </div>
   </div>
 

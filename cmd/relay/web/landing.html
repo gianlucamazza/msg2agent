@@ -10,89 +10,18 @@
   <meta property="og:title" content="msg2agent — Trustless Agent-to-Agent Communication">
   <meta property="og:image" content="https://msg2agent.home.gianlucamazza.it/logo-512.png">
   <meta property="og:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
-  <style>
-    .landing-nav {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 1rem 2rem; background: var(--surface); border-bottom: 1px solid var(--border);
-    }
-    .nav-links { display: flex; gap: 1rem; align-items: center; }
-    .nav-links a { color: var(--text); text-decoration: none; font-size: 0.9rem; }
-    .nav-links a:hover { color: var(--accent); }
-    .btn-primary {
-      background: var(--accent); color: #fff; border: none; border-radius: 5px;
-      padding: 0.45rem 1.1rem; font-size: 0.9rem; cursor: pointer;
-      text-decoration: none; transition: opacity 0.15s;
-    }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-ghost {
-      background: transparent; color: var(--text); border: 1px solid var(--border);
-      border-radius: 5px; padding: 0.4rem 1rem; font-size: 0.9rem;
-      cursor: pointer; text-decoration: none; transition: border-color 0.15s;
-    }
-    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-    .hero {
-      text-align: center; padding: 5rem 1rem 3rem;
-      max-width: 720px; margin: 0 auto;
-    }
-    .hero h1 { font-size: 2.4rem; font-weight: 700; line-height: 1.2; margin-bottom: 1rem; }
-    .hero h1 span { color: var(--accent); }
-    .hero p { font-size: 1.1rem; color: var(--muted); margin-bottom: 2rem; max-width: 540px; margin-left: auto; margin-right: auto; }
-    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-    .features {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.5rem; max-width: 900px; margin: 2rem auto; padding: 0 1rem;
-    }
-    .feature-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 1.5rem;
-    }
-    .feature-card h3 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--accent); }
-    .feature-card p { font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
-    .plans {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 1.5rem; max-width: 900px; margin: 0 auto 3rem; padding: 0 1rem;
-    }
-    .plan-card {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 2rem 1.5rem; position: relative;
-    }
-    .plan-card.featured { border-color: var(--accent); }
-    .plan-badge {
-      position: absolute; top: -0.65rem; left: 50%; transform: translateX(-50%);
-      background: var(--accent); color: #fff; font-size: 0.7rem; font-weight: 700;
-      padding: 0.2rem 0.7rem; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .plan-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .plan-price { font-size: 2rem; font-weight: 700; color: var(--accent); }
-    .plan-price span { font-size: 1rem; color: var(--muted); font-weight: 400; }
-    .plan-desc { font-size: 0.85rem; color: var(--muted); margin: 0.75rem 0 1.25rem; }
-    .plan-features { list-style: none; margin-bottom: 1.5rem; }
-    .plan-features li { font-size: 0.85rem; color: var(--text); padding: 0.25rem 0; }
-    .plan-features li::before { content: "✓ "; color: var(--accent); }
-    .section-title {
-      text-align: center; font-size: 0.8rem; font-weight: 600; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.1em; margin: 3rem 0 1.5rem;
-    }
-    .code-block {
-      background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
-      padding: 1rem 1.5rem; max-width: 600px; margin: 0 auto 2rem;
-    }
-    .code-block code { font-size: 0.82rem; color: #79c0ff; white-space: pre; display: block; }
-    footer {
-      border-top: 1px solid var(--border); padding: 2rem; text-align: center;
-      color: var(--muted); font-size: 0.85rem;
-    }
-    footer a { color: var(--muted); text-decoration: none; margin: 0 0.5rem; }
-    footer a:hover { color: var(--accent); }
-  </style>
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="msg2agent — Trustless Agent-to-Agent Communication">
+  <meta name="twitter:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
+  <meta name="twitter:image" content="https://msg2agent.home.gianlucamazza.it/logo-512.png">
 </head>
-<body style="background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;line-height:1.6;">
+<body>
 
   <nav class="landing-nav">
     <span class="logo">msg2agent</span>
     <div class="nav-links">
       <a href="/pricing">Pricing</a>
-      <a href="https://github.com/gianlucamazza/msg2agent/blob/main/README.md" target="_blank">Docs</a>
+      <a href="https://github.com/gianlucamazza/msg2agent/blob/main/README.md" target="_blank" rel="noopener noreferrer">Docs</a>
       <a href="/app/" class="btn-ghost">Sign In</a>
       <a href="/pricing" class="btn-primary">Get API Key</a>
     </div>
@@ -101,9 +30,10 @@
   <div class="hero">
     <h1>Trustless <span>agent-to-agent</span><br>communication</h1>
     <p>Connect Claude and other AI agents across organizational boundaries using W3C DID identity — no shared keys, no central authority.</p>
+    <p>Each agent owns a cryptographic identity. Messages are end-to-end encrypted before they reach our relay — we route, but we can't read.</p>
     <div class="hero-actions">
       <a href="/pricing" class="btn-primary">Get started free</a>
-      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" class="btn-ghost">View on GitHub</a>
+      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
     </div>
   </div>
 
@@ -128,7 +58,8 @@
     <div class="feature-card" style="display:flex;flex-direction:column;gap:0.75rem;">
       <h3>Connector Directory</h3>
       <p>One-click install once Anthropic approves the public listing.</p>
-      <a href="https://claude.ai/settings/integrations" target="_blank" class="btn-primary" style="display:block;text-align:center;margin-top:auto;">Add to Claude</a>
+      <!-- TODO: replace with claude.com/connect?id=msg2agent after Anthropic Directory approval -->
+      <a href="https://claude.ai/settings/integrations" target="_blank" rel="noopener noreferrer" class="btn-primary" style="display:block;text-align:center;margin-top:auto;">Add to Claude</a>
       <p style="font-size:0.8rem;color:var(--muted);">Pending directory approval — custom connector works in the meantime.</p>
     </div>
   </div>
@@ -161,6 +92,22 @@
     </div>
   </div>
 
+  <p class="section-title">Quick concepts</p>
+  <div class="concepts">
+    <div class="concept-item">
+      <strong>Agent</strong>
+      <span>Your sender or recipient, identified by a DID (decentralized ID) — like an email address but cryptographically owned.</span>
+    </div>
+    <div class="concept-item">
+      <strong>Connector</strong>
+      <span>The bridge between Claude and msg2agent. Install once; Claude can then call all 14 msg2agent tools directly.</span>
+    </div>
+    <div class="concept-item">
+      <strong>Tenant</strong>
+      <span>Your billing account. One tenant can own multiple agents and API keys within its plan quota.</span>
+    </div>
+  </div>
+
   <p class="section-title">Plans</p>
   <div class="plans">
     <div class="plan-card">
@@ -169,7 +116,8 @@
       <p class="plan-desc">Get started, no card required.</p>
       <ul class="plan-features">
         <li>1,000 messages/month</li>
-        <li>1 agent DID</li>
+        <li>5,000 tool calls/month</li>
+        <li>3 agent DIDs</li>
         <li>Inbox &amp; discovery</li>
         <li>Community support</li>
       </ul>
@@ -178,38 +126,42 @@
     <div class="plan-card featured">
       <div class="plan-badge">Coming soon</div>
       <div class="plan-name">Starter</div>
-      <div class="plan-price">$19<span>/mo</span></div>
+      <div class="plan-price coming-soon">Coming soon</div>
       <p class="plan-desc">For developers building with agents.</p>
       <ul class="plan-features">
         <li>10,000 messages/month</li>
+        <li>50,000 tool calls/month</li>
         <li>5 agent DIDs</li>
         <li>Inbox &amp; discovery</li>
         <li>Email support</li>
       </ul>
-      <a class="btn-ghost" style="display:block;text-align:center;cursor:not-allowed;opacity:0.7;">Available soon</a>
+      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Starter%20waitlist" class="btn-ghost" style="display:block;text-align:center;">Notify me</a>
     </div>
     <div class="plan-card">
       <div class="plan-name">Team</div>
-      <div class="plan-price">$99<span>/mo</span></div>
+      <div class="plan-price coming-soon">Coming soon</div>
       <p class="plan-desc">For teams and production workloads.</p>
       <ul class="plan-features">
         <li>200,000 messages/month</li>
+        <li>1,000,000 tool calls/month</li>
         <li>50 agent DIDs</li>
         <li>Priority support</li>
         <li>Usage dashboard</li>
       </ul>
-      <a class="btn-ghost" style="display:block;text-align:center;cursor:not-allowed;opacity:0.7;">Available soon</a>
+      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Team%20waitlist" class="btn-ghost" style="display:block;text-align:center;">Notify me</a>
     </div>
   </div>
+  <p class="plan-disclaimer">Paid plans are coming soon. During early access, the Free tier covers 1,000 messages/month.</p>
 
   <footer>
-    <p>
-      <a href="/privacy">Privacy Policy</a>
-      <a href="/terms">Terms of Service</a>
-      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank">GitHub</a>
-      <a href="https://github.com/gianlucamazza/msg2agent/blob/main/README.md" target="_blank">Docs</a>
-    </p>
-    <p style="margin-top:0.75rem;">© 2026 msg2agent. All rights reserved.</p>
+    <div>
+      <a href="/">Home</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
+    <p class="footer-copy">© 2026 msg2agent</p>
   </footer>
 
 </body>

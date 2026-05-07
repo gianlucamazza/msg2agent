@@ -9,22 +9,42 @@
 </head>
 <body>
   <nav>
-    <a href="/" class="logo" style="text-decoration:none;color:inherit;">msg2agent</a>
+    <a href="/" class="logo">msg2agent</a>
     <span id="nav-plan"></span>
   </nav>
-  <main>
+
+  <div id="auth-gate" hidden>
+    <div style="max-width:480px;margin:5rem auto;padding:0 1rem;text-align:center;">
+      <h2 style="font-size:1.4rem;margin-bottom:1rem;color:var(--text);text-transform:none;letter-spacing:0;">Not signed in</h2>
+      <p style="color:var(--muted);margin-bottom:2rem;font-size:0.95rem;">
+        This dashboard requires a Bearer token from the msg2agent OAuth 2.1 flow.
+        Get your API key first, then access the dashboard via your configured client.
+      </p>
+      <a href="/pricing" class="btn-primary">Get API Key</a>
+    </div>
+  </div>
+
+  <main id="main-content">
     <section id="section-account">
       <h2>Account</h2>
-      <div id="account-info">Loading...</div>
+      <div id="account-info">
+        <div class="skeleton" style="height:1rem;width:60%;margin-bottom:0.5rem;"></div>
+        <div class="skeleton" style="height:1rem;width:40%;"></div>
+      </div>
     </section>
     <section id="section-keys">
       <h2>API Keys</h2>
       <button id="btn-create-key">Create Key</button>
-      <div id="keys-list"></div>
+      <div id="keys-list">
+        <div class="skeleton" style="height:2.5rem;margin-top:1rem;"></div>
+      </div>
     </section>
     <section id="section-usage">
       <h2>Usage</h2>
-      <div id="usage-chart"></div>
+      <div id="usage-chart">
+        <div class="skeleton" style="height:2.5rem;margin-bottom:0.5rem;"></div>
+        <div class="skeleton" style="height:2.5rem;"></div>
+      </div>
     </section>
     <section id="section-billing">
       <h2>Billing</h2>

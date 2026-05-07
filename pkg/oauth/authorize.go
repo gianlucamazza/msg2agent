@@ -95,7 +95,7 @@ func (s *AuthorizeServer) HandleAuthorize(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 		return
 	}
 	if err := validateRedirectURI(redirectURI); err != nil {
@@ -113,7 +113,7 @@ func (s *AuthorizeServer) HandleAuthorize(w http.ResponseWriter, r *http.Request
 		// No valid session — start provider login. Encode OAuth params into the IDP state.
 		idpState, err2 := s.encodeIDPState(clientID, redirectURI, codeChallenge, codeChallengeMethod, scope, state)
 		if err2 != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 			return
 		}
 		http.Redirect(w, r, s.idp.AuthURL(idpState), http.StatusFound)
@@ -129,25 +129,25 @@ func (s *AuthorizeServer) HandleGoogleCallback(w http.ResponseWriter, r *http.Re
 	code := r.URL.Query().Get("code")
 	idpState := r.URL.Query().Get("state")
 	if code == "" || idpState == "" {
-		http.Error(w, "missing code or state", http.StatusBadRequest)
+		renderError(w, http.StatusBadRequest, "Sign-in failed", "The sign-in request was incomplete. Please start over.")
 		return
 	}
 
 	email, err := s.idp.ExchangeCode(r.Context(), code, idpState)
 	if err != nil {
-		http.Error(w, "identity provider error", http.StatusBadGateway)
+		renderError(w, http.StatusBadGateway, "Sign-in failed", "Google rejected the sign-in. Please try again.")
 		return
 	}
 
 	tenant, err := s.tenants.GetTenantByEmail(email)
 	if err != nil {
-		http.Error(w, "no account found for this email", http.StatusForbidden)
+		renderError(w, http.StatusForbidden, "No account found", "There's no msg2agent account for this email. Sign up at msg2agent.home.gianlucamazza.it/pricing.")
 		return
 	}
 
 	sessionToken, err := s.issuer.IssueSessionCookie(tenant.ID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -163,7 +163,7 @@ func (s *AuthorizeServer) HandleGoogleCallback(w http.ResponseWriter, r *http.Re
 	// Decode the original OAuth params from the IDP state and redirect back to authorize.
 	orig, err := s.decodeIDPState(idpState)
 	if err != nil {
-		http.Error(w, "invalid state", http.StatusBadRequest)
+		renderError(w, http.StatusBadRequest, "Sign-in expired", "Your sign-in attempt expired or the state was invalid. Please start over.")
 		return
 	}
 	q := url.Values{}
@@ -184,18 +184,18 @@ func (s *AuthorizeServer) HandleGoogleCallback(w http.ResponseWriter, r *http.Re
 // HandleConfirm serves POST /oauth/authorize/confirm.
 func (s *AuthorizeServer) HandleConfirm(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		renderError(w, http.StatusMethodNotAllowed, "Method not allowed", "This endpoint only accepts POST requests.")
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		renderError(w, http.StatusBadRequest, "Bad request", "Could not parse the form data. Please try again.")
 		return
 	}
 
 	sessionToken := r.FormValue("session")
 	tenantID, err := s.verifier.ValidateSessionCookie(sessionToken)
 	if err != nil {
-		http.Error(w, "session expired — please retry", http.StatusUnauthorized)
+		renderError(w, http.StatusUnauthorized, "Session expired", "Your consent session expired. Please start the sign-in again.")
 		return
 	}
 
@@ -214,7 +214,7 @@ func (s *AuthorizeServer) HandleConfirm(w http.ResponseWriter, r *http.Request) 
 
 	plainCode, codeHash, err := GenerateToken(32)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 		return
 	}
 
@@ -229,7 +229,7 @@ func (s *AuthorizeServer) HandleConfirm(w http.ResponseWriter, r *http.Request) 
 		ExpiresAt:           time.Now().UTC().Add(60 * time.Second),
 	}
 	if err := s.store.PutCode(code); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 		return
 	}
 
@@ -257,7 +257,7 @@ func (s *AuthorizeServer) showConsent(w http.ResponseWriter, _ *http.Request,
 ) {
 	sessionToken, err := s.issuer.IssueSessionCookie(tenantID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 		return
 	}
 

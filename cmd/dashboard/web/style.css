@@ -1,3 +1,8 @@
+/* DUPLICATE of cmd/relay/web/style.css
+   The dashboard binary embeds its own copy via go:embed.
+   Keep in sync with the relay's style.css when updating shared variables or components.
+   Dashboard-specific additions are at the bottom of this file. */
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -31,6 +36,7 @@ nav {
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.05em;
+  text-decoration: none;
 }
 
 #nav-plan {
@@ -90,5 +96,23 @@ td code { font-size: 0.85rem; color: var(--accent); }
   margin-bottom: 1rem;
   word-break: break-all;
 }
-.key-reveal code { font-size: 0.85rem; }
+.key-reveal code { font-size: 0.85rem; color: #7adb7a; }
 .key-reveal button { margin-top: 0.5rem; background: #4a4a4a; }
+
+/* ─── Dashboard-specific ─────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--accent); color: #fff; border: none; border-radius: 5px;
+  padding: 0.45rem 1.1rem; font-size: 0.9rem; cursor: pointer;
+  text-decoration: none; transition: opacity 0.15s; display: inline-block;
+}
+.btn-primary:hover { opacity: 0.85; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+.skeleton {
+  background: var(--border);
+  border-radius: 4px;
+  animation: pulse 1.5s ease-in-out infinite;
+}

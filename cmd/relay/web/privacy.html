@@ -6,30 +6,12 @@
   <title>Privacy Policy — msg2agent</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <style>
-    .landing-nav {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 1rem 2rem; background: var(--surface); border-bottom: 1px solid var(--border);
-    }
-    .landing-nav a { color: var(--text); text-decoration: none; font-size: 0.9rem; }
-    .landing-nav a:hover { color: var(--accent); }
-    .legal-wrap { max-width: 720px; margin: 3rem auto 4rem; padding: 0 1rem; }
-    h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.5rem; }
-    .effective { color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
-    h2 { font-size: 1rem; font-weight: 600; color: var(--muted); text-transform: uppercase;
-         letter-spacing: 0.08em; margin: 2rem 0 0.75rem; }
-    p, li { font-size: 0.9rem; color: var(--text); margin-bottom: 0.75rem; line-height: 1.7; }
-    ul { padding-left: 1.5rem; }
-    a { color: var(--accent); }
-    footer {
-      text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.8rem;
-      border-top: 1px solid var(--border);
-    }
-    footer a { color: var(--muted); text-decoration: none; margin: 0 0.4rem; }
-    footer a:hover { color: var(--accent); }
-  </style>
+  <link rel="apple-touch-icon" href="/logo-180.png">
+  <meta property="og:title" content="Privacy Policy — msg2agent">
+  <meta property="og:image" content="https://msg2agent.home.gianlucamazza.it/logo-512.png">
+  <meta property="og:description" content="Privacy policy for msg2agent, the trustless agent-to-agent communication relay.">
 </head>
-<body style="background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;line-height:1.6;">
+<body>
 
   <nav class="landing-nav">
     <a href="/" class="logo">msg2agent</a>
@@ -69,6 +51,7 @@
     <h2>5. Third-party processors</h2>
     <ul>
       <li><strong>Stripe</strong> — payment processing. Stripe's privacy policy applies to payment data.</li>
+      <li><strong>Google</strong> — identity provider for OAuth 2.1 sign-in. Google's privacy policy applies during sign-in.</li>
     </ul>
 
     <h2>6. Data retention</h2>
@@ -81,13 +64,15 @@
     We will respond within 30 days. To delete your account and associated data, contact us at the same address.</p>
 
     <h2>8. Security</h2>
-    <p>API keys are stored as bcrypt hashes. Data at rest is stored in SQLite on a home-lab server
-    in the EU. Data in transit is protected by TLS. We take reasonable precautions, but no system
-    is completely secure.</p>
+    <p>API keys are stored as bcrypt hashes. Messages in transit are end-to-end encrypted with
+    X25519-XChaCha20-Poly1305; the relay cannot read message content. Data at rest is stored
+    in SQLite on a home-lab server in the EU. Connections use TLS. We take reasonable precautions,
+    but no system is completely secure.</p>
 
     <h2>9. Cookies</h2>
-    <p>We do not use tracking cookies. The dashboard uses no cookies; authentication is handled
-    via Bearer tokens in API request headers.</p>
+    <p>We use one short-lived session cookie (<code>m2a_authz_session</code>) only during the
+    OAuth 2.1 consent flow at <code>/oauth/authorize</code>. It expires when the consent decision
+    is recorded. The API authenticates via Bearer JWT, not cookies. No tracking or analytics cookies.</p>
 
     <h2>10. Changes</h2>
     <p>We may update this policy. The effective date at the top will reflect the last change.
@@ -98,9 +83,14 @@
   </div>
 
   <footer>
-    <a href="/privacy">Privacy</a>
-    <a href="/terms">Terms</a>
-    <a href="/">Home</a>
+    <div>
+      <a href="/">Home</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
+    <p class="footer-copy">© 2026 msg2agent</p>
   </footer>
 
 </body>

@@ -8,8 +8,9 @@ function showKey(key) {
   const banner = document.createElement('div');
   banner.className = 'key-reveal';
   banner.innerHTML = `<strong>Copy your key — it will not be shown again:</strong><br><code>${key}</code>
-    <button onclick="this.parentElement.remove()">Dismiss</button>`;
+    <button id="dismiss-key">Dismiss</button>`;
   document.getElementById('section-keys').prepend(banner);
+  banner.querySelector('#dismiss-key').addEventListener('click', () => banner.remove());
 }
 
 function renderKeys(keys) {
@@ -46,28 +47,31 @@ function loadKeys() {
   });
 }
 
-async function init() {
-  // Load account info.
-  api('/api/dashboard/me').then(me => {
-    document.getElementById('nav-plan').textContent = me.plan;
-    document.getElementById('account-info').innerHTML =
-      `<p><strong>${me.name}</strong> &lt;${me.email}&gt;</p>
-       <p>Plan: <strong>${me.plan}</strong> &nbsp; Billing: ${me.billing_status}</p>
-       <p>Messages/mo: ${me.quota.max_messages_per_month.toLocaleString()} &nbsp;
-          Tool calls/mo: ${me.quota.max_tool_calls_per_month.toLocaleString()}</p>`;
-  }).catch(() => {
-    document.getElementById('account-info').textContent = 'Not authenticated.';
-  });
+function showAuthGate() {
+  document.getElementById('auth-gate').hidden = false;
+  document.getElementById('main-content').style.display = 'none';
+}
 
-  // Load keys.
+async function init() {
+  const me = await api('/api/dashboard/me').catch(() => null);
+  if (!me) {
+    showAuthGate();
+    return;
+  }
+
+  document.getElementById('nav-plan').textContent = me.plan;
+  document.getElementById('account-info').innerHTML =
+    `<p><strong>${me.name}</strong> &lt;${me.email}&gt;</p>
+     <p>Plan: <strong>${me.plan}</strong> &nbsp; Billing: ${me.billing_status}</p>
+     <p>Messages/mo: ${me.quota.max_messages_per_month.toLocaleString()} &nbsp;
+        Tool calls/mo: ${me.quota.max_tool_calls_per_month.toLocaleString()}</p>`;
+
   loadKeys();
 
-  // Load usage.
   api('/api/dashboard/usage').then(renderUsage).catch(() => {
     document.getElementById('usage-chart').textContent = 'Failed to load usage.';
   });
 
-  // Create key button.
   document.getElementById('btn-create-key').addEventListener('click', () => {
     const label = prompt('Key label:', 'My Key');
     if (!label) return;
@@ -76,7 +80,6 @@ async function init() {
       .catch(e => alert('Failed to create key: ' + JSON.stringify(e)));
   });
 
-  // Upgrade buttons.
   const checkout = (plan) => {
     api('/api/dashboard/checkout', {
       method: 'POST',
@@ -87,7 +90,6 @@ async function init() {
   document.getElementById('btn-upgrade-starter').addEventListener('click', () => checkout('starter'));
   document.getElementById('btn-upgrade-team').addEventListener('click', () => checkout('team'));
 
-  // Portal button.
   document.getElementById('btn-portal').addEventListener('click', () => {
     api('/api/dashboard/portal', {
       method: 'POST',

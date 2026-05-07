@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ type application struct {
 	store      billing.Store
 	eventStore billing.EventStore
 	relayURL   string
+	domain     string
 	logger     *slog.Logger
 }
 
@@ -102,12 +104,15 @@ func paginate[T any](r *http.Request, items []T) page[T] {
 // --- GET /api/dashboard/me ---
 
 type meResponse struct {
-	ID            string              `json:"id"`
-	Name          string              `json:"name"`
-	Email         string              `json:"email"`
-	Plan          billing.Plan        `json:"plan"`
-	BillingStatus string              `json:"billing_status"`
-	Quota         billing.QuotaConfig `json:"quota"`
+	ID                  string              `json:"id"`
+	Name                string              `json:"name"`
+	Email               string              `json:"email"`
+	Plan                billing.Plan        `json:"plan"`
+	BillingStatus       string              `json:"billing_status"`
+	Quota               billing.QuotaConfig `json:"quota"`
+	DID                 string              `json:"did,omitempty"`
+	SigningPublicKey    string              `json:"signing_public_key,omitempty"`
+	EncryptionPublicKey string              `json:"encryption_public_key,omitempty"`
 }
 
 func (app *application) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -119,14 +124,25 @@ func (app *application) handleMe(w http.ResponseWriter, r *http.Request) {
 	if t == nil {
 		return
 	}
-	writeJSON(w, http.StatusOK, meResponse{
+	resp := meResponse{
 		ID:            t.ID,
 		Name:          t.Name,
 		Email:         t.Email,
 		Plan:          t.Plan,
 		BillingStatus: t.BillingStatus,
 		Quota:         t.Quota,
-	})
+	}
+	if len(t.DIDSeed) == 32 {
+		ident, err := billing.DeriveTenantIdentity(app.domain, t.ID, t.DIDSeed)
+		if err == nil {
+			resp.DID = ident.String()
+			resp.SigningPublicKey = base64.StdEncoding.EncodeToString(ident.SigningPublicKey())
+			resp.EncryptionPublicKey = base64.StdEncoding.EncodeToString(ident.EncryptionPublicKey())
+		} else {
+			app.logger.Warn("derive tenant identity", "tenant", t.ID, "error", err)
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // --- GET /api/dashboard/keys & POST /api/dashboard/keys ---

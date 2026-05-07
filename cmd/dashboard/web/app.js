@@ -329,6 +329,43 @@ function loadUsage() {
     .catch(() => { document.getElementById('usage-chart').textContent = 'Failed to load usage.'; });
 }
 
+// ── Tenant network identity ───────────────────────────────────────────────────
+
+function renderIdentity(me) {
+  const el = document.getElementById('account-identity');
+  if (!me.did) return;
+  el.hidden = false;
+  el.innerHTML = `
+    <p class="identity-title">Network identity</p>
+    <div class="identity-row">
+      <span class="identity-label">DID</span>
+      <code class="identity-code">${esc(me.did)}</code>
+      <button class="identity-copy" data-copy="${esc(me.did)}">Copy</button>
+    </div>
+    <details class="identity-keys">
+      <summary>Show public keys</summary>
+      <div class="identity-row">
+        <span class="identity-label">Signing (Ed25519)</span>
+        <code class="identity-code">${esc(me.signing_public_key || '')}</code>
+        <button class="identity-copy" data-copy="${esc(me.signing_public_key || '')}">Copy</button>
+      </div>
+      <div class="identity-row">
+        <span class="identity-label">Encryption (X25519)</span>
+        <code class="identity-code">${esc(me.encryption_public_key || '')}</code>
+        <button class="identity-copy" data-copy="${esc(me.encryption_public_key || '')}">Copy</button>
+      </div>
+    </details>`;
+  el.querySelectorAll('.identity-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = orig; }, 1500);
+      });
+    });
+  });
+}
+
 // ── Quota progress bars ───────────────────────────────────────────────────────
 
 function renderQuota(quota, usagePayload) {
@@ -431,6 +468,7 @@ async function init() {
   document.getElementById('account-info').innerHTML =
     `<p><strong>${esc(me.name)}</strong> &lt;${esc(me.email)}&gt;</p>
      <p>Plan: <strong>${esc(me.plan)}</strong> &nbsp; Billing: ${esc(me.billing_status)}</p>`;
+  renderIdentity(me);
 
   // Load keys and usage in parallel; render quota progress after both
   const [, usagePayload] = await Promise.allSettled([

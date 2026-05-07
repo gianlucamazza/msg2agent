@@ -711,6 +711,18 @@
   .consent-footer { margin-top: var(--space-5); text-align: center; font-size: var(--fs-xs); color: var(--color-muted); }
   .consent-footer a { color: var(--color-muted); text-decoration: none; margin-inline: .4rem; }
   .consent-footer a:hover { color: var(--color-accent); }
+
+  /* - Tenant identity block - */
+  .identity-title { margin-top: var(--space-5); margin-bottom: var(--space-2); font-size: var(--fs-sm); color: var(--color-muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .identity-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-1); flex-wrap: wrap; }
+  .identity-label { min-width: 10rem; font-size: var(--fs-xs); color: var(--color-muted); flex-shrink: 0; }
+  .identity-code { flex: 1; min-width: 0; overflow-x: auto; background: var(--color-code-bg); color: var(--color-code-fg); border-radius: var(--radius-xs); padding: .2rem var(--space-2); font-size: var(--fs-xs); font-family: var(--font-mono); word-break: break-all; }
+  .identity-copy { flex-shrink: 0; background: var(--color-surface-2); border: 1px solid var(--color-border); color: var(--color-text); border-radius: var(--radius-xs); padding: .2rem var(--space-2); font-size: var(--fs-xs); cursor: pointer; }
+  .identity-copy:hover { border-color: var(--color-accent); color: var(--color-accent); }
+  .identity-keys { margin-top: var(--space-2); }
+  .identity-keys summary { cursor: pointer; font-size: var(--fs-xs); color: var(--color-muted); user-select: none; }
+  .identity-keys summary:hover { color: var(--color-accent); }
+  .identity-keys[open] summary { margin-bottom: var(--space-2); }
 }
 
 /* -- utilities ---------------------------------------------------------- */

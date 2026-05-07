@@ -33,6 +33,7 @@ func main() {
 		oauth2IssuerURL = flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL")
 		oauth2Audience  = flag.String("oauth2-audience", "", "OAuth2 audience")
 		oauth2JWKSURL   = flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL")
+		domain          = flag.String("domain", "", "DID domain for tenant identity (env: DOMAIN)")
 		shutdownTimeout = flag.Duration("shutdown-timeout", 30*time.Second, "graceful shutdown timeout")
 	)
 	flag.Parse()
@@ -44,6 +45,7 @@ func main() {
 	issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "OAUTH2_ISSUER_URL", "")
 	audience := config.FlagOrEnv(*oauth2Audience, "OAUTH2_AUDIENCE", "")
 	jwksURL := config.FlagOrEnv(*oauth2JWKSURL, "OAUTH2_JWKS_URL", "")
+	domain_ := config.FlagOrEnv(*domain, "DOMAIN", "localhost")
 	autoProvision := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -94,6 +96,7 @@ func main() {
 		store:      store,
 		eventStore: eventStore,
 		relayURL:   relayURL_,
+		domain:     domain_,
 		logger:     logger,
 	}
 

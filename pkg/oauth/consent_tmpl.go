@@ -19,7 +19,7 @@ var consentTmpl = template.Must(template.New("consent").Parse(`<!DOCTYPE html>
     </div>
     <h1><span class="app-name">{{.ClientName}}</span> wants to access msg2agent</h1>
     <p class="tenant-name">Signed in as <strong>{{.TenantName}}</strong></p>
-    <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.5rem;">The application is requesting:</p>
+    <p class="consent-intro">The application is requesting:</p>
     <ul class="scope-list">
       {{range .Scopes}}<li>{{.}}</li>{{end}}
     </ul>
@@ -32,8 +32,8 @@ var consentTmpl = template.Must(template.New("consent").Parse(`<!DOCTYPE html>
       <input type="hidden" name="scope" value="{{.Scope}}">
       <input type="hidden" name="state" value="{{.State}}">
       <div class="consent-actions">
-        <button type="submit" name="action" value="allow" class="btn-primary" style="flex:1;padding:0.6rem 0;font-size:0.95rem;">Allow</button>
-        <button type="submit" name="action" value="deny"  class="btn-ghost"   style="flex:1;padding:0.6rem 0;font-size:0.95rem;">Deny</button>
+        <button type="submit" name="action" value="allow" class="btn-primary">Allow</button>
+        <button type="submit" name="action" value="deny"  class="btn-ghost">Deny</button>
       </div>
     </form>
     <div class="consent-footer">

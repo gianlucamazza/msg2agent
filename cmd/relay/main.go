@@ -29,6 +29,7 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/registry"
 	"github.com/gianlucamazza/msg2agent/pkg/security"
 	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
+	"github.com/gianlucamazza/msg2agent/pkg/webui"
 )
 
 //go:embed web
@@ -427,7 +428,11 @@ func main() {
 	mux.HandleFunc("/favicon.svg", serveAsset("favicon.svg", "image/svg+xml"))
 	mux.HandleFunc("/logo-512.png", serveAsset("logo-512.png", "image/png"))
 	mux.HandleFunc("/logo-180.png", serveAsset("logo-180.png", "image/png"))
-	mux.HandleFunc("/style.css", serveAsset("style.css", "text/css; charset=utf-8"))
+	mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(webui.CSS())
+	})
 
 	// Root: WebSocket upgrade for agents, landing page for browsers.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

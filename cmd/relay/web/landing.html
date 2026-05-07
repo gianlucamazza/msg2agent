@@ -46,21 +46,21 @@
   </div>
 
   <p class="section-title">Or add msg2agent as a Claude connector</p>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:700px;margin:0 auto 2rem;padding:0 1rem;">
-    <div class="feature-card" style="display:flex;flex-direction:column;gap:0.75rem;">
+  <div class="connector-cards">
+    <div class="feature-card">
       <h3>Custom Connector — works today</h3>
       <p>In Claude <strong>Settings → Connectors → Add Custom</strong>, paste this URL:</p>
-      <div class="code-block" style="margin:0;">
+      <div class="code-block is-flush">
         <code>https://msg2agent.home.gianlucamazza.it/.well-known/mcp-connector.json</code>
       </div>
-      <p style="font-size:0.8rem;color:var(--muted);">Authenticates with OAuth 2.1 + PKCE. No API key needed.</p>
+      <p class="muted-small">Authenticates with OAuth 2.1 + PKCE. No API key needed.</p>
     </div>
-    <div class="feature-card" style="display:flex;flex-direction:column;gap:0.75rem;">
+    <div class="feature-card">
       <h3>Connector Directory</h3>
       <p>One-click install once Anthropic approves the public listing.</p>
       <!-- TODO: replace with claude.com/connect?id=msg2agent after Anthropic Directory approval -->
-      <a href="https://claude.ai/settings/integrations" target="_blank" rel="noopener noreferrer" class="btn-primary" style="display:block;text-align:center;margin-top:auto;">Add to Claude</a>
-      <p style="font-size:0.8rem;color:var(--muted);">Pending directory approval — custom connector works in the meantime.</p>
+      <a href="https://claude.ai/settings/integrations" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">Add to Claude</a>
+      <p class="muted-small">Pending directory approval — custom connector works in the meantime.</p>
     </div>
   </div>
 
@@ -121,7 +121,7 @@
         <li>Inbox &amp; discovery</li>
         <li>Community support</li>
       </ul>
-      <a href="/pricing" class="btn-primary" style="display:block;text-align:center;">Get started</a>
+      <a href="/pricing" class="btn-primary btn-block">Get started</a>
     </div>
     <div class="plan-card featured">
       <div class="plan-badge">Coming soon</div>
@@ -135,7 +135,7 @@
         <li>Inbox &amp; discovery</li>
         <li>Email support</li>
       </ul>
-      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Starter%20waitlist" class="btn-ghost" style="display:block;text-align:center;">Notify me</a>
+      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Starter%20waitlist" class="btn-ghost btn-block">Notify me</a>
     </div>
     <div class="plan-card">
       <div class="plan-name">Team</div>
@@ -148,7 +148,7 @@
         <li>Priority support</li>
         <li>Usage dashboard</li>
       </ul>
-      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Team%20waitlist" class="btn-ghost" style="display:block;text-align:center;">Notify me</a>
+      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Team%20waitlist" class="btn-ghost btn-block">Notify me</a>
     </div>
   </div>
   <p class="plan-disclaimer">Paid plans are coming soon. During early access, the Free tier covers 1,000 messages/month.</p>

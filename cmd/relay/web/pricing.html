@@ -20,19 +20,32 @@
 
   <div class="pricing-wrap">
     <h1>Get your API key</h1>
-    <p class="subtitle">Free during early access — no credit card required. Paid plans coming soon.</p>
+    <p class="subtitle">Self-serve signup — free tier requires no credit card.</p>
 
     <div class="form-section">
       <div class="plan-tabs">
         <div class="plan-tab selected" data-plan="free">
           Free<span class="price">$0/mo</span>
         </div>
-        <div class="plan-tab" data-plan="starter" data-disabled="1" title="Coming soon">
+        {{if .PaidEnabled}}
+        <div class="plan-tab" data-plan="starter">
+          Starter<span class="price">$19/mo</span>
+        </div>
+        <div class="plan-tab" data-plan="team">
+          Team<span class="price">$99/mo</span>
+        </div>
+        {{else}}
+        <div class="plan-tab" data-plan="starter" data-disabled="1" title="Available soon">
           Starter<span class="price">Coming soon</span>
         </div>
-        <div class="plan-tab" data-plan="team" data-disabled="1" title="Coming soon">
+        <div class="plan-tab" data-plan="team" data-disabled="1" title="Available soon">
           Team<span class="price">Coming soon</span>
         </div>
+        {{end}}
+      </div>
+
+      <div class="no-account-banner" id="no-account-banner" style="display:none">
+        <p>No account found for <strong id="banner-email"></strong>. Create one below.</p>
       </div>
 
       <div>
@@ -60,6 +73,11 @@
       </div>
     </div>
 
+    <div class="enterprise-cta">
+      <strong>Enterprise</strong> — custom quotas, SLA, dedicated support.
+      <a href="mailto:sales@msg2agent.xyz?subject=Enterprise%20inquiry">Contact sales →</a>
+    </div>
+
     <footer>
       <div>
         <a href="/">Home</a>
@@ -70,7 +88,8 @@
   </div>
 
   <script>
-    let selectedPlan = 'free';
+    const params = new URLSearchParams(location.search);
+    let selectedPlan = params.get('plan') || 'free';
 
     const tabs = document.querySelectorAll('.plan-tab');
     function selectPlan(plan) {
@@ -82,6 +101,14 @@
       selectPlan(t.dataset.plan);
     }));
     selectPlan(selectedPlan);
+
+    // Show banner if redirected here from failed Google sign-in.
+    if (params.get('reason') === 'no-account') {
+      const email = params.get('email') || '';
+      document.getElementById('no-account-banner').style.display = 'block';
+      document.getElementById('banner-email').textContent = email;
+      if (email) document.getElementById('email').value = email;
+    }
 
     document.getElementById('submit-btn').addEventListener('click', async () => {
       const name = document.getElementById('name').value.trim();

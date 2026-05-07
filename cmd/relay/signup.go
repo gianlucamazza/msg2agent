@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/email"
+	"github.com/gianlucamazza/msg2agent/pkg/oauth"
 )
 
 var emailRe = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
@@ -65,14 +67,15 @@ func (l *ipRateLimiter) allow(ip string, maxPerWindow int, windowSec int64) bool
 
 // signupHandler returns an HTTP handler for POST /api/tenants.
 //
-// Free plan: creates tenant + API key immediately (key active on creation).
+// Free plan: creates tenant + API key immediately (key usable on creation).
 // Paid plans (starter, team): creates tenant with BillingStatus="incomplete",
-// issues an inactive API key, and returns a Stripe Checkout URL. The key becomes
-// active automatically when the checkout.session.completed webhook fires.
+// issues an API key, and returns a Stripe Checkout URL. The key is gated by the
+// billing middleware (HTTP 402) until checkout.session.completed fires and flips
+// BillingStatus to "active".
 // Requires stripeClient != nil for paid plans; returns 503 otherwise.
 //
 // Per-IP rate limit: 5 signups per 60 seconds.
-func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logger *slog.Logger) http.HandlerFunc {
+func signupHandler(store billing.Store, stripeClient *billing.StripeClient, emailSender email.Sender, baseURL string, logger *slog.Logger) http.HandlerFunc {
 	limiter := newIPRateLimiter()
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +128,12 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 			return
 		}
 
+		// Prevent duplicate accounts for the same email address.
+		if existing, err := store.GetTenantByEmail(req.Email); err == nil && existing != nil {
+			writeError(w, http.StatusConflict, "an account already exists for this email; sign in at /app/")
+			return
+		}
+
 		tenant := billing.NewTenant(req.Name, req.Email, plan)
 
 		var checkoutURL string
@@ -174,6 +183,11 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 			"paid", isPaid,
 		)
 
+		// Send email verification (best-effort; never fails the signup).
+		if emailSender != nil {
+			go sendVerificationEmail(store, emailSender, tenant.ID, tenant.Email, baseURL, logger)
+		}
+
 		status := "active"
 		if isPaid {
 			status = "incomplete"
@@ -190,6 +204,28 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 		resp.APIKey = plaintext
 
 		writeRelayJSON(w, http.StatusCreated, resp)
+	}
+}
+
+// sendVerificationEmail generates a magic-link token and sends a verification email.
+// Called in a goroutine; errors are logged and swallowed.
+func sendVerificationEmail(store billing.Store, sender email.Sender, tenantID, toEmail, baseURL string, logger *slog.Logger) {
+	plain, hash, err := oauth.GenerateToken(32)
+	if err != nil {
+		logger.Warn("signup: generate verification token failed", "error", err)
+		return
+	}
+	if err := store.PutEmailVerificationToken(hash, tenantID, toEmail, time.Now().Add(24*time.Hour)); err != nil {
+		logger.Warn("signup: PutEmailVerificationToken failed", "error", err)
+		return
+	}
+	link := baseURL + "/oauth/verify?token=" + plain
+	htmlBody := `<p>Welcome to msg2agent! Click below to verify your email address:</p>
+<p><a href="` + link + `">Verify email</a></p>
+<p>This link expires in 24 hours. If you did not sign up, ignore this email.</p>`
+	textBody := "Welcome to msg2agent!\n\nVerify your email:\n" + link + "\n\nThis link expires in 24 hours."
+	if err := sender.Send(toEmail, "Verify your msg2agent email", htmlBody, textBody); err != nil {
+		logger.Warn("signup: send verification email failed", "to", toEmail, "error", err)
 	}
 }
 

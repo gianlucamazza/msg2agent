@@ -124,9 +124,8 @@
       <a href="/pricing" class="btn-primary btn-block">Get started</a>
     </div>
     <div class="plan-card featured">
-      <div class="plan-badge">Coming soon</div>
       <div class="plan-name">Starter</div>
-      <div class="plan-price coming-soon">Coming soon</div>
+      <div class="plan-price">$19<span>/mo</span></div>
       <p class="plan-desc">For developers building with agents.</p>
       <ul class="plan-features">
         <li>10,000 messages/month</li>
@@ -135,11 +134,11 @@
         <li>Inbox &amp; discovery</li>
         <li>Email support</li>
       </ul>
-      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Starter%20waitlist" class="btn-ghost btn-block">Notify me</a>
+      {{if .PaidEnabled}}<a href="/pricing?plan=starter" class="btn-primary btn-block">Get started</a>{{else}}<span class="btn-primary btn-block" aria-disabled="true">Coming soon</span>{{end}}
     </div>
     <div class="plan-card">
       <div class="plan-name">Team</div>
-      <div class="plan-price coming-soon">Coming soon</div>
+      <div class="plan-price">$99<span>/mo</span></div>
       <p class="plan-desc">For teams and production workloads.</p>
       <ul class="plan-features">
         <li>200,000 messages/month</li>
@@ -148,10 +147,10 @@
         <li>Priority support</li>
         <li>Usage dashboard</li>
       </ul>
-      <a href="mailto:homen3@gmail.com?subject=msg2agent%20Team%20waitlist" class="btn-ghost btn-block">Notify me</a>
+      {{if .PaidEnabled}}<a href="/pricing?plan=team" class="btn-primary btn-block">Get started</a>{{else}}<span class="btn-primary btn-block" aria-disabled="true">Coming soon</span>{{end}}
     </div>
   </div>
-  <p class="plan-disclaimer">Paid plans are coming soon. During early access, the Free tier covers 1,000 messages/month.</p>
+  {{if not .PaidEnabled}}<p class="plan-disclaimer">Paid plans are coming soon. <a href="/pricing">Free plan</a> is available now.</p>{{end}}
 
   <footer>
     <div>

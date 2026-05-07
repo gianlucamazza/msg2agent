@@ -384,8 +384,31 @@ async function init() {
   const checkoutResult = url.searchParams.get('checkout');
   if (checkoutResult) {
     history.replaceState(null, '', OAuth.REDIRECT_URI);
-    if (checkoutResult === 'success') toast('Subscription updated successfully.', 'success');
-    else if (checkoutResult === 'cancelled') toast('Checkout cancelled.', 'info');
+    if (checkoutResult === 'success') {
+      // Poll /me until billing_status=active (Stripe webhook may be delayed a few seconds).
+      toast('Activating your plan…', 'info');
+      let attempts = 0;
+      const maxAttempts = 24; // 24 × 5s = 120s
+      await new Promise(resolve => {
+        const poll = setInterval(async () => {
+          attempts++;
+          try {
+            const r = await api('/api/dashboard/me');
+            if (r && r.billing_status === 'active') {
+              clearInterval(poll);
+              toast('Plan activated!', 'success');
+              resolve();
+            } else if (attempts >= maxAttempts) {
+              clearInterval(poll);
+              toast('Plan activation is taking longer than expected — check back in a minute.', 'info');
+              resolve();
+            }
+          } catch { if (attempts >= maxAttempts) { clearInterval(poll); resolve(); } }
+        }, 5000);
+      });
+    } else if (checkoutResult === 'cancelled') {
+      toast('Checkout cancelled.', 'info');
+    }
   }
 
   // Step 1: handle OAuth callback if URL carries ?code=&state=

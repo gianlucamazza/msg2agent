@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
+	"github.com/gianlucamazza/msg2agent/pkg/email"
 	"github.com/gianlucamazza/msg2agent/pkg/oauth"
 	"github.com/gianlucamazza/msg2agent/pkg/queue"
 	"github.com/gianlucamazza/msg2agent/pkg/registry"
@@ -401,6 +403,13 @@ func main() {
 		logger.Error("failed to sub embedded web FS", "error", err)
 		os.Exit(1)
 	}
+
+	// paidEnabled gates Stripe-dependent UI (Starter/Team CTAs). Auto-activates
+	// when STRIPE_SECRET_KEY is present in the environment at startup.
+	type pageData struct{ PaidEnabled bool }
+	paidEnabled := billing.StripeConfigFromEnv() != nil
+	logger.Info("public ui", "paid_enabled", paidEnabled)
+
 	servePage := func(name string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			data, err := fs.ReadFile(webSub, name)
@@ -408,8 +417,13 @@ func main() {
 				http.NotFound(w, r)
 				return
 			}
+			tmpl, err := template.New(name).Parse(string(data))
+			if err != nil {
+				http.Error(w, "template error", http.StatusInternalServerError)
+				return
+			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = w.Write(data)
+			_ = tmpl.Execute(w, pageData{PaidEnabled: paidEnabled})
 		}
 	}
 	serveAsset := func(name, contentType string) http.HandlerFunc {
@@ -579,6 +593,9 @@ func main() {
 		}
 	}
 
+	// Email sender — optional; no-op if SMTP not configured.
+	emailSender := email.NewSMTPSenderFromEnv()
+
 	// Self-service signup endpoint (opt-in; requires billing store).
 	// Declared after Stripe setup so stripeClient is available for paid plans.
 	if *enableSignup {
@@ -586,8 +603,14 @@ func main() {
 			logger.Error("--enable-signup requires --billing-db to be set")
 			os.Exit(1)
 		}
-		mux.HandleFunc("/api/tenants", signupHandler(hub.billingStore, stripeClient, logger))
+		mux.HandleFunc("/api/tenants", signupHandler(hub.billingStore, stripeClient, emailSender, oauthASBaseURLStr, logger))
 		logger.Info("signup endpoint enabled", "path", "/api/tenants", "stripe", stripeClient != nil)
+	}
+
+	// Email verification endpoint — always mounted when billing store is present.
+	if hub.billingStore != nil {
+		dashURL := strings.Replace(oauthASBaseURLStr, "://", "://app.", 1)
+		mux.HandleFunc("/oauth/verify", verifyEmailHandler(hub.billingStore, dashURL, logger))
 	}
 
 	server := &http.Server{

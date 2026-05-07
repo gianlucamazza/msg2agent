@@ -42,11 +42,18 @@ func findTenantByStripeSubscriptionID(store Store, subscriptionID string) (*Tena
 // eventStore may be nil; if non-nil, each processed event is appended to the audit log.
 // Returns nil on success; returns error if a store update fails.
 func HandleStripeEvent(store Store, eventStore EventStore, event stripe.Event) error {
+	return HandleStripeEventWithConfig(store, eventStore, nil, event)
+}
+
+// HandleStripeEventWithConfig is like HandleStripeEvent but also accepts a StripeConfig
+// so that customer.subscription.updated events can resolve the new plan from the price ID.
+// cfg may be nil; in that case plan changes are not applied (only BillingStatus is updated).
+func HandleStripeEventWithConfig(store Store, eventStore EventStore, cfg *StripeConfig, event stripe.Event) error {
 	switch event.Type {
 	case "checkout.session.completed":
 		return handleCheckoutCompleted(store, eventStore, event)
 	case "customer.subscription.updated":
-		return handleSubscriptionUpdated(store, eventStore, event)
+		return handleSubscriptionUpdated(store, eventStore, cfg, event)
 	case "customer.subscription.deleted":
 		return handleSubscriptionDeleted(store, eventStore, event)
 	case "invoice.payment_failed":
@@ -89,7 +96,7 @@ func handleCheckoutCompleted(store Store, eventStore EventStore, event stripe.Ev
 	return nil
 }
 
-func handleSubscriptionUpdated(store Store, eventStore EventStore, event stripe.Event) error {
+func handleSubscriptionUpdated(store Store, eventStore EventStore, cfg *StripeConfig, event stripe.Event) error {
 	var sub stripe.Subscription
 	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
 		return fmt.Errorf("billing: unmarshal customer.subscription.updated: %w", err)
@@ -103,10 +110,20 @@ func handleSubscriptionUpdated(store Store, eventStore EventStore, event stripe.
 
 	// In Stripe v82, CurrentPeriodEnd is on SubscriptionItem, not Subscription.
 	if sub.Items != nil && len(sub.Items.Data) > 0 {
-		periodEnd := sub.Items.Data[0].CurrentPeriodEnd
+		item := sub.Items.Data[0]
+		periodEnd := item.CurrentPeriodEnd
 		if periodEnd > 0 {
 			t := time.Unix(periodEnd, 0).UTC()
 			tenant.CurrentPeriodEnd = &t
+		}
+
+		// If a StripeConfig is provided, resolve the new plan from the price ID and
+		// update the tenant's Plan and Quota so quota enforcement reflects the change.
+		if cfg != nil && item.Price != nil && item.Price.ID != "" {
+			if newPlan, ok := cfg.PlanFromPriceID(item.Price.ID); ok && newPlan != tenant.Plan {
+				tenant.Plan = newPlan
+				tenant.Quota = DefaultQuota(newPlan)
+			}
 		}
 	}
 

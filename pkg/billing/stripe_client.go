@@ -39,10 +39,24 @@ func StripeConfigFromEnv() *StripeConfig {
 	}
 }
 
+// PlanFromPriceID returns the Plan for the given Stripe price ID, doing a reverse lookup
+// in cfg.PriceIDs. Returns false if the price ID is not configured.
+func (cfg *StripeConfig) PlanFromPriceID(priceID string) (Plan, bool) {
+	for plan, id := range cfg.PriceIDs {
+		if id != "" && id == priceID {
+			return plan, true
+		}
+	}
+	return "", false
+}
+
 // StripeClient wraps the Stripe SDK for billing operations.
 type StripeClient struct {
 	cfg StripeConfig
 }
+
+// Config returns the StripeConfig used by this client.
+func (c *StripeClient) Config() *StripeConfig { return &c.cfg }
 
 // NewStripeClient creates a new StripeClient and sets the Stripe API key.
 func NewStripeClient(cfg StripeConfig) *StripeClient {

@@ -53,7 +53,7 @@ func stripeWebhookHandler(store billing.Store, stripeClient *billing.StripeClien
 			eventStore = es
 		}
 
-		if err := billing.HandleStripeEvent(store, eventStore, event); err != nil {
+		if err := billing.HandleStripeEventWithConfig(store, eventStore, stripeClient.Config(), event); err != nil {
 			logger.Error("stripe webhook: HandleStripeEvent failed",
 				"event_id", event.ID, "event_type", event.Type, "error", err)
 			// Return 200 to prevent Stripe from retrying events that fail due to our

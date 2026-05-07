@@ -123,8 +123,8 @@ func BearerMiddleware(store Store, jwtVal AccessTokenValidator, allowAnon bool) 
 				return
 			}
 
-			if tenant.BillingStatus == "incomplete" {
-				http.Error(w, "payment required: complete the Stripe checkout to activate your account", http.StatusPaymentRequired)
+			if tenant.BillingStatus == "incomplete" || tenant.BillingStatus == "past_due" {
+				http.Error(w, "payment required: update your payment method at https://msg2agent.xyz/app/", http.StatusPaymentRequired)
 				return
 			}
 			if !tenant.IsActive() {
@@ -208,8 +208,8 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				http.Error(w, "tenant not found", http.StatusUnauthorized)
 				return
 			}
-			if tenant.BillingStatus == "incomplete" {
-				http.Error(w, "payment required: complete the Stripe checkout to activate your API key", http.StatusPaymentRequired)
+			if tenant.BillingStatus == "incomplete" || tenant.BillingStatus == "past_due" {
+				http.Error(w, "payment required: update your payment method at https://msg2agent.xyz/app/", http.StatusPaymentRequired)
 				return
 			}
 			if !tenant.IsActive() {

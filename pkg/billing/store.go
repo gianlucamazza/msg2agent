@@ -22,6 +22,7 @@ type Store interface {
 	// Tenant operations
 	PutTenant(t *Tenant) error
 	GetTenant(id string) (*Tenant, error)
+	GetTenantByEmail(email string) (*Tenant, error)
 	ListTenants() ([]*Tenant, error)
 	UpdateTenant(t *Tenant) error
 	SuspendTenant(id string) error
@@ -36,6 +37,16 @@ type Store interface {
 	// OAuth identity operations (maps OAuth provider+sub → tenant).
 	PutOAuthIdentity(provider, sub, tenantID, email string) error
 	GetOAuthIdentityTenant(provider, sub string) (string, error)
+
+	// Email verification tokens (magic-link signup verification).
+	PutEmailVerificationToken(tokenHash, tenantID, email string, expiresAt time.Time) error
+	// ConsumeEmailVerificationToken validates the token, deletes it, and returns
+	// the associated tenantID and email. Returns ErrTokenNotFound if the token
+	// is unknown or expired.
+	ConsumeEmailVerificationToken(tokenHash string) (tenantID, email string, err error)
+
+	// MarkTenantEmailVerified sets the email_verified_at timestamp on a tenant.
+	MarkTenantEmailVerified(tenantID string, at time.Time) error
 
 	// MarkStripeEventProcessed records a Stripe webhook event ID for idempotency.
 	// Returns true if the event was newly inserted, false if it was already present.
@@ -70,13 +81,20 @@ type EventStore interface {
 	FlushAggregates(snapshots []UsageSnapshot) error
 }
 
+type memEmailToken struct {
+	tenantID  string
+	email     string
+	expiresAt time.Time
+}
+
 // MemoryStore is an in-memory Store for testing and local single-tenant use.
 type MemoryStore struct {
 	mu               sync.RWMutex
 	tenants          map[string]*Tenant
-	keys             map[string]*APIKey  // keyed by hash
-	oauthIds         map[string]string   // keyed by "provider:sub" → tenantID
-	stripeEventsSeen map[string]struct{} // stripe event IDs already processed
+	keys             map[string]*APIKey        // keyed by hash
+	oauthIds         map[string]string         // keyed by "provider:sub" → tenantID
+	stripeEventsSeen map[string]struct{}       // stripe event IDs already processed
+	emailTokens      map[string]*memEmailToken // keyed by token hash
 }
 
 // NewMemoryStore creates an empty in-memory billing store.
@@ -86,6 +104,7 @@ func NewMemoryStore() *MemoryStore {
 		keys:             make(map[string]*APIKey),
 		oauthIds:         make(map[string]string),
 		stripeEventsSeen: make(map[string]struct{}),
+		emailTokens:      make(map[string]*memEmailToken),
 	}
 }
 
@@ -125,6 +144,17 @@ func (s *MemoryStore) UpdateTenant(t *Tenant) error {
 	t.UpdatedAt = time.Now().UTC()
 	s.tenants[t.ID] = t
 	return nil
+}
+
+func (s *MemoryStore) GetTenantByEmail(email string) (*Tenant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.tenants {
+		if t.Email == email && t.Status != TenantStatusDeleted {
+			return t, nil
+		}
+	}
+	return nil, ErrTenantNotFound
 }
 
 func (s *MemoryStore) SuspendTenant(id string) error {
@@ -191,6 +221,37 @@ func (s *MemoryStore) RevokeAPIKey(id string) error {
 		}
 	}
 	return ErrAPIKeyNotFound
+}
+
+func (s *MemoryStore) PutEmailVerificationToken(tokenHash, tenantID, email string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.emailTokens[tokenHash] = &memEmailToken{tenantID: tenantID, email: email, expiresAt: expiresAt}
+	return nil
+}
+
+func (s *MemoryStore) ConsumeEmailVerificationToken(tokenHash string) (string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tok, ok := s.emailTokens[tokenHash]
+	if !ok || time.Now().After(tok.expiresAt) {
+		delete(s.emailTokens, tokenHash)
+		return "", "", ErrTokenNotFound
+	}
+	delete(s.emailTokens, tokenHash)
+	return tok.tenantID, tok.email, nil
+}
+
+func (s *MemoryStore) MarkTenantEmailVerified(tenantID string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tenants[tenantID]
+	if !ok {
+		return ErrTenantNotFound
+	}
+	t.EmailVerifiedAt = &at
+	t.UpdatedAt = time.Now().UTC()
+	return nil
 }
 
 func (s *MemoryStore) PutOAuthIdentity(provider, sub, tenantID, _ string) error {
@@ -364,6 +425,21 @@ var migrations = []migration{
 		);
 		CREATE INDEX IF NOT EXISTS idx_oauth_refresh_expires ON oauth_refresh_tokens(expires_at);
 	`},
+	// V7: email verification. Uses sentinel to run ALTER TABLE idempotently.
+	{7, `_email_verify_v7`},
+}
+
+// emailVerifyV7Stmts are the individual SQL statements for the V7 migration.
+var emailVerifyV7Stmts = []string{
+	`ALTER TABLE tenants ADD COLUMN email_verified_at TEXT`,
+	`CREATE TABLE IF NOT EXISTS email_verification_tokens (
+		token_hash  TEXT PRIMARY KEY,
+		tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+		email       TEXT NOT NULL,
+		expires_at  TEXT NOT NULL,
+		created_at  TEXT NOT NULL
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_email_tokens_expires ON email_verification_tokens(expires_at)`,
 }
 
 // stripeV4Stmts are the individual SQL statements for the V4 migration.
@@ -403,9 +479,13 @@ func (s *SQLiteStore) migrate() error {
 			continue
 		}
 
-		// V4 uses individual statements to allow idempotent ALTER TABLE on SQLite.
+		// Sentinel-based migrations run individual statements for idempotent ALTER TABLE.
 		if m.sql == "_stripe_v4" {
 			if err := s.migrateStripeV4(); err != nil {
+				return err
+			}
+		} else if m.sql == "_email_verify_v7" {
+			if err := s.migrateEmailVerifyV7(); err != nil {
 				return err
 			}
 		} else {
@@ -456,6 +536,50 @@ func (s *SQLiteStore) migrateStripeV4() error {
 	return nil
 }
 
+// migrateEmailVerifyV7 applies the V7 email verification schema changes one statement at
+// a time, ignoring "duplicate column name" errors so the migration is idempotent.
+func (s *SQLiteStore) migrateEmailVerifyV7() error {
+	for _, stmt := range emailVerifyV7Stmts {
+		if _, err := s.db.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") ||
+				strings.Contains(err.Error(), "already exists") {
+				continue
+			}
+			return fmt.Errorf("billing: migrate v7: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *SQLiteStore) PutEmailVerificationToken(tokenHash, tenantID, email string, expiresAt time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT OR REPLACE INTO email_verification_tokens(token_hash, tenant_id, email, expires_at, created_at)
+		 VALUES(?, ?, ?, ?, ?)`,
+		tokenHash, tenantID, email,
+		expiresAt.UTC().Format(time.RFC3339),
+		time.Now().UTC().Format(time.RFC3339),
+	)
+	return err
+}
+
+func (s *SQLiteStore) ConsumeEmailVerificationToken(tokenHash string) (string, string, error) {
+	var tenantID, email, expiresAtStr string
+	err := s.db.QueryRow(
+		`SELECT tenant_id, email, expires_at FROM email_verification_tokens WHERE token_hash=?`,
+		tokenHash,
+	).Scan(&tenantID, &email, &expiresAtStr)
+	if err != nil {
+		return "", "", ErrTokenNotFound
+	}
+	expiresAt, err := time.Parse(time.RFC3339, expiresAtStr)
+	if err != nil || time.Now().After(expiresAt) {
+		_, _ = s.db.Exec(`DELETE FROM email_verification_tokens WHERE token_hash=?`, tokenHash)
+		return "", "", ErrTokenNotFound
+	}
+	_, _ = s.db.Exec(`DELETE FROM email_verification_tokens WHERE token_hash=?`, tokenHash)
+	return tenantID, email, nil
+}
+
 func (s *SQLiteStore) PutTenant(t *Tenant) error {
 	quota, err := json.Marshal(t.Quota)
 	if err != nil {
@@ -491,7 +615,7 @@ func (s *SQLiteStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
 		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
 		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,
-		        did_seed
+		        did_seed,email_verified_at
 		 FROM tenants WHERE id=?`, id,
 	)
 	return scanTenant(row)
@@ -501,7 +625,7 @@ func (s *SQLiteStore) ListTenants() ([]*Tenant, error) {
 	rows, err := s.db.Query(
 		`SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
 		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,
-		        did_seed
+		        did_seed,email_verified_at
 		 FROM tenants`,
 	)
 	if err != nil {
@@ -553,6 +677,21 @@ func (s *SQLiteStore) SuspendTenant(id string) error {
 	res, err := s.db.Exec(
 		`UPDATE tenants SET status=?,updated_at=? WHERE id=?`,
 		string(TenantStatusSuspended), now, id,
+	)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteStore) MarkTenantEmailVerified(tenantID string, at time.Time) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	res, err := s.db.Exec(
+		`UPDATE tenants SET email_verified_at=?,updated_at=? WHERE id=?`,
+		at.UTC().Format(time.RFC3339), now, tenantID,
 	)
 	if err != nil {
 		return err
@@ -867,12 +1006,12 @@ type scanner interface {
 func scanTenant(row scanner) (*Tenant, error) {
 	var t Tenant
 	var quotaJSON, createdStr, updatedStr string
-	var stripeCustomerID, stripeSubscriptionID, currentPeriodEndStr sql.NullString
+	var stripeCustomerID, stripeSubscriptionID, currentPeriodEndStr, emailVerifiedAtStr sql.NullString
 	var didSeed []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
 		&quotaJSON, &createdStr, &updatedStr,
 		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEndStr, &t.BillingStatus,
-		&didSeed)
+		&didSeed, &emailVerifiedAtStr)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -896,6 +1035,10 @@ func scanTenant(row scanner) (*Tenant, error) {
 	}
 	if len(didSeed) == 32 {
 		t.DIDSeed = didSeed
+	}
+	if emailVerifiedAtStr.Valid && emailVerifiedAtStr.String != "" {
+		ts, _ := time.Parse(time.RFC3339, emailVerifiedAtStr.String)
+		t.EmailVerifiedAt = &ts
 	}
 	return &t, nil
 }

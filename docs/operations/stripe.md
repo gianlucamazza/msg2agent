@@ -118,3 +118,42 @@ Use test mode keys (`sk_test_…`, `pk_test_…`) and test Price IDs when runnin
 | Free | — | Not applicable (no payment required) |
 
 Price IDs are created in the Stripe Dashboard under **Products**. Create one Price per plan, set to **Recurring** with the appropriate billing interval (monthly).
+
+## 8. Payment Failure Enforcement (`past_due`)
+
+When `invoice.payment_failed` fires, the tenant's `BillingStatus` is set to `past_due`. From that point every API request returns:
+
+```
+HTTP 402 Payment Required
+payment required: update your payment method at https://msg2agent.xyz/app/
+```
+
+Tenants resolve this by opening the Stripe Customer Portal (`GET /api/billing/portal`) and updating their payment method. Once Stripe retries and succeeds, `invoice.paid` / `customer.subscription.updated` flips `BillingStatus` back to `active`.
+
+## 9. Plan Changes via Customer Portal
+
+When a tenant upgrades or downgrades via the Stripe Customer Portal, `customer.subscription.updated` fires. The relay:
+
+1. Reads `subscription.items.data[0].price.id` from the event.
+2. Reverse-looks up the Price ID against the configured `STRIPE_PRICE_*` env vars to determine the new plan.
+3. Updates `tenant.Plan` and resets `tenant.Quota` to the new plan's defaults.
+
+If the Price ID is not recognised (e.g. a custom enterprise price), only `BillingStatus` is updated and `Plan` is left unchanged — reconcile manually via `billing-admin`.
+
+## 10. Email Verification (SMTP)
+
+Post-signup magic-link verification requires an SMTP relay. Configure via:
+
+| Variable | Required | Description |
+|---|---|---|
+| `MSG2AGENT_SMTP_HOST` | Yes | SMTP server hostname (e.g. `smtp.sendgrid.net`). |
+| `MSG2AGENT_SMTP_PORT` | No | SMTP port (default: `587`). |
+| `MSG2AGENT_SMTP_USER` | Yes | SMTP username. |
+| `MSG2AGENT_SMTP_PASS` | Yes | SMTP password / API key. |
+| `MSG2AGENT_SMTP_FROM` | No | Sender address (default: `noreply@msg2agent.xyz`). |
+
+If `MSG2AGENT_SMTP_HOST` is not set, email sending is silently skipped — signup continues normally but no verification link is sent.
+
+Recommended providers with a free tier for low-volume sending: SendGrid (100/day), Mailgun, Postmark.
+
+After configuring, verify SPF and DKIM records in your DNS for `msg2agent.xyz` to avoid deliverability issues.

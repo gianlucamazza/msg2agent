@@ -199,7 +199,7 @@ func (s *SQLiteStore) CleanupOAuthExpired() error {
 func (s *SQLiteStore) GetTenantByEmail(email string) (*Tenant, error) {
 	row := s.db.QueryRow(`
 		SELECT id,name,email,plan,status,quota_json,created_at,updated_at,
-		       stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed
+		       stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed,email_verified_at
 		FROM tenants WHERE email=? AND status != 'deleted' ORDER BY created_at ASC LIMIT 1`,
 		strings.ToLower(email),
 	)

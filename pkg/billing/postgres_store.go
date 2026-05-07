@@ -138,6 +138,18 @@ var pgMigrations = []pgMigration{
 		);
 		CREATE INDEX IF NOT EXISTS idx_oauth_refresh_expires ON oauth_refresh_tokens(expires_at);
 	`},
+	// V7: email verification tokens + EmailVerifiedAt on tenants.
+	{7, `
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+		CREATE TABLE IF NOT EXISTS email_verification_tokens (
+			token_hash  TEXT PRIMARY KEY,
+			tenant_id   TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			email       TEXT NOT NULL,
+			expires_at  TIMESTAMPTZ NOT NULL,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_email_tokens_expires ON email_verification_tokens(expires_at);
+	`},
 }
 
 // NewPostgresStore opens a billing Postgres database at dsn and runs migrations.
@@ -237,16 +249,30 @@ func (s *PostgresStore) PutTenant(t *Tenant) error {
 func (s *PostgresStore) GetTenant(id string) (*Tenant, error) {
 	row := s.db.QueryRow(
 		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed,email_verified_at
 		 FROM tenants WHERE id=$1`, id,
 	)
 	return pgScanTenant(row)
 }
 
+func (s *PostgresStore) GetTenantByEmail(email string) (*Tenant, error) {
+	row := s.db.QueryRow(
+		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed,email_verified_at
+		 FROM tenants WHERE email=$1 AND status != 'deleted' ORDER BY created_at ASC LIMIT 1`,
+		strings.ToLower(email),
+	)
+	t, err := pgScanTenant(row)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 func (s *PostgresStore) ListTenants() ([]*Tenant, error) {
 	rows, err := s.db.Query(
 		`SELECT id,name,email,plan,status,quota,created_at,updated_at,
-		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed
+		        stripe_customer_id,stripe_subscription_id,current_period_end,billing_status,did_seed,email_verified_at
 		 FROM tenants`,
 	)
 	if err != nil {
@@ -412,6 +438,46 @@ func (s *PostgresStore) GetOAuthIdentityTenant(provider, sub string) (string, er
 
 // MarkStripeEventProcessed records a Stripe webhook event ID for idempotency.
 // Returns true if the event was newly inserted, false if it was already present.
+func (s *PostgresStore) PutEmailVerificationToken(tokenHash, tenantID, email string, expiresAt time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT INTO email_verification_tokens(token_hash, tenant_id, email, expires_at, created_at)
+		 VALUES($1,$2,$3,$4,$5)
+		 ON CONFLICT(token_hash) DO UPDATE SET expires_at=excluded.expires_at`,
+		tokenHash, tenantID, email, expiresAt.UTC(), time.Now().UTC(),
+	)
+	return err
+}
+
+func (s *PostgresStore) ConsumeEmailVerificationToken(tokenHash string) (string, string, error) {
+	var tenantID, email string
+	var expiresAt time.Time
+	err := s.db.QueryRow(
+		`DELETE FROM email_verification_tokens WHERE token_hash=$1 RETURNING tenant_id, email, expires_at`,
+		tokenHash,
+	).Scan(&tenantID, &email, &expiresAt)
+	if err != nil {
+		return "", "", ErrTokenNotFound
+	}
+	if time.Now().After(expiresAt) {
+		return "", "", ErrTokenNotFound
+	}
+	return tenantID, email, nil
+}
+
+func (s *PostgresStore) MarkTenantEmailVerified(tenantID string, at time.Time) error {
+	res, err := s.db.Exec(
+		`UPDATE tenants SET email_verified_at=$1, updated_at=NOW() WHERE id=$2`,
+		at.UTC(), tenantID,
+	)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrTenantNotFound
+	}
+	return nil
+}
+
 func (s *PostgresStore) MarkStripeEventProcessed(eventID string) (bool, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO stripe_events_processed(event_id, processed_at) VALUES($1, NOW())
@@ -708,11 +774,12 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	var quotaJSON string
 	var createdAt, updatedAt time.Time
 	var stripeCustomerID, stripeSubscriptionID sql.NullString
-	var currentPeriodEnd sql.NullTime
+	var currentPeriodEnd, emailVerifiedAt sql.NullTime
 	var didSeed []byte
 	err := row.Scan(&t.ID, &t.Name, &t.Email, (*string)(&t.Plan), (*string)(&t.Status),
 		&quotaJSON, &createdAt, &updatedAt,
-		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEnd, &t.BillingStatus, &didSeed)
+		&stripeCustomerID, &stripeSubscriptionID, &currentPeriodEnd, &t.BillingStatus,
+		&didSeed, &emailVerifiedAt)
 	if err == sql.ErrNoRows {
 		return nil, ErrTenantNotFound
 	}
@@ -736,6 +803,10 @@ func pgScanTenant(row scanner) (*Tenant, error) {
 	}
 	if len(didSeed) == 32 {
 		t.DIDSeed = didSeed
+	}
+	if emailVerifiedAt.Valid {
+		ts := emailVerifiedAt.Time.UTC()
+		t.EmailVerifiedAt = &ts
 	}
 	return &t, nil
 }

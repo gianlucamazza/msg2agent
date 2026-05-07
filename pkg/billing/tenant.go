@@ -147,6 +147,10 @@ type Tenant struct {
 	// tenant's Ed25519 signing key and DID via billing.DeriveTenantIdentity.
 	// Set once at signup; never changes. Nil for tenants created before V5 migration.
 	DIDSeed []byte `json:"-" db:"did_seed"`
+
+	// EmailVerifiedAt is set when the tenant clicks the verification magic-link.
+	// Nil means the email has not yet been verified.
+	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty" db:"email_verified_at"`
 }
 
 // Billing errors.
@@ -158,6 +162,7 @@ var (
 	ErrAPIKeyRevoked         = errors.New("API key has been revoked")
 	ErrInvalidAPIKey         = errors.New("invalid API key format")
 	ErrOAuthIdentityNotFound = errors.New("OAuth identity not found")
+	ErrTokenNotFound         = errors.New("verification token not found or expired")
 )
 
 // NewTenant creates a new tenant with a generated ID and a random DID seed.

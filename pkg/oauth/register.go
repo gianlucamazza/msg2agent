@@ -80,6 +80,7 @@ func DCRHandler(store Store) http.Handler {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 		var req DCRRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			oauthError(w, "invalid_client_metadata", "invalid JSON body", http.StatusBadRequest)

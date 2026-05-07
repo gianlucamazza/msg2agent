@@ -370,6 +370,7 @@ type SSEHeartbeat struct {
 	interval time.Duration
 	stopCh   chan struct{}
 	done     chan struct{}
+	stopOnce sync.Once
 }
 
 // NewSSEHeartbeat creates a new heartbeat sender.
@@ -407,7 +408,8 @@ func (h *SSEHeartbeat) Start() {
 }
 
 // Stop stops sending heartbeats and waits for the goroutine to exit.
+// Safe to call multiple times.
 func (h *SSEHeartbeat) Stop() {
-	close(h.stopCh)
+	h.stopOnce.Do(func() { close(h.stopCh) })
 	<-h.done
 }

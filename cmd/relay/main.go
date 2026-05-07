@@ -187,6 +187,7 @@ type RelayHub struct {
 	ctx         context.Context    // Hub-level context, canceled on Stop
 	ctxCancel   context.CancelFunc // Cancel function for hub context
 	stopCh      chan struct{}
+	stopOnce    sync.Once
 	wg          sync.WaitGroup // Track background goroutines for clean shutdown
 
 	// DID allowlist enforcement
@@ -299,45 +300,47 @@ func (h *RelayHub) queueCleanupLoop() {
 	}
 }
 
-// Stop gracefully stops the relay hub.
+// Stop gracefully stops the relay hub. Safe to call multiple times.
 func (h *RelayHub) Stop() {
-	h.ctxCancel() // Cancel hub context, propagates to all client contexts
-	close(h.stopCh)
+	h.stopOnce.Do(func() {
+		h.ctxCancel() // Cancel hub context, propagates to all client contexts
+		close(h.stopCh)
 
-	// Close all client connections to unblock writePump goroutines
-	// Use a map to track closed channels to avoid double-close
-	// (clients can be in the map twice: by ID and by DID)
-	h.mu.Lock()
-	closed := make(map[*Client]bool)
-	for _, client := range h.clients {
-		if !closed[client] {
-			client.stopped.Store(true) // Prevent new sends before closing
-			close(client.SendCh)       // This will cause writePump to exit
-			closed[client] = true
+		// Close all client connections to unblock writePump goroutines.
+		// Clients can appear twice in the map (by ID and by DID), so
+		// track already-closed ones to avoid a double-close panic.
+		h.mu.Lock()
+		closed := make(map[*Client]bool)
+		for _, client := range h.clients {
+			if !closed[client] {
+				client.stopped.Store(true)
+				close(client.SendCh)
+				closed[client] = true
+			}
 		}
-	}
-	h.mu.Unlock()
+		h.mu.Unlock()
 
-	// Wait for goroutines with timeout
-	done := make(chan struct{})
-	go func() {
-		h.wg.Wait()
-		close(done)
-	}()
+		// Wait for goroutines with timeout.
+		done := make(chan struct{})
+		go func() {
+			h.wg.Wait()
+			close(done)
+		}()
 
-	select {
-	case <-done:
-		h.logger.Info("all goroutines stopped")
-	case <-time.After(5 * time.Second):
-		h.logger.Warn("goroutine shutdown timeout")
-	}
+		select {
+		case <-done:
+			h.logger.Info("all goroutines stopped")
+		case <-time.After(5 * time.Second):
+			h.logger.Warn("goroutine shutdown timeout")
+		}
 
-	if h.queue != nil {
-		_ = h.queue.Close()
-	}
-	if h.presence != nil {
-		h.presence.Stop()
-	}
+		if h.queue != nil {
+			_ = h.queue.Close()
+		}
+		if h.presence != nil {
+			h.presence.Stop()
+		}
+	})
 }
 
 // Register registers a new client.

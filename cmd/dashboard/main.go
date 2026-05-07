@@ -62,13 +62,18 @@ func main() {
 		defer s.Close()
 	}
 
-	// Build OAuth2 validator.
+	// Build OAuth2 validator. Validation is only skipped in explicit dev mode —
+	// otherwise an empty JWKS URL would silently accept any unsigned token.
+	devMode := os.Getenv("MSG2AGENT_DEV_MODE") == "1"
+	if jwksURL == "" && !devMode {
+		logger.Error("OAUTH2_JWKS_URL is required (set MSG2AGENT_DEV_MODE=1 to bypass for local development)")
+		os.Exit(1)
+	}
 	oauth2Cfg := a2a.OAuth2Config{
-		Issuer:   issuerURL,
-		Audience: audience,
-		JWKSURL:  jwksURL,
-		// Skip validation when no JWKS URL is configured (dev mode).
-		SkipValidation: jwksURL == "",
+		Issuer:         issuerURL,
+		Audience:       audience,
+		JWKSURL:        jwksURL,
+		SkipValidation: jwksURL == "" && devMode,
 	}
 	validator := a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauth2Cfg))
 
@@ -92,12 +97,18 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// API routes — OAuth2 protected.
-	var apiHandler http.Handler = app.apiRouter()
+	// API routes — OAuth2 protected. Without a billing store the API cannot
+	// resolve tenants or persist anything, so refuse to mount the routes
+	// instead of exposing them unauthenticated.
 	if store != nil {
-		apiHandler = billing.OAuth2Middleware(validator, store, autoProvision)(apiHandler)
+		apiHandler := billing.OAuth2Middleware(validator, store, autoProvision)(app.apiRouter())
+		mux.Handle("/api/dashboard/", apiHandler)
+	} else {
+		mux.Handle("/api/dashboard/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "dashboard API unavailable: billing store not configured", http.StatusServiceUnavailable)
+		}))
+		logger.Warn("billing store not configured; /api/dashboard/* will return 503")
 	}
-	mux.Handle("/api/dashboard/", apiHandler)
 
 	// Static files from embedded FS.
 	webSub, err := fs.Sub(webFS, "web")

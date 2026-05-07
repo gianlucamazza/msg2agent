@@ -26,7 +26,8 @@ type PresenceManager struct {
 	typingState map[string]map[string]time.Time
 	typingMu    sync.RWMutex
 
-	stopCh chan struct{}
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // NewPresenceManager creates a new presence manager.
@@ -214,9 +215,9 @@ func (pm *PresenceManager) cleanupExpiredTyping() {
 	}
 }
 
-// Stop stops the presence manager.
+// Stop stops the presence manager. Safe to call multiple times.
 func (pm *PresenceManager) Stop() {
-	close(pm.stopCh)
+	pm.stopOnce.Do(func() { close(pm.stopCh) })
 }
 
 // Relay method handlers for presence

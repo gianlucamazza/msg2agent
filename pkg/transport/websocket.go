@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -354,21 +355,28 @@ func (l *WebSocketListener) Close() error {
 	l.closed = true
 	close(l.connCh)
 
-	// Close underlying listener first
-	if l.listener != nil {
-		_ = l.listener.Close() // Best effort
-	}
-
 	if l.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
+		// Shutdown closes the underlying net.Listener for us; suppress the
+		// "use of closed network connection" error that can surface when the
+		// goroutine running Serve already unblocked from the closed listener
+		// before Shutdown tries to close it a second time.
 		err := l.server.Shutdown(ctx)
+		if errors.Is(err, net.ErrClosed) {
+			err = nil
+		}
 		if err != nil {
 			l.logger.Warn("websocket listener shutdown error", "error", err)
 		} else {
 			l.logger.Info("websocket listener closed", "addr", l.addr)
 		}
 		return err
+	}
+
+	// Start was never called or failed before Serve: close the bare listener.
+	if l.listener != nil {
+		_ = l.listener.Close()
 	}
 	l.logger.Info("websocket listener closed", "addr", l.addr)
 	return nil

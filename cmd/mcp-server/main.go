@@ -20,6 +20,7 @@ import (
 	mcpadapter "github.com/gianlucamazza/msg2agent/adapters/mcp"
 	"github.com/gianlucamazza/msg2agent/pkg/agent"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/httputil"
 	"github.com/gianlucamazza/msg2agent/pkg/identity"
@@ -113,6 +114,7 @@ func main() {
 		Level: slog.LevelInfo,
 	})
 	logger := slog.New(handler)
+	logger.Info("starting mcp-server", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
 	// Load or create persistent identity.
 	keyPath := *identFile

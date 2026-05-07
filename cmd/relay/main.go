@@ -22,6 +22,7 @@ import (
 
 	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/oauth"
 	"github.com/gianlucamazza/msg2agent/pkg/queue"
@@ -144,6 +145,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slogLevel,
 	}))
+	logger.Info("starting relay", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
 	// Validate TLS configuration
 	if useTLS {

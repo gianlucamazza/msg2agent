@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE    ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 GOFLAGS ?=
-LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.Date=$(DATE)"
+LDFLAGS := -ldflags "-X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version=$(VERSION) -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit=$(COMMIT) -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date=$(DATE)"
 
 # Directories
 BUILD_DIR := ./build

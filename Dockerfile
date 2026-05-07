@@ -27,19 +27,19 @@ ARG DATE=unknown
 
 # Build all binaries
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -ldflags "-X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version=${VERSION} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit=${COMMIT} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date=${DATE}" \
     -o /out/relay ./cmd/relay
 
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -ldflags "-X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version=${VERSION} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit=${COMMIT} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date=${DATE}" \
     -o /out/mcp-server ./cmd/mcp-server
 
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -ldflags "-X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version=${VERSION} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit=${COMMIT} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date=${DATE}" \
     -o /out/billing-admin ./cmd/billing-admin
 
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.Date=${DATE}" \
+    -ldflags "-X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version=${VERSION} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit=${COMMIT} -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date=${DATE}" \
     -o /out/dashboard ./cmd/dashboard
 
 # =============================================================================

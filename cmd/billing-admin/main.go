@@ -15,6 +15,7 @@ import (
 	stripesubscription "github.com/stripe/stripe-go/v82/subscription"
 
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
 )
 
 func usage() {
@@ -51,8 +52,14 @@ Run billing-admin -db <path> <command> -help for per-command flags.
 
 func main() {
 	db := flag.String("db", "", "path to billing SQLite database")
+	version := flag.Bool("version", false, "print build info and exit")
 	flag.Usage = usage
 	flag.Parse()
+
+	if *version {
+		fmt.Println(buildinfo.String())
+		os.Exit(0)
+	}
 
 	if *db == "" {
 		fmt.Fprintln(os.Stderr, "error: -db is required")

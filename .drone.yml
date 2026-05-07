@@ -60,6 +60,10 @@ steps:
       tags:
         - latest
         - ${DRONE_COMMIT_SHA}
+      build_args:
+        - VERSION=${DRONE_TAG=${DRONE_COMMIT_BRANCH}-${DRONE_BUILD_NUMBER}}
+        - COMMIT=${DRONE_COMMIT_SHA}
+        - DATE=${DRONE_BUILD_CREATED}
       username:
         from_secret: REGISTRY_USERNAME
       password:
@@ -79,6 +83,10 @@ steps:
       tags:
         - latest
         - ${DRONE_COMMIT_SHA}
+      build_args:
+        - VERSION=${DRONE_TAG=${DRONE_COMMIT_BRANCH}-${DRONE_BUILD_NUMBER}}
+        - COMMIT=${DRONE_COMMIT_SHA}
+        - DATE=${DRONE_BUILD_CREATED}
       username:
         from_secret: REGISTRY_USERNAME
       password:
@@ -98,6 +106,10 @@ steps:
       tags:
         - latest
         - ${DRONE_COMMIT_SHA}
+      build_args:
+        - VERSION=${DRONE_TAG=${DRONE_COMMIT_BRANCH}-${DRONE_BUILD_NUMBER}}
+        - COMMIT=${DRONE_COMMIT_SHA}
+        - DATE=${DRONE_BUILD_CREATED}
       username:
         from_secret: REGISTRY_USERNAME
       password:
@@ -117,6 +129,10 @@ steps:
       tags:
         - latest
         - ${DRONE_COMMIT_SHA}
+      build_args:
+        - VERSION=${DRONE_TAG=${DRONE_COMMIT_BRANCH}-${DRONE_BUILD_NUMBER}}
+        - COMMIT=${DRONE_COMMIT_SHA}
+        - DATE=${DRONE_BUILD_CREATED}
       username:
         from_secret: REGISTRY_USERNAME
       password:

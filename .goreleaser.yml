@@ -25,9 +25,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.Commit={{.Commit}}
-      - -X main.Date={{.Date}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version={{.Version}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit={{.Commit}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date={{.Date}}
 
   - id: mcp-server
     main: ./cmd/mcp-server
@@ -43,9 +43,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.Commit={{.Commit}}
-      - -X main.Date={{.Date}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version={{.Version}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit={{.Commit}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date={{.Date}}
 
   - id: billing-admin
     main: ./cmd/billing-admin
@@ -61,9 +61,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X main.Version={{.Version}}
-      - -X main.Commit={{.Commit}}
-      - -X main.Date={{.Date}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version={{.Version}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit={{.Commit}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date={{.Date}}
 
 archives:
   - id: default

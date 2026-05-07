@@ -16,6 +16,7 @@ import (
 
 	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
+	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
 	"github.com/gianlucamazza/msg2agent/pkg/config"
 )
 
@@ -45,6 +46,7 @@ func main() {
 	autoProvision := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger.Info("starting dashboard", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
 	// Open billing store (optional).
 	var store billing.Store

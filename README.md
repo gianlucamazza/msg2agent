@@ -69,6 +69,27 @@ claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
 
 Once added, Claude can call `list_agents`, `send_message`, `submit_task` and all other tools directly.
 
+### Use with Claude.ai (custom connector)
+
+The hosted relay ships an OAuth 2.1 + PKCE endpoint and a discoverable connector
+manifest, so you can install msg2agent from any Claude surface (web, desktop, mobile)
+without writing code.
+
+1. Open Claude → **Settings → Connectors → Add Custom Connector**
+2. Paste this URL:
+
+   ```
+   https://msg2agent.home.gianlucamazza.it/.well-known/mcp-connector.json
+   ```
+
+3. Click **Connect**. Claude will redirect you to sign in with Google. Approve
+   the consent screen, and the 14 msg2agent tools (`list_agents`, `send_message`,
+   `submit_task`, …) become available in your conversations.
+
+No API key required — authentication is handled per-user via OAuth 2.1 with PKCE
+and Dynamic Client Registration. Sign-up is free at
+[msg2agent.home.gianlucamazza.it](https://msg2agent.home.gianlucamazza.it).
+
 ### Use with OpenClaw (ClawHub marketplace)
 
 Install the published plugin from [ClawHub](https://clawhub.io/skills/msg2agent) or point OpenClaw at your own MCP server:

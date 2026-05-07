@@ -77,24 +77,24 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
 
 		ip := signupRealIP(r)
 		if !limiter.allow(ip, 5, 60) {
-			http.Error(w, "signup rate limit exceeded; try again in 60 seconds", http.StatusTooManyRequests)
+			writeError(w, http.StatusTooManyRequests, "signup rate limit exceeded; try again in 60 seconds")
 			return
 		}
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, 4096))
 		if err != nil {
-			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "failed to read request body")
 			return
 		}
 		var req signupRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 			return
 		}
 
@@ -106,22 +106,22 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 		req.Plan = strings.ToLower(strings.TrimSpace(req.Plan))
 
 		if len(req.Name) < 2 || len(req.Name) > 100 {
-			http.Error(w, "name must be 2-100 characters", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "name must be 2-100 characters")
 			return
 		}
 		if !emailRe.MatchString(req.Email) {
-			http.Error(w, "invalid email address", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "invalid email address")
 			return
 		}
 		plan, ok := validPlans[req.Plan]
 		if !ok {
-			http.Error(w, "plan must be one of: free, starter, team", http.StatusBadRequest)
+			writeError(w, http.StatusBadRequest, "plan must be one of: free, starter, team")
 			return
 		}
 
 		isPaid := plan != billing.PlanFree
 		if isPaid && stripeClient == nil {
-			http.Error(w, "paid plans are not available: billing not configured", http.StatusServiceUnavailable)
+			writeError(w, http.StatusServiceUnavailable, "paid plans are not available: billing not configured")
 			return
 		}
 
@@ -143,7 +143,7 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 			)
 			if err != nil {
 				logger.Error("signup: CreateCheckoutSession failed", "error", err)
-				http.Error(w, "failed to create checkout session", http.StatusInternalServerError)
+				writeError(w, http.StatusInternalServerError, "failed to create checkout session")
 				return
 			}
 			checkoutURL = sess.URL
@@ -151,19 +151,19 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 
 		if err := store.PutTenant(tenant); err != nil {
 			logger.Error("signup: PutTenant failed", "error", err)
-			http.Error(w, "failed to create tenant", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "failed to create tenant")
 			return
 		}
 
 		plaintext, key, err := billing.GenerateAPIKey(tenant.ID, "default")
 		if err != nil {
 			logger.Error("signup: GenerateAPIKey failed", "error", err)
-			http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "failed to generate API key")
 			return
 		}
 		if err := store.PutAPIKey(key); err != nil {
 			logger.Error("signup: PutAPIKey failed", "error", err)
-			http.Error(w, "failed to store API key", http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "failed to store API key")
 			return
 		}
 
@@ -189,9 +189,7 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, logg
 		// save it and use it after checkout without another API call.
 		resp.APIKey = plaintext
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(resp)
+		writeRelayJSON(w, http.StatusCreated, resp)
 	}
 }
 

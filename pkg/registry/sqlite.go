@@ -433,7 +433,7 @@ func (s *SQLiteStore) CountByTenant(tenantID string) (int, error) {
 		err = s.db.QueryRow("SELECT COUNT(*) FROM agents WHERE tenant_id = ?", tenantID).Scan(&count)
 	}
 	if err != nil {
-		return 0, fmt.Errorf("CountByTenant failed: %w", err)
+		return 0, fmt.Errorf("count by tenant: %w", err)
 	}
 	return count, nil
 }

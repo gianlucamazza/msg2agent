@@ -91,8 +91,14 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Health check — no auth.
+	// Health check — no auth; verifies billing store if configured.
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		if store != nil {
+			if err := store.Ping(); err != nil {
+				http.Error(w, "billing store unavailable: "+err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})

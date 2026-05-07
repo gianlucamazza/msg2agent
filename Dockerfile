@@ -45,7 +45,7 @@ RUN CGO_ENABLED=0 go build \
 # =============================================================================
 # Relay Image
 # =============================================================================
-FROM alpine:3.20 AS relay
+FROM alpine:3.23 AS relay
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
@@ -80,7 +80,7 @@ CMD ["-addr", ":8080", "-store", "sqlite", "-store-file", "/data/relay.db"]
 # =============================================================================
 # MCP Server Image
 # =============================================================================
-FROM alpine:3.20 AS mcp-server
+FROM alpine:3.23 AS mcp-server
 
 # Install runtime dependencies
 RUN apk add --no-cache ca-certificates tzdata
@@ -110,7 +110,7 @@ CMD []
 # =============================================================================
 # Billing Admin Image
 # =============================================================================
-FROM alpine:3.20 AS billing-admin
+FROM alpine:3.23 AS billing-admin
 
 RUN apk add --no-cache ca-certificates tzdata
 
@@ -129,7 +129,7 @@ CMD ["-help"]
 # =============================================================================
 # Dashboard Image
 # =============================================================================
-FROM alpine:3.20 AS dashboard
+FROM alpine:3.23 AS dashboard
 
 RUN apk add --no-cache ca-certificates tzdata
 

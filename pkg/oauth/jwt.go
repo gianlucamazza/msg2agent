@@ -32,9 +32,10 @@ func NewJWTIssuer(priv ed25519.PrivateKey, kid, issuer string) *JWTIssuer {
 }
 
 // IssueAccessToken mints an EdDSA-signed JWT access token.
-func (j *JWTIssuer) IssueAccessToken(tenantID, clientID, scope, audience, jti string) (string, error) {
+// email and name are optional; pass empty strings to omit the claims.
+func (j *JWTIssuer) IssueAccessToken(tenantID, clientID, scope, audience, jti, email, name string) (string, error) {
 	now := time.Now().UTC()
-	tok, err := jwt.NewBuilder().
+	b := jwt.NewBuilder().
 		Issuer(j.issuer).
 		Subject(tenantID).
 		Audience([]string{audience}).
@@ -42,8 +43,14 @@ func (j *JWTIssuer) IssueAccessToken(tenantID, clientID, scope, audience, jti st
 		Expiration(now.Add(AccessTokenTTL)).
 		JwtID(jti).
 		Claim("client_id", clientID).
-		Claim("scope", scope).
-		Build()
+		Claim("scope", scope)
+	if email != "" {
+		b = b.Claim("email", email)
+	}
+	if name != "" {
+		b = b.Claim("name", name)
+	}
+	tok, err := b.Build()
 	if err != nil {
 		return "", fmt.Errorf("oauth: build access token: %w", err)
 	}

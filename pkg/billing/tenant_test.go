@@ -8,7 +8,6 @@ import (
 // TestNewTenant_FieldsAndNonZeroID verifies that NewTenant produces a tenant
 // with the given fields and a non-empty ID.
 func TestNewTenant_FieldsAndNonZeroID(t *testing.T) {
-	t = t
 	tenant := NewTenant("Acme Corp", "acme@example.com", PlanStarter)
 
 	if tenant.ID == "" {

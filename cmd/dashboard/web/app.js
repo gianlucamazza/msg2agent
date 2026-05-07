@@ -5,6 +5,61 @@
 // load; client_id persisted in localStorage. Access/refresh tokens kept in
 // sessionStorage so a closed tab requires a fresh sign-in.
 
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ── Toast notifications ──────────────────────────────────────────────────────
+
+function toast(msg, kind = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast' + (kind !== 'info' ? ' ' + kind : '');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── Modal (replaces prompt / confirm) ────────────────────────────────────────
+
+function showModal({ title, message = '', input = false, confirmLabel = 'OK' }) {
+  return new Promise(resolve => {
+    const dlg = document.getElementById('modal');
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-message').textContent = message;
+    document.getElementById('modal-confirm').textContent = confirmLabel;
+    const inp = document.getElementById('modal-input');
+    inp.style.display = input ? 'block' : 'none';
+    inp.value = '';
+
+    const cleanup = result => {
+      dlg.removeEventListener('close', onClose);
+      document.getElementById('modal-cancel').removeEventListener('click', onCancel);
+      resolve(result);
+    };
+    const onClose = () => cleanup(input ? inp.value.trim() || null : true);
+    const onCancel = () => { dlg.close(); cleanup(null); };
+
+    dlg.addEventListener('close', onClose, { once: true });
+    document.getElementById('modal-cancel').addEventListener('click', onCancel, { once: true });
+    dlg.showModal();
+    if (input) inp.focus();
+  });
+}
+
+// ── Loading state for action buttons ─────────────────────────────────────────
+
+async function withLoading(btn, fn) {
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    await fn();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// ── OAuth 2.1 PKCE ───────────────────────────────────────────────────────────
+
 const OAuth = {
   AS: location.origin,
   REDIRECT_URI: location.origin + '/app/',
@@ -35,6 +90,10 @@ const OAuth = {
 
   async ensureClient() {
     if (this.clientId) return this.clientId;
+    return this._registerClient();
+  },
+
+  async _registerClient() {
     const r = await fetch(this.AS + '/oauth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -107,6 +166,8 @@ const OAuth = {
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       history.replaceState(null, '', this.REDIRECT_URI);
+      // invalid_client means the AS has forgotten our registration; re-register next time
+      if (err.error === 'invalid_client') this.clientId = null;
       throw new Error('token exchange failed: ' + (err.error_description || r.status));
     }
     const data = await r.json();
@@ -129,6 +190,8 @@ const OAuth = {
       body,
     });
     if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (err.error === 'invalid_client') this.clientId = null;
       this.token = null; this.refresh = null;
       return false;
     }
@@ -138,12 +201,22 @@ const OAuth = {
     return true;
   },
 
-  signOut() {
+  async signOut() {
+    // Best-effort RFC 7009 revocation; errors are ignored
+    if (this.refresh && this.clientId) {
+      fetch(this.AS + '/oauth/revoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: this.refresh, token_type_hint: 'refresh_token', client_id: this.clientId }),
+      }).catch(() => {});
+    }
     this.token = null;
     this.refresh = null;
     location.href = this.REDIRECT_URI;
   },
 };
+
+// ── API helper ───────────────────────────────────────────────────────────────
 
 async function api(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
@@ -160,50 +233,132 @@ async function api(path, opts = {}) {
   return r.status === 204 ? null : r.json();
 }
 
+// ── Key reveal banner ────────────────────────────────────────────────────────
+
 function showKey(key) {
   const banner = document.createElement('div');
   banner.className = 'key-reveal';
-  banner.innerHTML = `<strong>Copy your key — it will not be shown again:</strong><br><code>${key}</code>
+  banner.innerHTML = `<strong>Copy your key — it will not be shown again:</strong><br><code>${esc(key)}</code>
     <button id="dismiss-key">Dismiss</button>`;
   document.getElementById('section-keys').prepend(banner);
   banner.querySelector('#dismiss-key').addEventListener('click', () => banner.remove());
 }
 
+// ── Keys list with pagination ────────────────────────────────────────────────
+
+let keysOffset = 0;
+const KEYS_LIMIT = 20;
+
 function renderKeys(payload) {
   const keys = Array.isArray(payload) ? payload : (payload.items || []);
+  const total = payload.total ?? keys.length;
   const el = document.getElementById('keys-list');
-  if (!keys.length) { el.innerHTML = '<p>No API keys yet.</p>'; return; }
-  el.innerHTML = `<table><thead><tr>
+  if (!keys.length && keysOffset === 0) {
+    el.innerHTML = '<p>No API keys yet. Create one to get started.</p>';
+    return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr>
     <th>Label</th><th>Prefix</th><th>Created</th><th>Status</th><th></th>
   </tr></thead><tbody>${keys.map(k => `<tr>
-    <td>${k.label}</td>
-    <td><code>${k.key_prefix}…</code></td>
+    <td>${esc(k.label)}</td>
+    <td><code>${esc(k.key_prefix)}…</code></td>
     <td>${new Date(k.created_at).toLocaleDateString()}</td>
     <td>${k.revoked_at ? 'Revoked' : 'Active'}</td>
-    <td>${k.revoked_at ? '' : `<button class="danger" data-id="${k.id}">Revoke</button>`}</td>
-  </tr>`).join('')}</tbody></table>`;
+    <td>${k.revoked_at ? '' : `<button class="danger" data-id="${esc(k.id)}" aria-label="Revoke key ${esc(k.label)}">Revoke</button>`}</td>
+  </tr>`).join('')}</tbody></table></div>`;
+
+  if (total > KEYS_LIMIT) {
+    const start = keysOffset + 1;
+    const end = Math.min(keysOffset + keys.length, total);
+    el.innerHTML += `<div class="pager">
+      <button id="keys-prev" ${keysOffset === 0 ? 'disabled' : ''}>‹ Prev</button>
+      <span>${start}–${end} / ${total}</span>
+      <button id="keys-next" ${end >= total ? 'disabled' : ''}>Next ›</button>
+    </div>`;
+    el.querySelector('#keys-prev')?.addEventListener('click', () => { keysOffset = Math.max(0, keysOffset - KEYS_LIMIT); loadKeys(); });
+    el.querySelector('#keys-next')?.addEventListener('click', () => { keysOffset += KEYS_LIMIT; loadKeys(); });
+  }
+
   el.querySelectorAll('.danger[data-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!confirm('Revoke this key?')) return;
-      api(`/api/dashboard/keys/${btn.dataset.id}`, { method: 'DELETE' })
-        .then(() => loadKeys()).catch(e => alert('Revoke failed: ' + JSON.stringify(e)));
+    btn.addEventListener('click', async () => {
+      const ok = await showModal({ title: 'Revoke key?', message: 'The key will stop working immediately.', confirmLabel: 'Revoke' });
+      if (!ok) return;
+      await withLoading(btn, () =>
+        api(`/api/dashboard/keys/${btn.dataset.id}`, { method: 'DELETE' })
+          .then(() => loadKeys())
+          .catch(e => toast('Revoke failed: ' + (e.error || JSON.stringify(e)), 'error'))
+      );
     });
   });
 }
 
-function renderUsage(payload) {
-  const rows = Array.isArray(payload) ? payload : (payload.items || []);
-  const el = document.getElementById('usage-chart');
-  if (!rows.length) { el.innerHTML = '<p>No usage data yet.</p>'; return; }
-  el.innerHTML = `<table><thead><tr><th>Period</th><th>Event</th><th>Count</th></tr></thead>
-    <tbody>${rows.map(r => `<tr><td>${r.period}</td><td>${r.event}</td><td>${r.count.toLocaleString()}</td></tr>`).join('')}</tbody></table>`;
+function loadKeys() {
+  return api(`/api/dashboard/keys?limit=${KEYS_LIMIT}&offset=${keysOffset}`)
+    .then(renderKeys)
+    .catch(() => { document.getElementById('keys-list').textContent = 'Failed to load keys.'; });
 }
 
-function loadKeys() {
-  return api('/api/dashboard/keys').then(renderKeys).catch(() => {
-    document.getElementById('keys-list').textContent = 'Failed to load keys.';
-  });
+// ── Usage table with pagination ───────────────────────────────────────────────
+
+let usageOffset = 0;
+const USAGE_LIMIT = 50;
+
+function renderUsage(payload) {
+  const rows = Array.isArray(payload) ? payload : (payload.items || []);
+  const total = payload.total ?? rows.length;
+  const el = document.getElementById('usage-chart');
+  if (!rows.length && usageOffset === 0) { el.innerHTML = '<p>No usage data yet.</p>'; return; }
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Period</th><th>Event</th><th>Count</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${esc(r.period)}</td><td>${esc(r.event)}</td><td>${r.count.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`;
+  if (total > USAGE_LIMIT) {
+    const start = usageOffset + 1;
+    const end = Math.min(usageOffset + rows.length, total);
+    el.innerHTML += `<div class="pager">
+      <button id="usage-prev" ${usageOffset === 0 ? 'disabled' : ''}>‹ Prev</button>
+      <span>${start}–${end} / ${total}</span>
+      <button id="usage-next" ${end >= total ? 'disabled' : ''}>Next ›</button>
+    </div>`;
+    el.querySelector('#usage-prev')?.addEventListener('click', () => { usageOffset = Math.max(0, usageOffset - USAGE_LIMIT); loadUsage(); });
+    el.querySelector('#usage-next')?.addEventListener('click', () => { usageOffset += USAGE_LIMIT; loadUsage(); });
+  }
 }
+
+function loadUsage() {
+  return api(`/api/dashboard/usage?limit=${USAGE_LIMIT}&offset=${usageOffset}`)
+    .then(renderUsage)
+    .catch(() => { document.getElementById('usage-chart').textContent = 'Failed to load usage.'; });
+}
+
+// ── Quota progress bars ───────────────────────────────────────────────────────
+
+function renderQuota(quota, usagePayload) {
+  const rows = Array.isArray(usagePayload) ? usagePayload : (usagePayload?.items || []);
+  const now = new Date();
+  const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let messages = 0, toolCalls = 0;
+  for (const r of rows) {
+    if (r.period !== period) continue;
+    if (r.event === 'messages') messages += r.count;
+    if (r.event === 'tool_calls') toolCalls += r.count;
+  }
+
+  const bars = [
+    { label: 'Messages', used: messages, max: quota.max_messages_per_month },
+    { label: 'Tool calls', used: toolCalls, max: quota.max_tool_calls_per_month },
+  ];
+
+  const html = bars.map(b => {
+    const pct = b.max > 0 ? Math.min(100, (b.used / b.max) * 100) : 0;
+    const cls = pct >= 100 ? 'over' : pct >= 80 ? 'warn' : '';
+    return `<div class="quota-item">
+      <label><span>${esc(b.label)}/mo</span><span>${b.used.toLocaleString()} / ${b.max.toLocaleString()}</span></label>
+      <div class="quota-bar"><div class="quota-bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('account-info').insertAdjacentHTML('beforeend', `<div class="quota-bar-wrap">${html}</div>`);
+}
+
+// ── Auth gate ─────────────────────────────────────────────────────────────────
 
 function showAuthGate(message) {
   document.getElementById('auth-gate').hidden = false;
@@ -216,11 +371,22 @@ function showAuthGate(message) {
   }
 }
 
+// ── Main init ─────────────────────────────────────────────────────────────────
+
 async function init() {
   document.getElementById('btn-signin').addEventListener('click', () => {
     OAuth.signIn().catch(e => showAuthGate(e.message));
   });
   document.getElementById('btn-signout').addEventListener('click', () => OAuth.signOut());
+
+  // Handle ?checkout= return from Stripe before anything else
+  const url = new URL(location.href);
+  const checkoutResult = url.searchParams.get('checkout');
+  if (checkoutResult) {
+    history.replaceState(null, '', OAuth.REDIRECT_URI);
+    if (checkoutResult === 'success') toast('Subscription updated successfully.', 'success');
+    else if (checkoutResult === 'cancelled') toast('Checkout cancelled.', 'info');
+  }
 
   // Step 1: handle OAuth callback if URL carries ?code=&state=
   try {
@@ -230,7 +396,7 @@ async function init() {
     return;
   }
 
-  // Step 2: load /me with the token (if any)
+  // Step 2: load /me — gate everything behind this
   const me = await api('/api/dashboard/me').catch(() => null);
   if (!me) {
     showAuthGate();
@@ -240,41 +406,55 @@ async function init() {
   document.getElementById('btn-signout').hidden = false;
   document.getElementById('nav-plan').textContent = me.plan;
   document.getElementById('account-info').innerHTML =
-    `<p><strong>${me.name}</strong> &lt;${me.email}&gt;</p>
-     <p>Plan: <strong>${me.plan}</strong> &nbsp; Billing: ${me.billing_status}</p>
-     <p>Messages/mo: ${me.quota.max_messages_per_month.toLocaleString()} &nbsp;
-        Tool calls/mo: ${me.quota.max_tool_calls_per_month.toLocaleString()}</p>`;
+    `<p><strong>${esc(me.name)}</strong> &lt;${esc(me.email)}&gt;</p>
+     <p>Plan: <strong>${esc(me.plan)}</strong> &nbsp; Billing: ${esc(me.billing_status)}</p>`;
 
-  loadKeys();
+  // Load keys and usage in parallel; render quota progress after both
+  const [, usagePayload] = await Promise.allSettled([
+    loadKeys(),
+    api('/api/dashboard/usage').then(p => { renderUsage(p); return p; }).catch(() => null),
+  ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null));
 
-  api('/api/dashboard/usage').then(renderUsage).catch(() => {
-    document.getElementById('usage-chart').textContent = 'Failed to load usage.';
-  });
+  if (usagePayload) renderQuota(me.quota, usagePayload);
 
-  document.getElementById('btn-create-key').addEventListener('click', () => {
-    const label = prompt('Key label:', 'My Key');
+  // Create key
+  document.getElementById('btn-create-key').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-create-key');
+    const label = await showModal({ title: 'New API Key', message: 'Enter a label for the key:', input: true, confirmLabel: 'Create' });
     if (!label) return;
-    api('/api/dashboard/keys', { method: 'POST', body: JSON.stringify({ label }) })
-      .then(res => { showKey(res.key); return loadKeys(); })
-      .catch(e => alert('Failed to create key: ' + JSON.stringify(e)));
+    await withLoading(btn, () =>
+      api('/api/dashboard/keys', { method: 'POST', body: JSON.stringify({ label }) })
+        .then(res => { showKey(res.key); return loadKeys(); })
+        .catch(e => toast('Failed to create key: ' + (e.error || JSON.stringify(e)), 'error'))
+    );
   });
 
-  const checkout = (plan) => {
-    api('/api/dashboard/checkout', {
-      method: 'POST',
-      body: JSON.stringify({ plan, success_url: location.href, cancel_url: location.href })
-    }).then(res => { if (res.url) location.href = res.url; })
-      .catch(e => alert('Checkout failed: ' + JSON.stringify(e)));
+  // Checkout / upgrade
+  const checkout = (plan) => async (e) => {
+    await withLoading(e.currentTarget, () =>
+      api('/api/dashboard/checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          plan,
+          success_url: location.origin + '/app/?checkout=success',
+          cancel_url:  location.origin + '/app/?checkout=cancelled',
+        }),
+      }).then(res => { if (res?.url) location.href = res.url; })
+        .catch(e => toast('Checkout failed: ' + (e.error || JSON.stringify(e)), 'error'))
+    );
   };
-  document.getElementById('btn-upgrade-starter').addEventListener('click', () => checkout('starter'));
-  document.getElementById('btn-upgrade-team').addEventListener('click', () => checkout('team'));
+  document.getElementById('btn-upgrade-starter').addEventListener('click', checkout('starter'));
+  document.getElementById('btn-upgrade-team').addEventListener('click', checkout('team'));
 
-  document.getElementById('btn-portal').addEventListener('click', () => {
-    api('/api/dashboard/portal', {
-      method: 'POST',
-      body: JSON.stringify({ return_url: location.href })
-    }).then(res => { if (res.url) location.href = res.url; })
-      .catch(e => alert('Portal failed: ' + JSON.stringify(e)));
+  // Billing portal
+  document.getElementById('btn-portal').addEventListener('click', async (e) => {
+    await withLoading(e.currentTarget, () =>
+      api('/api/dashboard/portal', {
+        method: 'POST',
+        body: JSON.stringify({ return_url: location.href }),
+      }).then(res => { if (res?.url) location.href = res.url; })
+        .catch(e => toast('Portal failed: ' + (e.error || JSON.stringify(e)), 'error'))
+    );
   });
 }
 

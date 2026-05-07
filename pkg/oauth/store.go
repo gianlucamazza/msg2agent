@@ -73,6 +73,9 @@ type Store interface {
 	// RotateRefreshToken atomically marks the old token revoked and stores the new one.
 	// Returns ErrRefreshTokenNotFound or ErrRefreshTokenRevoked if the old hash is invalid.
 	RotateRefreshToken(oldHash string, newRT *RefreshToken) (*RefreshToken, error)
+	// RevokeRefreshToken marks the token with the given hash as revoked (RFC 7009).
+	// Returns nil if the token does not exist (idempotent).
+	RevokeRefreshToken(hash string) error
 
 	// Cleanup removes expired codes and tokens.
 	CleanupOAuthExpired() error

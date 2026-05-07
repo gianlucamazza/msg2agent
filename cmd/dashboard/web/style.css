@@ -99,6 +99,40 @@ td code { font-size: 0.85rem; color: var(--accent); }
 .key-reveal code { font-size: 0.85rem; color: #7adb7a; }
 .key-reveal button { margin-top: 0.5rem; background: #4a4a4a; }
 
+/* ─── Auth gate ──────────────────────────────────────────────────────── */
+.auth-gate-container {
+  max-width: 480px;
+  margin: 5rem auto;
+  padding: 0 1rem;
+  text-align: center;
+}
+.auth-gate-title {
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.auth-gate-subtitle {
+  color: var(--muted);
+  margin-bottom: 2rem;
+  font-size: 0.95rem;
+}
+.error-text {
+  color: #dc2626;
+  margin-top: 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* ─── Skeleton variants ──────────────────────────────────────────────── */
+.skeleton-sm  { height: 1rem; }
+.skeleton-sm-narrow { height: 1rem; width: 60%; margin-bottom: 0.5rem; }
+.skeleton-sm-wide   { height: 1rem; width: 40%; }
+.skeleton-row { height: 2.5rem; margin-top: 1rem; }
+.skeleton-row-gap { height: 2.5rem; margin-bottom: 0.5rem; }
+
+#btn-signout { margin-left: auto; }
+
 /* ─── Dashboard-specific ─────────────────────────────────────────────── */
 .btn-primary {
   background: var(--accent); color: #fff; border: none; border-radius: 5px;
@@ -115,4 +149,117 @@ td code { font-size: 0.85rem; color: var(--accent); }
   background: var(--border);
   border-radius: 4px;
   animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Toast notifications ────────────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 1000;
+}
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  color: var(--text);
+  max-width: 320px;
+  animation: toast-in 0.2s ease;
+}
+.toast.error { border-color: #dc2626; color: #fca5a5; }
+.toast.success { border-color: #2d7d2d; color: #7adb7a; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Modal dialog ───────────────────────────────────────────────────── */
+dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 1.5rem;
+  min-width: 320px;
+  max-width: 480px;
+}
+dialog::backdrop { background: rgba(0,0,0,0.6); }
+.modal-title { font-weight: 600; margin-bottom: 0.75rem; }
+.modal-message { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+.modal-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 1rem;
+}
+.modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+/* ─── Quota progress bars ────────────────────────────────────────────── */
+.quota-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.quota-item label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.quota-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.quota-bar-fill {
+  height: 100%;
+  background: #2d7d2d;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+.quota-bar-fill.warn  { background: #b45309; }
+.quota-bar-fill.over  { background: #dc2626; }
+
+/* ─── Pager ──────────────────────────────────────────────────────────── */
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.pager button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+.pager button:disabled { opacity: 0.35; cursor: default; }
+
+/* ─── Table wrapper for horizontal scroll ───────────────────────────── */
+.table-wrap { overflow-x: auto; }
+
+/* ─── Mobile ─────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  nav { padding: 0.75rem 1rem; }
+  main { margin: 1rem auto; padding: 0 0.75rem; }
+  section { padding: 1rem; }
+  #section-billing { display: flex; flex-direction: column; gap: 0.5rem; }
+  #section-billing button { width: 100%; }
+  #toast-container { left: 1rem; right: 1rem; bottom: 1rem; }
+  dialog { min-width: unset; width: calc(100vw - 2rem); }
 }

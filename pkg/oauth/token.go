@@ -10,7 +10,8 @@ import (
 )
 
 // TokenHandler returns an http.Handler for POST /oauth/token (RFC 6749 §4.1 + §6).
-func TokenHandler(store Store, issuer *JWTIssuer, audience string) http.Handler {
+// tenants is optional; when non-nil, email and name claims are embedded in issued tokens.
+func TokenHandler(store Store, issuer *JWTIssuer, audience string, tenants TenantLookup) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -22,16 +23,16 @@ func TokenHandler(store Store, issuer *JWTIssuer, audience string) http.Handler 
 		}
 		switch r.FormValue("grant_type") {
 		case "authorization_code":
-			handleAuthCode(w, r, store, issuer, audience)
+			handleAuthCode(w, r, store, issuer, audience, tenants)
 		case "refresh_token":
-			handleRefresh(w, r, store, issuer, audience)
+			handleRefresh(w, r, store, issuer, audience, tenants)
 		default:
 			oauthError(w, "unsupported_grant_type", "supported: authorization_code, refresh_token", http.StatusBadRequest)
 		}
 	})
 }
 
-func handleAuthCode(w http.ResponseWriter, r *http.Request, store Store, issuer *JWTIssuer, audience string) {
+func handleAuthCode(w http.ResponseWriter, r *http.Request, store Store, issuer *JWTIssuer, audience string, tenants TenantLookup) {
 	clientID := r.FormValue("client_id")
 	redirectURI := r.FormValue("redirect_uri")
 	codeVerifier := r.FormValue("code_verifier")
@@ -98,10 +99,10 @@ func handleAuthCode(w http.ResponseWriter, r *http.Request, store Store, issuer 
 		return
 	}
 
-	writeTokenJSON(w, issuer, audience, code.TenantID, clientID, code.Scope, plainRefresh, refreshExpiry)
+	writeTokenJSON(w, issuer, audience, code.TenantID, clientID, code.Scope, plainRefresh, refreshExpiry, tenants)
 }
 
-func handleRefresh(w http.ResponseWriter, r *http.Request, store Store, issuer *JWTIssuer, audience string) {
+func handleRefresh(w http.ResponseWriter, r *http.Request, store Store, issuer *JWTIssuer, audience string, tenants TenantLookup) {
 	plainToken := r.FormValue("refresh_token")
 	clientID := r.FormValue("client_id")
 	if plainToken == "" || clientID == "" {
@@ -129,11 +130,18 @@ func handleRefresh(w http.ResponseWriter, r *http.Request, store Store, issuer *
 		return
 	}
 
-	writeTokenJSON(w, issuer, audience, rt.TenantID, clientID, rt.Scope, plainNew, newExpiry)
+	writeTokenJSON(w, issuer, audience, rt.TenantID, clientID, rt.Scope, plainNew, newExpiry, tenants)
 }
 
-func writeTokenJSON(w http.ResponseWriter, issuer *JWTIssuer, audience, tenantID, clientID, scope, plainRefresh string, refreshExpiry time.Time) {
-	accessToken, err := issuer.IssueAccessToken(tenantID, clientID, scope, audience, uuid.New().String())
+func writeTokenJSON(w http.ResponseWriter, issuer *JWTIssuer, audience, tenantID, clientID, scope, plainRefresh string, refreshExpiry time.Time, tenants TenantLookup) {
+	var email, name string
+	if tenants != nil {
+		if t, err := tenants.GetTenantByID(tenantID); err == nil {
+			email = t.Email
+			name = t.Name
+		}
+	}
+	accessToken, err := issuer.IssueAccessToken(tenantID, clientID, scope, audience, uuid.New().String(), email, name)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

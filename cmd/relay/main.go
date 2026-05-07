@@ -329,6 +329,7 @@ func main() {
 		oauthJWKSHandler    http.Handler
 		oauthDCRHandler     http.Handler
 		oauthTokenHandler   http.Handler
+		oauthRevokeHandler  http.Handler
 		oauthASMeta         *oauth.ASMetadata
 		oauthASBaseURLStr   string
 	)
@@ -368,7 +369,8 @@ func main() {
 		oauthAuthzSrv = oauth.NewAuthorizeServer(oauthStore, idp, tenantLookup, jwtIssuer, jwtVerifier, oauthASBaseURLStr)
 		oauthJWKSHandler = oauth.JWKSHandler(jwkSet)
 		oauthDCRHandler = oauth.DCRHandler(oauthStore)
-		oauthTokenHandler = oauth.TokenHandler(oauthStore, jwtIssuer, oauthASBaseURLStr+"/mcp")
+		oauthTokenHandler = oauth.TokenHandler(oauthStore, jwtIssuer, oauthASBaseURLStr+"/mcp", tenantLookup)
+		oauthRevokeHandler = oauth.RevokeHandler(oauthStore)
 
 		logger.Info("oauth AS enabled", "base_url", oauthASBaseURLStr, "kid", kid, "google_idp", googleClientID != "")
 	}
@@ -501,6 +503,7 @@ func main() {
 		mux.HandleFunc("/oauth/google-callback", oauthAuthzSrv.HandleGoogleCallback)
 		mux.HandleFunc("/oauth/authorize/confirm", oauthAuthzSrv.HandleConfirm)
 		mux.Handle("/oauth/token", oauthTokenHandler)
+		mux.Handle("/oauth/revoke", oauthRevokeHandler)
 		logger.Info("oauth AS routes mounted",
 			"authorize", "/oauth/authorize",
 			"token", "/oauth/token",

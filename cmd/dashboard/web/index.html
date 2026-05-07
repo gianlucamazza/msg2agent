@@ -11,17 +11,17 @@
   <nav>
     <a href="/" class="logo">msg2agent</a>
     <span id="nav-plan"></span>
-    <button id="btn-signout" hidden style="margin-left:auto;">Sign Out</button>
+    <button id="btn-signout" hidden>Sign Out</button>
   </nav>
 
   <div id="auth-gate" hidden>
-    <div style="max-width:480px;margin:5rem auto;padding:0 1rem;text-align:center;">
-      <h2 style="font-size:1.4rem;margin-bottom:1rem;color:var(--text);text-transform:none;letter-spacing:0;">Sign in</h2>
-      <p style="color:var(--muted);margin-bottom:2rem;font-size:0.95rem;">
+    <div class="auth-gate-container">
+      <h2 class="auth-gate-title">Sign in</h2>
+      <p class="auth-gate-subtitle">
         Authenticate with Google to access your msg2agent dashboard.
       </p>
       <button id="btn-signin" class="btn-primary">Sign in with Google</button>
-      <p id="auth-error" hidden style="color:#dc2626;margin-top:1.5rem;font-size:0.9rem;"></p>
+      <p id="auth-error" hidden class="error-text"></p>
     </div>
   </div>
 
@@ -29,22 +29,22 @@
     <section id="section-account">
       <h2>Account</h2>
       <div id="account-info">
-        <div class="skeleton" style="height:1rem;width:60%;margin-bottom:0.5rem;"></div>
-        <div class="skeleton" style="height:1rem;width:40%;"></div>
+        <div class="skeleton skeleton-sm-narrow"></div>
+        <div class="skeleton skeleton-sm-wide"></div>
       </div>
     </section>
     <section id="section-keys">
       <h2>API Keys</h2>
       <button id="btn-create-key">Create Key</button>
       <div id="keys-list">
-        <div class="skeleton" style="height:2.5rem;margin-top:1rem;"></div>
+        <div class="skeleton skeleton-row"></div>
       </div>
     </section>
     <section id="section-usage">
       <h2>Usage</h2>
       <div id="usage-chart">
-        <div class="skeleton" style="height:2.5rem;margin-bottom:0.5rem;"></div>
-        <div class="skeleton" style="height:2.5rem;"></div>
+        <div class="skeleton skeleton-row-gap"></div>
+        <div class="skeleton skeleton-row"></div>
       </div>
     </section>
     <section id="section-billing">
@@ -54,6 +54,20 @@
       <button id="btn-portal">Manage Subscription</button>
     </section>
   </main>
+  <div id="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <dialog id="modal" aria-modal="true">
+    <form method="dialog" id="modal-form">
+      <p id="modal-title" class="modal-title"></p>
+      <input id="modal-input" type="text" class="modal-input" autocomplete="off">
+      <p id="modal-message" class="modal-message"></p>
+      <div class="modal-actions">
+        <button type="submit" id="modal-confirm" class="btn-primary">OK</button>
+        <button type="button" id="modal-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/app.js"></script>
 </body>
 </html>

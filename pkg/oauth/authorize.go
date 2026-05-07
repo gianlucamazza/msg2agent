@@ -24,8 +24,9 @@ type IdentityProvider interface {
 
 // TenantBrief is the minimal tenant information needed by the consent screen.
 type TenantBrief struct {
-	ID   string
-	Name string
+	ID    string
+	Name  string
+	Email string
 }
 
 // TenantLookup resolves a tenant by email or ID for the consent screen.

@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -138,6 +137,7 @@ type keyListItem struct {
 	CreatedAt time.Time  `json:"created_at"`
 	LastUsed  *time.Time `json:"last_used,omitempty"`
 	KeyPrefix string     `json:"key_prefix"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
 type createKeyRequest struct {
@@ -169,20 +169,21 @@ func (app *application) handleKeys(w http.ResponseWriter, r *http.Request) {
 		}
 		items := make([]keyListItem, 0, len(keys))
 		for _, k := range keys {
-			prefix := k.KeyHash
-			if len(prefix) > 8 {
-				prefix = prefix[:8]
-			}
 			items = append(items, keyListItem{
 				ID:        k.ID,
 				Label:     k.Name,
 				CreatedAt: k.CreatedAt,
-				KeyPrefix: prefix,
+				KeyPrefix: k.Prefix,
+				RevokedAt: k.RevokedAt,
 			})
 		}
 		writeJSON(w, http.StatusOK, paginate(r, items))
 
 	case http.MethodPost:
+		if !globalKeyCreateLimiter.allow(t.ID) {
+			writeRateLimitError(w, globalKeyCreateLimiter.retryAfterSecs(t.ID))
+			return
+		}
 		var req createKeyRequest
 		if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
 			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
@@ -190,6 +191,10 @@ func (app *application) handleKeys(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Label == "" {
 			req.Label = "API Key"
+		}
+		if len(req.Label) > 64 {
+			http.Error(w, "label too long (max 64 characters)", http.StatusBadRequest)
+			return
 		}
 		plaintext, record, err := billing.GenerateAPIKey(t.ID, req.Label)
 		if err != nil {
@@ -368,9 +373,8 @@ func (app *application) proxyToRelay(w http.ResponseWriter, r *http.Request, pat
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	if svcToken := os.Getenv("MSG2AGENT_SERVICE_TOKEN"); svcToken != "" {
-		req.Header.Set("X-Service-Token", svcToken)
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		req.Header.Set("Authorization", auth)
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}

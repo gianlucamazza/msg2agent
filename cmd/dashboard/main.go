@@ -167,7 +167,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         addr_,
-		Handler:      mux,
+		Handler:      securityHeaders(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,

@@ -72,7 +72,7 @@ func TestJWT_roundtrip(t *testing.T) {
 	issuer := NewJWTIssuer(priv, "key-1", "https://example.com")
 	verifier := NewJWTVerifier(priv, "https://example.com", "https://example.com/mcp")
 
-	token, err := issuer.IssueAccessToken("tenant-1", "cli_abc", "mcp:tools:read", "https://example.com/mcp", "jti-1")
+	token, err := issuer.IssueAccessToken("tenant-1", "cli_abc", "mcp:tools:read", "https://example.com/mcp", "jti-1", "", "")
 	if err != nil {
 		t.Fatalf("IssueAccessToken: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestJWT_wrongKey(t *testing.T) {
 	issuer := NewJWTIssuer(priv1, "k1", "https://example.com")
 	verifier := NewJWTVerifier(priv2, "https://example.com", "https://example.com/mcp")
 
-	token, _ := issuer.IssueAccessToken("t", "c", "s", "https://example.com/mcp", "j")
+	token, _ := issuer.IssueAccessToken("t", "c", "s", "https://example.com/mcp", "j", "", "")
 	if _, err := verifier.ValidateClaims(token); err == nil {
 		t.Fatal("expected error when verifying with wrong key")
 	}
@@ -207,7 +207,7 @@ func storeCodeForTest(t *testing.T, store Store, verifier, redirectURI string) s
 
 func TestTokenHandler_authCode(t *testing.T) {
 	store, issuer := setupTokenTest(t)
-	h := TokenHandler(store, issuer, "https://example.com/mcp")
+	h := TokenHandler(store, issuer, "https://example.com/mcp", nil)
 
 	const redirectURI = "http://localhost:9999/cb"
 	const verifier = "test-verifier-long-enough-to-be-valid-0123456789"
@@ -235,7 +235,7 @@ func TestTokenHandler_authCode(t *testing.T) {
 
 func TestTokenHandler_wrongVerifier(t *testing.T) {
 	store, issuer := setupTokenTest(t)
-	h := TokenHandler(store, issuer, "https://example.com/mcp")
+	h := TokenHandler(store, issuer, "https://example.com/mcp", nil)
 
 	const redirectURI = "http://localhost:9999/cb"
 	code := storeCodeForTest(t, store, "correct-verifier-padding000000000000000000", redirectURI)
@@ -259,7 +259,7 @@ func TestTokenHandler_wrongVerifier(t *testing.T) {
 
 func TestTokenHandler_unsupportedGrant(t *testing.T) {
 	store, issuer := setupTokenTest(t)
-	h := TokenHandler(store, issuer, "https://example.com/mcp")
+	h := TokenHandler(store, issuer, "https://example.com/mcp", nil)
 
 	form := url.Values{"grant_type": {"client_credentials"}}
 	req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))

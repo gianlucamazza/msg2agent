@@ -174,6 +174,11 @@ func (s *SQLiteStore) RotateRefreshToken(oldHash string, newRT *oauth.RefreshTok
 	return newRT, tx.Commit()
 }
 
+func (s *SQLiteStore) RevokeRefreshToken(hash string) error {
+	_, err := s.db.Exec(`UPDATE oauth_refresh_tokens SET revoked=1 WHERE token_hash=?`, hash)
+	return err
+}
+
 // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
 func (s *SQLiteStore) CleanupOAuthExpired() error {

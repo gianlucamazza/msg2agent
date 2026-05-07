@@ -80,4 +80,13 @@ func (s *memStore) RotateRefreshToken(oldHash string, newRT *RefreshToken) (*Ref
 	return newRT, nil
 }
 
+func (s *memStore) RevokeRefreshToken(hash string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if rt, ok := s.rts[hash]; ok {
+		rt.Revoked = true
+	}
+	return nil
+}
+
 func (s *memStore) CleanupOAuthExpired() error { return nil }

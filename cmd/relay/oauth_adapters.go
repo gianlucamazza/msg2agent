@@ -25,7 +25,7 @@ func (l *billingTenantLookup) GetTenantByEmail(email string) (*oauth.TenantBrief
 	if err != nil {
 		return nil, err
 	}
-	return &oauth.TenantBrief{ID: t.ID, Name: t.Name}, nil
+	return &oauth.TenantBrief{ID: t.ID, Name: t.Name, Email: t.Email}, nil
 }
 
 func (l *billingTenantLookup) GetTenantByID(id string) (*oauth.TenantBrief, error) {
@@ -33,5 +33,5 @@ func (l *billingTenantLookup) GetTenantByID(id string) (*oauth.TenantBrief, erro
 	if err != nil {
 		return nil, fmt.Errorf("billing: get tenant %s: %w", id, err)
 	}
-	return &oauth.TenantBrief{ID: t.ID, Name: t.Name}, nil
+	return &oauth.TenantBrief{ID: t.ID, Name: t.Name, Email: t.Email}, nil
 }

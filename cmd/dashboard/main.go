@@ -62,20 +62,25 @@ func main() {
 		defer s.Close()
 	}
 
-	// Build OAuth2 validator. Validation is only skipped in explicit dev mode —
-	// otherwise an empty JWKS URL would silently accept any unsigned token.
-	devMode := os.Getenv("MSG2AGENT_DEV_MODE") == "1"
-	if jwksURL == "" && !devMode {
-		logger.Error("OAUTH2_JWKS_URL is required (set MSG2AGENT_DEV_MODE=1 to bypass for local development)")
-		os.Exit(1)
+	// Build OAuth2 validator. The dashboard's /api/dashboard/* needs OAuth2
+	// to identify the calling tenant; if no issuer is configured, the API
+	// mount returns 503 below instead of running unauthenticated. JWKS URL
+	// defaults to <issuer>/.well-known/jwks.json when only the issuer is set
+	// — same convention used by relay and mcp-server.
+	var validator billing.JWTValidator
+	if issuerURL != "" {
+		if jwksURL == "" {
+			jwksURL = strings.TrimRight(issuerURL, "/") + "/.well-known/jwks.json"
+		}
+		validator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(a2a.OAuth2Config{
+			Issuer:   issuerURL,
+			Audience: audience,
+			JWKSURL:  jwksURL,
+		}))
+		logger.Info("OAuth2 validator enabled", "issuer", issuerURL, "jwks_url", jwksURL)
+	} else {
+		logger.Warn("OAuth2 not configured (MSG2AGENT_OAUTH2_ISSUER_URL empty); /api/dashboard/* will return 503")
 	}
-	oauth2Cfg := a2a.OAuth2Config{
-		Issuer:         issuerURL,
-		Audience:       audience,
-		JWKSURL:        jwksURL,
-		SkipValidation: jwksURL == "" && devMode,
-	}
-	validator := a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauth2Cfg))
 
 	// Effective auto-provision plan (default free if the env is set but blank).
 	if autoProvision == "" && os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION") != "" {
@@ -103,17 +108,23 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	// API routes — OAuth2 protected. Without a billing store the API cannot
-	// resolve tenants or persist anything, so refuse to mount the routes
-	// instead of exposing them unauthenticated.
-	if store != nil {
+	// API routes — OAuth2 protected. Both the billing store and the OAuth2
+	// validator are required: without the store we can't resolve tenants;
+	// without the validator we can't authenticate. Either missing piece
+	// disables the API mount with a clear 503 instead of exposing it
+	// unauthenticated or crashing the binary.
+	if store != nil && validator != nil {
 		apiHandler := billing.OAuth2Middleware(validator, store, autoProvision)(app.apiRouter())
 		mux.Handle("/api/dashboard/", apiHandler)
 	} else {
+		reason := "billing store not configured"
+		if validator == nil {
+			reason = "OAuth2 not configured (set MSG2AGENT_OAUTH2_ISSUER_URL)"
+		}
 		mux.Handle("/api/dashboard/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, "dashboard API unavailable: billing store not configured", http.StatusServiceUnavailable)
+			http.Error(w, "dashboard API unavailable: "+reason, http.StatusServiceUnavailable)
 		}))
-		logger.Warn("billing store not configured; /api/dashboard/* will return 503")
+		logger.Warn("dashboard API disabled", "reason", reason)
 	}
 
 	// Static files from embedded FS.

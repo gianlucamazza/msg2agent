@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"flag"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
-	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/webui"
 )
 
@@ -25,37 +23,15 @@ import (
 var webFS embed.FS
 
 func main() {
-	var (
-		addr            = flag.String("addr", "", "listen address (default :8082)")
-		relayURL        = flag.String("relay-url", "", "relay base URL")
-		billingDB       = flag.String("billing-db", "", "billing SQLite path")
-		billingDriver   = flag.String("billing-driver", "", "billing store driver (sqlite|postgres)")
-		oauth2IssuerURL = flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL")
-		oauth2Audience  = flag.String("oauth2-audience", "", "OAuth2 audience")
-		oauth2JWKSURL   = flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL")
-		domain          = flag.String("domain", "", "DID domain for tenant identity (env: DOMAIN)")
-		shutdownTimeout = flag.Duration("shutdown-timeout", 30*time.Second, "graceful shutdown timeout")
-	)
-	flag.Parse()
-
-	addr_ := config.FlagOrEnv(*addr, "DASHBOARD_ADDR", ":8082")
-	relayURL_ := config.FlagOrEnv(*relayURL, "RELAY_URL", "http://localhost:8080")
-	billingDB_ := config.FlagOrEnv(*billingDB, "BILLING_DB", "")
-	billingDriver_ := config.FlagOrEnv(*billingDriver, "BILLING_DRIVER", "sqlite")
-	issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "OAUTH2_ISSUER_URL", "")
-	audience := config.FlagOrEnv(*oauth2Audience, "OAUTH2_AUDIENCE", "")
-	jwksURL := config.FlagOrEnv(*oauth2JWKSURL, "OAUTH2_JWKS_URL", "")
-	domain_ := config.FlagOrEnv(*domain, "DOMAIN", "localhost")
-	autoProvision := billing.Plan(os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION"))
-
+	cfg := parseAppConfig()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	logger.Info("starting dashboard", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
 	// Open billing store (optional).
 	var store billing.Store
 	var eventStore billing.EventStore
-	if billingDB_ != "" {
-		s, _, err := billing.NewStore(billingDriver_, billingDB_)
+	if cfg.BillingDB != "" {
+		s, _, err := billing.NewStore(cfg.BillingDriver, cfg.BillingDB)
 		if err != nil {
 			logger.Error("failed to open billing store", "error", err)
 			os.Exit(1)
@@ -73,30 +49,26 @@ func main() {
 	// defaults to <issuer>/.well-known/jwks.json when only the issuer is set
 	// — same convention used by relay and mcp-server.
 	var validator billing.JWTValidator
-	if issuerURL != "" {
+	jwksURL := cfg.OAuth2JWKSURL
+	if cfg.OAuth2IssuerURL != "" {
 		if jwksURL == "" {
-			jwksURL = strings.TrimRight(issuerURL, "/") + "/.well-known/jwks.json"
+			jwksURL = strings.TrimRight(cfg.OAuth2IssuerURL, "/") + "/.well-known/jwks.json"
 		}
 		validator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(a2a.OAuth2Config{
-			Issuer:   issuerURL,
-			Audience: audience,
+			Issuer:   cfg.OAuth2IssuerURL,
+			Audience: cfg.OAuth2Audience,
 			JWKSURL:  jwksURL,
 		}))
-		logger.Info("OAuth2 validator enabled", "issuer", issuerURL, "jwks_url", jwksURL)
+		logger.Info("OAuth2 validator enabled", "issuer", cfg.OAuth2IssuerURL, "jwks_url", jwksURL)
 	} else {
 		logger.Warn("OAuth2 not configured (MSG2AGENT_OAUTH2_ISSUER_URL empty); /api/dashboard/* will return 503")
-	}
-
-	// Effective auto-provision plan (default free if the env is set but blank).
-	if autoProvision == "" && os.Getenv("MSG2AGENT_OAUTH_AUTO_PROVISION") != "" {
-		autoProvision = billing.PlanFree
 	}
 
 	app := &application{
 		store:      store,
 		eventStore: eventStore,
-		relayURL:   relayURL_,
-		domain:     domain_,
+		relayURL:   cfg.RelayURL,
+		domain:     cfg.Domain,
 		logger:     logger,
 	}
 
@@ -120,7 +92,7 @@ func main() {
 	// disables the API mount with a clear 503 instead of exposing it
 	// unauthenticated or crashing the binary.
 	if store != nil && validator != nil {
-		apiHandler := billing.OAuth2Middleware(validator, store, autoProvision)(app.apiRouter())
+		apiHandler := billing.OAuth2Middleware(validator, store, cfg.AutoProvision)(app.apiRouter())
 		mux.Handle("/api/dashboard/", apiHandler)
 	} else {
 		reason := "billing store not configured"
@@ -177,7 +149,7 @@ func main() {
 	})
 
 	srv := &http.Server{
-		Addr:         addr_,
+		Addr:         cfg.Addr,
 		Handler:      securityHeaders(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -189,7 +161,7 @@ func main() {
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		logger.Info("dashboard starting", "addr", addr_, "relay_url", relayURL_)
+		logger.Info("dashboard starting", "addr", cfg.Addr, "relay_url", cfg.RelayURL)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server error", "error", err)
 			os.Exit(1)
@@ -198,7 +170,7 @@ func main() {
 
 	<-stop
 	logger.Info("shutting down dashboard")
-	ctx, cancel := context.WithTimeout(context.Background(), *shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("shutdown error", "error", err)

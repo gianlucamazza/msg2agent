@@ -7,7 +7,6 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -23,7 +22,6 @@ import (
 	"github.com/gianlucamazza/msg2agent/adapters/a2a"
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 	"github.com/gianlucamazza/msg2agent/pkg/buildinfo"
-	"github.com/gianlucamazza/msg2agent/pkg/config"
 	"github.com/gianlucamazza/msg2agent/pkg/email"
 	"github.com/gianlucamazza/msg2agent/pkg/httputil"
 	"github.com/gianlucamazza/msg2agent/pkg/oauth"
@@ -38,135 +36,25 @@ import (
 var webFS embed.FS
 
 func main() {
-	// Define flags with defaults that can be overridden by env vars
-	addr := flag.String("addr", "", "Listen address (env: MSG2AGENT_RELAY_ADDR)")
-	maxConns := flag.Int("max-connections", 0, "Maximum concurrent connections (env: MSG2AGENT_MAX_CONNECTIONS)")
-	msgRate := flag.Float64("msg-rate", 0, "Message rate limit per client (msg/sec) (env: MSG2AGENT_MSG_RATE)")
-
-	// TLS flags
-	tlsEnabled := flag.Bool("tls", false, "Enable TLS (env: MSG2AGENT_TLS)")
-	tlsCert := flag.String("tls-cert", "", "TLS certificate file (env: MSG2AGENT_TLS_CERT)")
-	tlsKey := flag.String("tls-key", "", "TLS key file (env: MSG2AGENT_TLS_KEY)")
-
-	// Log level flag
-	logLevel := flag.String("log-level", "", "Log level: debug, info, warn, error (env: MSG2AGENT_LOG_LEVEL)")
-
-	// Store configuration
-	storeType := flag.String("store", "", "Store type: memory, file, sqlite (env: MSG2AGENT_STORE)")
-	storeFile := flag.String("store-file", "", "Store file path for file/sqlite stores (env: MSG2AGENT_STORE_FILE)")
-
-	// Observability settings
-	otlpEndpoint := flag.String("otlp-endpoint", "", "OTLP endpoint for tracing (env: MSG2AGENT_OTLP_ENDPOINT)")
-	traceStdout := flag.Bool("trace-stdout", false, "Enable stdout tracing for debugging (env: MSG2AGENT_TRACE_STDOUT)")
-
-	// CORS settings
-	corsOrigins := flag.String("cors-origins", "", "Comma-separated list of allowed CORS origins (env: MSG2AGENT_CORS_ORIGINS)")
-
-	// Security settings
-	skipDIDProof := flag.Bool("skip-did-proof", false, "Skip DID ownership verification during registration (NOT recommended) (env: MSG2AGENT_SKIP_DID_PROOF)")
-	allowedDIDs := flag.String("allowed-dids", "", "Comma-separated list of allowed DIDs (empty = open relay) (env: MSG2AGENT_ALLOWED_DIDS)")
-
-	// Billing (optional)
-	billingDBPath := flag.String("billing-db", "", "Path to billing SQLite DB; enables API key auth on WS register (env: MSG2AGENT_BILLING_DB)")
-	auditVerifierIntervalFlag := flag.Duration("audit-verifier-interval", 6*time.Hour, "Interval for background audit chain verification (0 = disabled)")
-	stripeReconcileInterval := flag.Duration("stripe-reconcile-interval", time.Hour, "Interval for Stripe subscription reconciler (0 = disabled)")
-	stripeAutoReconcile := flag.Bool("stripe-auto-reconcile", false, "Automatically fix divergent billing state during reconciliation")
-
-	// OAuth2 (optional; enables JWT auth on WS in addition to API keys)
-	oauth2IssuerURL := flag.String("oauth2-issuer-url", "", "OAuth2 issuer URL for JWT validation on relay WS (env: MSG2AGENT_OAUTH2_ISSUER_URL)")
-	oauth2Audience := flag.String("oauth2-audience", "", "OAuth2 expected audience (env: MSG2AGENT_OAUTH2_AUDIENCE)")
-	oauth2JWKSUrl := flag.String("oauth2-jwks-url", "", "OAuth2 JWKS URL override (default: issuer/.well-known/jwks.json)")
-
-	// OAuth 2.1 Authorization Server (Phase B — our own AS, optional)
-	oauthASBaseURL := flag.String("oauth-as-base-url", "", "Base URL for the OAuth 2.1 Authorization Server (env: MSG2AGENT_OAUTH_AS_BASE_URL)")
-	oauthSigningKeyPath := flag.String("oauth-signing-key", "/data/oauth-signing-key.pem", "Path to the Ed25519 signing key PEM for the OAuth AS (env: MSG2AGENT_OAUTH_SIGNING_KEY)")
-	oauthGoogleClientID := flag.String("oauth-google-client-id", "", "Google OAuth2 client ID for the consent screen (env: MSG2AGENT_OAUTH_GOOGLE_CLIENT_ID)")
-	oauthGoogleClientSecret := flag.String("oauth-google-client-secret", "", "Google OAuth2 client secret (env: MSG2AGENT_OAUTH_GOOGLE_CLIENT_SECRET)")
-
-	// A2A AgentCard — served at /.well-known/agent.json (public, no auth)
-	agentCardPath := flag.String("agent-card", "", "Path to agent card JSON file to serve at /.well-known/agent.json")
-	connectorManifestPath := flag.String("connector-manifest", "", "Path to connector manifest JSON to serve at /.well-known/mcp-connector.json")
-
-	// Self-service signup (optional; requires billing store)
-	enableSignup := flag.Bool("enable-signup", false, "Enable self-service tenant signup endpoint POST /api/tenants (requires --billing-db)")
-
-	flag.Parse()
-
-	// Resolve configuration: flags override env vars override defaults
-	listenAddr := config.FlagOrEnv(*addr, "RELAY_ADDR", ":8080")
-	maxConnections := config.FlagOrEnvInt(*maxConns, 0, "MAX_CONNECTIONS", 1000)
-	messageRate := config.FlagOrEnvFloat(*msgRate, 0, "MSG_RATE", 100.0)
-	useTLS := config.FlagOrEnvBool(*tlsEnabled, "TLS", false)
-	certFile := config.FlagOrEnv(*tlsCert, "TLS_CERT", "")
-	keyFile := config.FlagOrEnv(*tlsKey, "TLS_KEY", "")
-	logLevelStr := config.FlagOrEnv(*logLevel, "LOG_LEVEL", "debug")
-	storeTypeStr := config.FlagOrEnv(*storeType, "STORE", "memory")
-	storeFilePath := config.FlagOrEnv(*storeFile, "STORE_FILE", "")
-	otlpAddr := config.FlagOrEnv(*otlpEndpoint, "OTLP_ENDPOINT", "")
-	useTraceStdout := config.FlagOrEnvBool(*traceStdout, "TRACE_STDOUT", false)
-	corsOriginsStr := config.FlagOrEnv(*corsOrigins, "CORS_ORIGINS", "")
-	skipDIDVerification := config.FlagOrEnvBool(*skipDIDProof, "SKIP_DID_PROOF", false)
-	allowedDIDsStr := config.FlagOrEnv(*allowedDIDs, "ALLOWED_DIDS", "")
-
-	// Parse allowed DIDs
-	var allowedDIDList []string
-	if allowedDIDsStr != "" {
-		for _, d := range strings.Split(allowedDIDsStr, ",") {
-			d = strings.TrimSpace(d)
-			if d != "" {
-				allowedDIDList = append(allowedDIDList, d)
-			}
-		}
+	cfg, err := parseAppConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "invalid configuration:", err)
+		os.Exit(1)
 	}
-
-	// Parse CORS origins
-	var allowedOrigins []string
-	if corsOriginsStr != "" {
-		for _, origin := range strings.Split(corsOriginsStr, ",") {
-			origin = strings.TrimSpace(origin)
-			if origin != "" {
-				allowedOrigins = append(allowedOrigins, origin)
-			}
-		}
-	}
-
-	// Parse log level
-	var slogLevel slog.Level
-	switch logLevelStr {
-	case "debug":
-		slogLevel = slog.LevelDebug
-	case "info":
-		slogLevel = slog.LevelInfo
-	case "warn":
-		slogLevel = slog.LevelWarn
-	case "error":
-		slogLevel = slog.LevelError
-	default:
-		slogLevel = slog.LevelDebug
-	}
-
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slogLevel,
+		Level: cfg.LogLevel,
 	}))
 	logger.Info("starting relay", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
-	// Validate TLS configuration
-	if useTLS {
-		if certFile == "" || keyFile == "" {
-			logger.Error("TLS enabled but certificate or key file not specified")
-			os.Exit(1)
-		}
-	}
-
 	// Initialize tracing if configured
 	var tracerProvider *telemetry.TracerProvider
-	if otlpAddr != "" || useTraceStdout {
+	if cfg.OTLPEndpoint != "" || cfg.TraceStdout {
 		var err error
 		tracerProvider, err = telemetry.InitTracer(context.Background(), telemetry.TracerConfig{
 			ServiceName:  "msg2agent-relay",
 			Environment:  "development",
-			OTLPEndpoint: otlpAddr,
-			UseStdout:    useTraceStdout,
+			OTLPEndpoint: cfg.OTLPEndpoint,
+			UseStdout:    cfg.TraceStdout,
 			Logger:       logger,
 		})
 		if err != nil {
@@ -177,10 +65,10 @@ func main() {
 	}
 
 	relayCfg := DefaultRelayConfig()
-	relayCfg.MaxConnections = maxConnections
-	relayCfg.MessageRateLimit = messageRate
-	relayCfg.AllowedOrigins = allowedOrigins
-	relayCfg.RequireDIDProof = !skipDIDVerification
+	relayCfg.MaxConnections = cfg.MaxConnections
+	relayCfg.MessageRateLimit = cfg.MessageRateLimit
+	relayCfg.AllowedOrigins = cfg.AllowedOrigins
+	relayCfg.RequireDIDProof = !cfg.SkipDIDVerification
 
 	// Validate configuration
 	if err := relayCfg.Validate(); err != nil {
@@ -189,15 +77,15 @@ func main() {
 	}
 
 	// Log security configuration
-	if skipDIDVerification {
+	if cfg.SkipDIDVerification {
 		logger.Warn("DID proof verification disabled - not recommended for production")
 	} else {
 		logger.Info("DID proof verification enabled")
 	}
 
 	// Log CORS configuration
-	if len(allowedOrigins) > 0 {
-		logger.Info("CORS configured", "origins", allowedOrigins)
+	if len(cfg.AllowedOrigins) > 0 {
+		logger.Info("CORS configured", "origins", cfg.AllowedOrigins)
 	} else {
 		logger.Warn("CORS: no external origins allowed (same-origin only)")
 	}
@@ -205,8 +93,9 @@ func main() {
 	// Create store based on configuration
 	var store registry.Store
 	var storeCloser func() error // for stores that need cleanup
+	storeFilePath := cfg.StoreFile
 
-	switch storeTypeStr {
+	switch cfg.StoreType {
 	case "sqlite":
 		if storeFilePath == "" {
 			storeFilePath = "./relay.db"
@@ -257,7 +146,7 @@ func main() {
 	// Create queue store (uses same storage backend as registry)
 	var queueStore queue.Store
 	if relayCfg.EnableOfflineQueue {
-		switch storeTypeStr {
+		switch cfg.StoreType {
 		case "sqlite":
 			queuePath := storeFilePath
 			if queuePath != ":memory:" {
@@ -290,18 +179,17 @@ func main() {
 	hub := NewRelayHubWithStore(relayCfg, store, queueStore, logger)
 
 	// Configure billing (optional)
-	billingDBStr := config.FlagOrEnv(*billingDBPath, "BILLING_DB", "")
-	if billingDBStr != "" {
-		bStore, err := billing.NewSQLiteStore(billingDBStr)
+	if cfg.BillingDBPath != "" {
+		bStore, err := billing.NewSQLiteStore(cfg.BillingDBPath)
 		if err != nil {
-			logger.Error("failed to open billing store", "path", billingDBStr, "error", err)
+			logger.Error("failed to open billing store", "path", cfg.BillingDBPath, "error", err)
 			os.Exit(1)
 		}
 		hub.billingStore = bStore
 		hub.tenantPool = billing.NewTenantRateLimiterPool(bStore)
-		logger.Info("relay billing enabled", "db", billingDBStr)
+		logger.Info("relay billing enabled", "db", cfg.BillingDBPath)
 
-		auditInterval := *auditVerifierIntervalFlag
+		auditInterval := cfg.AuditVerifierInterval
 		if auditInterval > 0 {
 			// bStore is *billing.SQLiteStore which implements billing.AdminStore directly.
 			billing.StartPeriodicVerifier(hub.ctx, hub.billingStore, bStore, auditInterval, logger)
@@ -309,17 +197,18 @@ func main() {
 		}
 
 		// Optional: JWT validator for OAuth2 WS auth alongside API keys.
-		issuerURL := config.FlagOrEnv(*oauth2IssuerURL, "OAUTH2_ISSUER_URL", "")
-		if issuerURL != "" {
-			jwksURL := config.FlagOrEnv(*oauth2JWKSUrl, "", strings.TrimRight(issuerURL, "/")+
-				"/.well-known/jwks.json")
+		if cfg.OAuth2IssuerURL != "" {
+			jwksURL := cfg.OAuth2JWKSURL
+			if jwksURL == "" {
+				jwksURL = strings.TrimRight(cfg.OAuth2IssuerURL, "/") + "/.well-known/jwks.json"
+			}
 			oauthCfg := a2a.OAuth2Config{
 				JWKSURL:  jwksURL,
-				Issuer:   issuerURL,
-				Audience: config.FlagOrEnv(*oauth2Audience, "OAUTH2_AUDIENCE", ""),
+				Issuer:   cfg.OAuth2IssuerURL,
+				Audience: cfg.OAuth2Audience,
 			}
 			hub.jwtValidator = a2a.NewBillingValidator(a2a.NewOAuth2Validator(oauthCfg))
-			logger.Info("relay OAuth2 JWT auth enabled", "issuer", issuerURL)
+			logger.Info("relay OAuth2 JWT auth enabled", "issuer", cfg.OAuth2IssuerURL)
 		}
 	}
 
@@ -336,12 +225,11 @@ func main() {
 		oauthASMeta         *oauth.ASMetadata
 		oauthASBaseURLStr   string
 	)
-	oauthASBaseURLStr = config.FlagOrEnv(*oauthASBaseURL, "OAUTH_AS_BASE_URL", "")
+	oauthASBaseURLStr = cfg.OAuthASBaseURL
 	if oauthASBaseURLStr != "" && hub.billingStore != nil {
-		signingKeyPath := config.FlagOrEnv(*oauthSigningKeyPath, "OAUTH_SIGNING_KEY", "/data/oauth-signing-key.pem")
-		privKey, err := oauth.LoadOrGenerateEd25519(signingKeyPath)
+		privKey, err := oauth.LoadOrGenerateEd25519(cfg.OAuthSigningKeyPath)
 		if err != nil {
-			logger.Error("oauth AS: failed to load/generate signing key", "path", signingKeyPath, "error", err)
+			logger.Error("oauth AS: failed to load/generate signing key", "path", cfg.OAuthSigningKeyPath, "error", err)
 			os.Exit(1)
 		}
 		jwkSet, kid, err := oauth.BuildJWK(privKey)
@@ -361,10 +249,8 @@ func main() {
 		oauthASMeta = oauth.NewASMetadata(oauthASBaseURLStr)
 
 		var idp oauth.IdentityProvider
-		googleClientID := config.FlagOrEnv(*oauthGoogleClientID, "OAUTH_GOOGLE_CLIENT_ID", "")
-		googleClientSecret := config.FlagOrEnv(*oauthGoogleClientSecret, "OAUTH_GOOGLE_CLIENT_SECRET", "")
-		if googleClientID != "" {
-			idp = oauth.NewGoogleIDP(googleClientID, googleClientSecret, oauthASBaseURLStr+"/oauth/google-callback")
+		if cfg.OAuthGoogleClientID != "" {
+			idp = oauth.NewGoogleIDP(cfg.OAuthGoogleClientID, cfg.OAuthGoogleClientSecret, oauthASBaseURLStr+"/oauth/google-callback")
 		}
 
 		tenantLookup := &billingTenantLookup{store: oauthCombinedStore}
@@ -377,7 +263,7 @@ func main() {
 		oauthTokenHandler = oauth.TokenHandler(oauthStore, jwtIssuer, oauthASBaseURLStr+"/mcp", tenantLookup)
 		oauthRevokeHandler = oauth.RevokeHandler(oauthStore)
 
-		logger.Info("oauth AS enabled", "base_url", oauthASBaseURLStr, "kid", kid, "google_idp", googleClientID != "")
+		logger.Info("oauth AS enabled", "base_url", oauthASBaseURLStr, "kid", kid, "google_idp", cfg.OAuthGoogleClientID != "")
 	}
 
 	// Internal service token — lets mcp-server connect without billing API key.
@@ -388,9 +274,9 @@ func main() {
 
 	// Configure DID allowlist
 	hub.aclEnforcer = security.NewACLEnforcer()
-	if len(allowedDIDList) > 0 {
-		hub.allowlistACL = security.TrustedAgentsPolicy(allowedDIDList)
-		logger.Info("DID allowlist enabled", "count", len(allowedDIDList))
+	if len(cfg.AllowedDIDs) > 0 {
+		hub.allowlistACL = security.TrustedAgentsPolicy(cfg.AllowedDIDs)
+		logger.Info("DID allowlist enabled", "count", len(cfg.AllowedDIDs))
 	} else {
 		logger.Info("DID allowlist disabled (open relay)")
 	}
@@ -542,9 +428,9 @@ func main() {
 	}
 
 	// A2A AgentCard — public, no auth, served at /.well-known/agent.json
-	if *agentCardPath != "" {
+	if cfg.AgentCardPath != "" {
 		mux.HandleFunc("/.well-known/agent.json", func(w http.ResponseWriter, r *http.Request) {
-			data, err := os.ReadFile(*agentCardPath)
+			data, err := os.ReadFile(cfg.AgentCardPath)
 			if err != nil {
 				http.Error(w, "agent card not found", http.StatusNotFound)
 				return
@@ -553,21 +439,21 @@ func main() {
 			w.Header().Set("Cache-Control", "public, max-age=300")
 			_, _ = w.Write(data)
 		})
-		logger.Info("agent card endpoint enabled", "path", "/.well-known/agent.json", "file", *agentCardPath)
+		logger.Info("agent card endpoint enabled", "path", "/.well-known/agent.json", "file", cfg.AgentCardPath)
 	}
 
 	// Connector manifest — Anthropic Connector Directory discovery
-	if *connectorManifestPath != "" {
-		manifestBytes, err := os.ReadFile(*connectorManifestPath)
+	if cfg.ConnectorManifestPath != "" {
+		manifestBytes, err := os.ReadFile(cfg.ConnectorManifestPath)
 		if err != nil {
-			logger.Warn("connector manifest not found, endpoint disabled", "file", *connectorManifestPath, "err", err)
+			logger.Warn("connector manifest not found, endpoint disabled", "file", cfg.ConnectorManifestPath, "err", err)
 		} else {
 			mux.HandleFunc("/.well-known/mcp-connector.json", func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Cache-Control", "public, max-age=300")
 				_, _ = w.Write(manifestBytes)
 			})
-			logger.Info("connector manifest endpoint enabled", "path", "/.well-known/mcp-connector.json", "file", *connectorManifestPath)
+			logger.Info("connector manifest endpoint enabled", "path", "/.well-known/mcp-connector.json", "file", cfg.ConnectorManifestPath)
 		}
 	}
 
@@ -582,11 +468,11 @@ func main() {
 			stripeClient = billing.NewStripeClient(*stripeCfg)
 
 			// Stripe reconciler: periodically syncs subscription state from Stripe.
-			billing.StartStripeReconciler(hub.ctx, hub.billingStore, stripeClient, *stripeReconcileInterval, *stripeAutoReconcile, logger)
-			if *stripeReconcileInterval > 0 {
+			billing.StartStripeReconciler(hub.ctx, hub.billingStore, stripeClient, cfg.StripeReconcileEvery, cfg.StripeAutoReconcile, logger)
+			if cfg.StripeReconcileEvery > 0 {
 				logger.Info("Stripe reconciler started",
-					"interval", *stripeReconcileInterval,
-					"auto_fix", *stripeAutoReconcile)
+					"interval", cfg.StripeReconcileEvery,
+					"auto_fix", cfg.StripeAutoReconcile)
 			}
 
 			authMW := billing.BearerMiddleware(hub.billingStore, oauthAccessTokenVal, false)
@@ -606,7 +492,7 @@ func main() {
 
 	// Self-service signup endpoint (opt-in; requires billing store).
 	// Declared after Stripe setup so stripeClient is available for paid plans.
-	if *enableSignup {
+	if cfg.EnableSelfServiceSignup {
 		if hub.billingStore == nil {
 			logger.Error("--enable-signup requires --billing-db to be set")
 			os.Exit(1)
@@ -629,7 +515,7 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:              listenAddr,
+		Addr:              cfg.ListenAddr,
 		Handler:           httputil.CSP(securityHeaders(mux), cspHashes...),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -637,16 +523,16 @@ func main() {
 	// Start server in goroutine
 	go func() {
 		var err error
-		if useTLS {
-			logger.Info("relay hub starting with TLS", "addr", listenAddr, "cert", certFile)
+		if cfg.TLSEnabled {
+			logger.Info("relay hub starting with TLS", "addr", cfg.ListenAddr, "cert", cfg.TLSCert)
 			// Configure TLS
 			tlsConfig := &tls.Config{
 				MinVersion: tls.VersionTLS12,
 			}
 			server.TLSConfig = tlsConfig
-			err = server.ListenAndServeTLS(certFile, keyFile)
+			err = server.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
 		} else {
-			logger.Info("relay hub starting", "addr", listenAddr)
+			logger.Info("relay hub starting", "addr", cfg.ListenAddr)
 			err = server.ListenAndServe()
 		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -656,10 +542,10 @@ func main() {
 	}()
 
 	protocol := "ws"
-	if useTLS {
+	if cfg.TLSEnabled {
 		protocol = "wss"
 	}
-	fmt.Printf("Relay Hub started on %s://%s\n", protocol, listenAddr)
+	fmt.Printf("Relay Hub started on %s://%s\n", protocol, cfg.ListenAddr)
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)

@@ -111,87 +111,17 @@ export MSG2AGENT_STORE_FILE="/var/lib/msg2agent/relay.db"
 ./relay
 ```
 
-## Agent Configuration
+## Agent Runtime
 
-### Command Line Flags
+The agent runtime is implemented as the reusable Go package `pkg/agent`. The
+shipped process that embeds it is `cmd/mcp-server`, which connects to the relay,
+registers a DID, and exposes the network through MCP transports. There is no
+current standalone binary or Docker target named `agent`.
 
-| Flag                  | Default     | Description                                   |
-| --------------------- | ----------- | --------------------------------------------- |
-| `-name`               |             | Agent name (required)                         |
-| `-domain`             | `localhost` | Domain for DID                                |
-| `-relay`              |             | Relay WebSocket URL                           |
-| `-http`               |             | HTTP server address for agent card            |
-| `-listen`             |             | P2P WebSocket listener address                |
-| `-metrics`            |             | Metrics server address                        |
-| `-tls`                | `false`     | Enable TLS for listener                       |
-| `-http-tls`           | `false`     | Enable TLS for HTTP server                    |
-| `-tls-cert`           |             | TLS certificate file                          |
-| `-tls-key`            |             | TLS private key file                          |
-| `-tls-skip-verify`    | `false`     | Skip TLS verification (dev only)              |
-| `-require-encryption` | `false`     | Require message encryption                    |
-| `-log-level`          | `info`      | Log level                                     |
-| `-otlp-endpoint`      |             | OpenTelemetry endpoint                        |
-| `-trace-stdout`       | `false`     | Output traces to stdout                       |
-| `-trusted-dids`       |             | Comma-separated list of trusted agent DIDs    |
-| `-open-acl`           | `false`     | Open ACL policy - allow all (not recommended) |
-
-### Environment Variables
-
-| Environment Variable           | Flag Equivalent       |
-| ------------------------------ | --------------------- |
-| `MSG2AGENT_NAME`               | `-name`               |
-| `MSG2AGENT_DOMAIN`             | `-domain`             |
-| `MSG2AGENT_RELAY`              | `-relay`              |
-| `MSG2AGENT_HTTP`               | `-http`               |
-| `MSG2AGENT_LISTEN`             | `-listen`             |
-| `MSG2AGENT_METRICS`            | `-metrics`            |
-| `MSG2AGENT_TLS`                | `-tls`                |
-| `MSG2AGENT_HTTP_TLS`           | `-http-tls`           |
-| `MSG2AGENT_TLS_CERT`           | `-tls-cert`           |
-| `MSG2AGENT_TLS_KEY`            | `-tls-key`            |
-| `MSG2AGENT_TLS_SKIP_VERIFY`    | `-tls-skip-verify`    |
-| `MSG2AGENT_REQUIRE_ENCRYPTION` | `-require-encryption` |
-| `MSG2AGENT_LOG_LEVEL`          | `-log-level`          |
-| `MSG2AGENT_OTLP_ENDPOINT`      | `-otlp-endpoint`      |
-| `MSG2AGENT_TRUSTED_DIDS`       | `-trusted-dids`       |
-| `MSG2AGENT_OPEN_ACL`           | `-open-acl`           |
-
-### Example Configurations
-
-**Development:**
-
-```bash
-./agent -name alice -relay ws://localhost:8080 -log-level debug
-```
-
-**Production:**
-
-```bash
-./agent \
-  -name production-agent \
-  -domain example.com \
-  -relay wss://relay.example.com:8443 \
-  -http :8081 \
-  -http-tls \
-  -metrics :9090 \
-  -tls-cert /etc/msg2agent/agent.crt \
-  -tls-key /etc/msg2agent/agent.key \
-  -require-encryption \
-  -log-level info \
-  -otlp-endpoint http://jaeger:4318
-```
-
-**P2P mode (no relay):**
-
-```bash
-./agent \
-  -name alice \
-  -domain example.com \
-  -listen :8082 \
-  -tls \
-  -tls-cert server.crt \
-  -tls-key server.key
-```
+Custom agents should import `pkg/agent`, configure `agent.Config`, register
+method handlers, and connect to the relay with a WebSocket URL. Operational
+configuration for the shipped agent-facing binary is documented in the MCP
+server section below.
 
 ## MCP Server Configuration
 
@@ -489,15 +419,15 @@ The relay enforces TLS 1.2 minimum.
 
 ### Prometheus Metrics
 
-Both relay and agents expose metrics at `/metrics`:
+The relay and streamable HTTP MCP server expose Prometheus metrics at `/metrics`:
 
 ```bash
 # Relay metrics
 curl http://localhost:8080/metrics
 
-# Agent metrics (separate port)
-./agent -name alice -metrics :9090
-curl http://localhost:9090/metrics
+# MCP server metrics
+./mcp-server -transport streamable-http -addr :3001 -relay ws://localhost:8080
+curl http://localhost:3001/metrics
 ```
 
 ### OpenTelemetry Tracing
@@ -519,13 +449,13 @@ curl http://localhost:9090/metrics
 | `/health` | Liveness  | `ok`             |
 | `/ready`  | Readiness | JSON with status |
 
-### Agent (on metrics port)
+### MCP Server (streamable HTTP)
 
-| Endpoint  | Purpose      | Response |
-| --------- | ------------ | -------- |
-| `/health` | Liveness     | `ok`     |
-| `/ready`  | Readiness    | `ok`     |
-| `/live`   | K8s liveness | `ok`     |
+| Endpoint   | Purpose   | Response         |
+| ---------- | --------- | ---------------- |
+| `/health`  | Liveness  | `ok`             |
+| `/ready`   | Readiness | JSON with DID    |
+| `/metrics` | Metrics   | Prometheus format |
 
 ## Resource Limits
 
@@ -586,7 +516,7 @@ When set, only the listed DIDs may register. An empty value means the relay acce
 
 - [ ] Enable TLS (`-tls`)
 - [ ] Use valid certificates (not self-signed)
-- [ ] Enable encryption (`-require-encryption`)
+- [ ] Require encryption in custom `pkg/agent` deployments when peer support is available
 - [ ] Set appropriate rate limits
 - [ ] Use SQLite or external DB for persistence
 - [ ] Configure log level to `info` or `warn`

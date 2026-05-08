@@ -35,84 +35,65 @@ services:
       - msg2agent
     restart: unless-stopped
 
-  # Agent Alice
-  alice:
-    image: msg2agent-agent:latest
-    build:
-      context: .
-      target: agent
-    ports:
-      - "${ALICE_HTTP_PORT:-8081}:8081"
-      - "${ALICE_P2P_PORT:-8082}:8082"
-      - "${ALICE_METRICS_PORT:-9091}:9090"
-    environment:
-      MSG2AGENT_NAME: "alice"
-      MSG2AGENT_DOMAIN: "alice.local"
-      MSG2AGENT_RELAY: "ws://relay:8080"
-      MSG2AGENT_HTTP: ":8081"
-      MSG2AGENT_LISTEN: ":8082"
-      MSG2AGENT_METRICS: ":9090"
-      MSG2AGENT_LOG_LEVEL: "${LOG_LEVEL:-debug}"
-    depends_on:
-      relay:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    networks:
-      - msg2agent
-    restart: unless-stopped
-
-  # Agent Bob
-  bob:
-    image: msg2agent-agent:latest
-    build:
-      context: .
-      target: agent
-    ports:
-      - "${BOB_HTTP_PORT:-8083}:8081"
-      - "${BOB_P2P_PORT:-8084}:8082"
-      - "${BOB_METRICS_PORT:-9092}:9090"
-    environment:
-      MSG2AGENT_NAME: "bob"
-      MSG2AGENT_DOMAIN: "bob.local"
-      MSG2AGENT_RELAY: "ws://relay:8080"
-      MSG2AGENT_HTTP: ":8081"
-      MSG2AGENT_LISTEN: ":8082"
-      MSG2AGENT_METRICS: ":9090"
-      MSG2AGENT_LOG_LEVEL: "${LOG_LEVEL:-debug}"
-    depends_on:
-      relay:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    networks:
-      - msg2agent
-    restart: unless-stopped
-
   # MCP Server - Model Context Protocol interface for AI assistants
   mcp-server:
     image: msg2agent-mcp-server:latest
     build:
       context: .
       target: mcp-server
-    command: ["-name", "mcp-agent", "-domain", "mcp.local", "-relay", "ws://relay:8080"]
-    stdin_open: true
-    tty: true
+    command:
+      [
+        "-name",
+        "mcp-agent",
+        "-domain",
+        "mcp.local",
+        "-relay",
+        "ws://relay:8080",
+        "-transport",
+        "streamable-http",
+        "-addr",
+        ":3001",
+      ]
+    ports:
+      - "${MCP_PORT:-3001}:3001"
     volumes:
       - mcp-identity:/home/msg2agent/.msg2agent
     depends_on:
       relay:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
     networks:
       - msg2agent
+    restart: unless-stopped
+
+  # Dashboard - tenant/API-key/usage UI. The API returns 503 until billing and OAuth are configured.
+  dashboard:
+    image: msg2agent-dashboard:latest
+    build:
+      context: .
+      target: dashboard
+    ports:
+      - "${DASHBOARD_PORT:-8082}:8082"
+    environment:
+      MSG2AGENT_DASHBOARD_ADDR: ":8082"
+      MSG2AGENT_RELAY_URL: "http://relay:8080"
+    depends_on:
+      relay:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - msg2agent
+    restart: unless-stopped
 
 volumes:
   mcp-identity:

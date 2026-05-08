@@ -4,43 +4,31 @@ This guide covers deploying msg2agent components using Docker and Docker Compose
 
 ## Building Images
 
-### Relay Image
-
-```dockerfile
-# Dockerfile.relay
-FROM golang:1.23-alpine AS builder
-
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /relay ./cmd/relay
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
-COPY --from=builder /relay /usr/local/bin/relay
-EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/relay"]
-CMD ["-addr", ":8080"]
-```
-
-Build the image:
+The repository root `Dockerfile` builds all shipped binaries in a shared builder stage
+and exposes one runtime target per component:
 
 ```bash
-docker build -f Dockerfile.relay -t msg2agent/relay:latest .
+docker build --target relay -t msg2agent-relay:latest .
+docker build --target mcp-server -t msg2agent-mcp-server:latest .
+docker build --target billing-admin -t msg2agent-billing-admin:latest .
+docker build --target dashboard -t msg2agent-dashboard:latest .
 ```
+
+`make docker-build` runs the same target set with version tags.
 
 ## Docker Compose
 
 ### Basic Setup
 
-```yaml
-# docker-compose.yml
-version: "3.8"
+The checked-in `docker-compose.yml` starts the current runtime services:
+`relay`, `mcp-server` in streamable HTTP mode, and `dashboard`. The agent runtime
+is implemented as `pkg/agent` and is embedded by `mcp-server`; there is no
+standalone Docker target named `agent`.
 
+```yaml
 services:
   relay:
-    image: msg2agent/relay:latest
+    image: msg2agent-relay:latest
     ports:
       - "8080:8080"
     environment:
@@ -53,17 +41,18 @@ services:
       retries: 3
 
   mcp-server:
-    image: msg2agent/mcp-server:latest
+    image: msg2agent-mcp-server:latest
+    command: ["-name", "mcp-agent", "-domain", "mcp.local", "-relay", "ws://relay:8080", "-transport", "streamable-http", "-addr", ":3001"]
     depends_on:
       relay:
         condition: service_healthy
-    environment:
-      - MSG2AGENT_NAME=my-agent
-      - MSG2AGENT_DOMAIN=example.com
-      - MSG2AGENT_RELAY_URL=ws://relay:8080
-      - MSG2AGENT_HTTP_ADDR=:3001
     ports:
       - "3001:3001"
+
+  dashboard:
+    image: msg2agent-dashboard:latest
+    ports:
+      - "8082:8082"
 ```
 
 ### With SQLite Persistence
@@ -74,7 +63,7 @@ version: "3.8"
 
 services:
   relay:
-    image: msg2agent/relay:latest
+    image: msg2agent-relay:latest
     ports:
       - "8080:8080"
     volumes:
@@ -101,7 +90,7 @@ version: "3.8"
 
 services:
   relay:
-    image: msg2agent/relay:latest
+    image: msg2agent-relay:latest
     ports:
       - "8443:8443"
     volumes:
@@ -117,28 +106,32 @@ services:
 ## Running
 
 ```bash
-# Start all services
-docker-compose up -d
+# Build and start all services
+make dev-up
 
 # View logs
-docker-compose logs -f relay
+make dev-logs
 
 # Check health
 curl http://localhost:8080/health
+curl http://localhost:3001/health
+curl http://localhost:8082/health
 
 # Stop services
-docker-compose down
+make dev-down
 ```
 
 ## Health Checks
 
-The relay exposes these endpoints:
+The compose services expose these default health endpoints:
 
-| Endpoint   | Purpose            | Response          |
-| ---------- | ------------------ | ----------------- |
-| `/health`  | Liveness probe     | `ok`              |
-| `/ready`   | Readiness probe    | JSON with status  |
-| `/metrics` | Prometheus metrics | Prometheus format |
+| Service      | Endpoint                 | Purpose            |
+| ------------ | ------------------------ | ------------------ |
+| relay        | `http://localhost:8080/health` | Liveness probe     |
+| relay        | `http://localhost:8080/ready`  | Readiness probe    |
+| relay        | `http://localhost:8080/metrics` | Prometheus metrics |
+| mcp-server   | `http://localhost:3001/health` | Liveness probe     |
+| dashboard    | `http://localhost:8082/health` | Liveness probe     |
 
 ## Environment Variables
 

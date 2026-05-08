@@ -242,7 +242,8 @@ web-check: ## Build and verify embed dirs match web/dist/ (used in CI from Phase
 	git diff --exit-code cmd/relay/web cmd/dashboard/web pkg/webui/assets/style.css
 
 web-test: ## Run Playwright smoke tests against the built front-end
-	pnpm --dir web exec playwright install chromium --with-deps
+	pnpm --dir web install --frozen-lockfile
+	@if ! command -v playwright >/dev/null 2>&1; then pnpm --dir web exec playwright install chromium --with-deps; fi
 	pnpm --dir web test
 
 ## CI

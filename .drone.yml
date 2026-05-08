@@ -14,6 +14,7 @@ steps:
       - name: pnpmstore
         path: /root/.local/share/pnpm/store
     commands:
+      - apk add --no-cache git
       - corepack enable
       - make web-check
 
@@ -24,20 +25,28 @@ steps:
         path: /root/.local/share/pnpm/store
     commands:
       - corepack enable
-      - pnpm --dir web install --frozen-lockfile
-      - CI=true pnpm --dir web test
+      - CI=true make web-test
 
-  - name: test
-    image: golang:1.25-alpine
-    environment:
-      CGO_ENABLED: "0"
+  - name: lint
+    image: golangci/golangci-lint:v2.11.0-alpine
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
     commands:
-      - apk add --no-cache git
+      - golangci-lint run --timeout=15m ./...
+
+  - name: test
+    image: golang:1.25-alpine
+    environment:
+      CGO_ENABLED: "1"
+    volumes:
+      - name: gomodcache
+        path: /root/go/pkg/mod
+    commands:
+      - apk add --no-cache git gcc musl-dev
       - go mod download
-      - go test ./pkg/... ./cmd/...
+      - make test-unit
+
 volumes:
   - name: gomodcache
     host:
@@ -65,6 +74,7 @@ steps:
       - name: pnpmstore
         path: /root/.local/share/pnpm/store
     commands:
+      - apk add --no-cache git
       - corepack enable
       - make web-check
 
@@ -75,20 +85,27 @@ steps:
         path: /root/.local/share/pnpm/store
     commands:
       - corepack enable
-      - pnpm --dir web install --frozen-lockfile
-      - CI=true pnpm --dir web test
+      - CI=true make web-test
 
-  - name: test
-    image: golang:1.25-alpine
-    environment:
-      CGO_ENABLED: "0"
+  - name: lint
+    image: golangci/golangci-lint:v2.11.0-alpine
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
     commands:
-      - apk add --no-cache git
+      - golangci-lint run --timeout=15m ./...
+
+  - name: test
+    image: golang:1.25-alpine
+    environment:
+      CGO_ENABLED: "1"
+    volumes:
+      - name: gomodcache
+        path: /root/go/pkg/mod
+    commands:
+      - apk add --no-cache git gcc musl-dev
       - go mod download
-      - go test ./pkg/... ./cmd/...
+      - make test-unit
 
   - name: docker-build-push-relay
     image: plugins/docker
@@ -195,16 +212,16 @@ steps:
       - name: opt_services
         path: /opt/services
     commands:
-      - apk add --no-cache bash
       - echo "$REGISTRY_PASSWORD" | docker login registry.home.gianlucamazza.it -u "$REGISTRY_USERNAME" --password-stdin
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-relay:latest
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin:latest
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-relay:${DRONE_COMMIT_SHA}
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:${DRONE_COMMIT_SHA}
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin:${DRONE_COMMIT_SHA}
+      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:${DRONE_COMMIT_SHA}
       - cp /drone/src/infrastructure/docker-compose.odroid.yml /opt/services/msg2agent/docker-compose.yml
       - cp /drone/src/infrastructure/agentcard-msg2agent.json /opt/services/msg2agent/agentcard.json
       - cp /drone/src/infrastructure/connector-manifest.json /opt/services/msg2agent/connector-manifest.json
-      - docker compose -f /opt/services/msg2agent/docker-compose.yml up -d --no-build --force-recreate
+      - echo "MSG2AGENT_VERSION=${DRONE_COMMIT_SHA}" > /opt/services/msg2agent/.env.version
+      - docker compose --env-file /opt/services/msg2agent/.env.version --env-file /opt/services/msg2agent/.env -f /opt/services/msg2agent/docker-compose.yml up -d --no-build --force-recreate
 
 volumes:
   - name: gomodcache
@@ -236,7 +253,7 @@ clone:
   depth: 1
 steps:
   - name: lint
-    image: golangci/golangci-lint:v2.11-alpine
+    image: golangci/golangci-lint:v2.11.0-alpine
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
@@ -246,14 +263,14 @@ steps:
   - name: test
     image: golang:1.25-alpine
     environment:
-      CGO_ENABLED: "0"
+      CGO_ENABLED: "1"
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
     commands:
-      - apk add --no-cache git
+      - apk add --no-cache git gcc musl-dev
       - go mod download
-      - go test ./pkg/... ./cmd/...
+      - make test-unit
 
 volumes:
   - name: gomodcache

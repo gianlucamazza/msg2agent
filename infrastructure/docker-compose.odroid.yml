@@ -22,7 +22,7 @@ services:
 
   # ── Relay Hub ──────────────────────────────────────────────────────────────
   relay:
-    image: registry.home.gianlucamazza.it/gmazza/msg2agent-relay:latest
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-relay:${MSG2AGENT_VERSION:-latest}
     container_name: msg2agent-relay
     # Override CMD to enable signup endpoint and AgentCard discovery.
     # All other config is picked up from MSG2AGENT_* env vars.
@@ -74,7 +74,7 @@ services:
 
   # ── MCP Server (OpenClaw plugin endpoint) ─────────────────────────────────
   mcp-server:
-    image: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:latest
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:${MSG2AGENT_VERSION:-latest}
     container_name: msg2agent-mcp-server
     ports:
       - "192.168.1.103:3010:3001"   # LAN only — NPM proxies /mcp to this port
@@ -124,7 +124,7 @@ services:
 
   # ── Dashboard (self-serve web UI, LAN only) ────────────────────────────────
   dashboard:
-    image: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:latest
+    image: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:${MSG2AGENT_VERSION:-latest}
     container_name: msg2agent-dashboard
     ports:
       - "192.168.1.103:8082:8082"   # LAN only — NPM proxies /app and /api/dashboard under msg2agent.xyz

@@ -27,7 +27,8 @@ steps:
     commands:
       - corepack enable
       - corepack prepare pnpm@10.33.1 --activate
-      - CI=true make web-test
+      - cd web && pnpm install --frozen-lockfile
+      - cd web && pnpm test
 
   - name: lint
     image: golangci/golangci-lint:v2.11.0-alpine
@@ -89,7 +90,8 @@ steps:
     commands:
       - corepack enable
       - corepack prepare pnpm@10.33.1 --activate
-      - CI=true make web-test
+      - cd web && pnpm install --frozen-lockfile
+      - cd web && pnpm test
 
   - name: lint
     image: golangci/golangci-lint:v2.11.0-alpine

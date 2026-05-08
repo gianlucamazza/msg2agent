@@ -1,6 +1,7 @@
 {
   "name": "msg2agent-web",
   "type": "module",
+  "packageManager": "pnpm@10.33.1",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && tailwindcss -i src/styles/global.css -o dist/style.css --minify",

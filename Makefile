@@ -224,27 +224,27 @@ smoke: ## Post-deploy smoke test (env: RELAY_URL, MCP_URL, API_KEY)
 ## Front-end
 
 web-install: ## Install front-end dependencies (requires pnpm)
-	pnpm --dir web install --frozen-lockfile
+	cd web && pnpm install --frozen-lockfile
 
 web-build: ## Build front-end into web/dist/ (requires pnpm)
-	pnpm --dir web build
+	cd web && pnpm build
 
 web-deploy: web-build ## Build front-end and copy into Go embed dirs
 	node web/scripts/split-dist.mjs
 
 web-dev: ## Start Astro dev server with HMR (requires pnpm)
-	pnpm --dir web dev
+	cd web && pnpm dev
 
 web-check: ## Build and verify embed dirs match web/dist/ (used in CI from Phase 4)
-	pnpm --dir web install --frozen-lockfile
-	pnpm --dir web build
+	cd web && pnpm install --frozen-lockfile
+	cd web && pnpm build
 	node web/scripts/split-dist.mjs
 	git diff --exit-code cmd/relay/web cmd/dashboard/web pkg/webui/assets/style.css
 
 web-test: ## Run Playwright smoke tests against the built front-end
-	pnpm --dir web install --frozen-lockfile
-	@if ! command -v playwright >/dev/null 2>&1; then pnpm --dir web exec playwright install chromium --with-deps; fi
-	pnpm --dir web test
+	cd web && pnpm install --frozen-lockfile
+	@if command -v apt-get >/dev/null 2>&1; then cd web && pnpm exec playwright install chromium --with-deps; else cd web && pnpm exec playwright install chromium; fi
+	cd web && pnpm test
 
 ## CI
 

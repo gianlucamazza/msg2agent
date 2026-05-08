@@ -9,6 +9,9 @@ before:
   hooks:
     - go mod tidy
     - go mod verify
+    - pnpm --dir web install --frozen-lockfile
+    - pnpm --dir web build
+    - node web/scripts/split-dist.mjs
 
 builds:
   - id: relay
@@ -50,6 +53,24 @@ builds:
   - id: billing-admin
     main: ./cmd/billing-admin
     binary: billing-admin
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Version={{.Version}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Commit={{.Commit}}
+      - -X github.com/gianlucamazza/msg2agent/pkg/buildinfo.Date={{.Date}}
+
+  - id: dashboard
+    main: ./cmd/dashboard
+    binary: dashboard
     env:
       - CGO_ENABLED=0
     goos:

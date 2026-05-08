@@ -8,6 +8,15 @@ platform:
 clone:
   depth: 1
 steps:
+  - name: web-check
+    image: node:22-alpine
+    volumes:
+      - name: pnpmstore
+        path: /root/.local/share/pnpm/store
+    commands:
+      - corepack enable
+      - make web-check
+
   - name: test
     image: golang:1.25-alpine
     environment:
@@ -23,6 +32,9 @@ volumes:
   - name: gomodcache
     host:
       path: /var/cache/drone/gomod
+  - name: pnpmstore
+    host:
+      path: /var/cache/drone/pnpmstore
 trigger:
   event:
     - pull_request
@@ -37,6 +49,15 @@ platform:
 clone:
   depth: 1
 steps:
+  - name: web-check
+    image: node:22-alpine
+    volumes:
+      - name: pnpmstore
+        path: /root/.local/share/pnpm/store
+    commands:
+      - corepack enable
+      - make web-check
+
   - name: test
     image: golang:1.25-alpine
     environment:
@@ -169,6 +190,9 @@ volumes:
   - name: gomodcache
     host:
       path: /var/cache/drone/gomod
+  - name: pnpmstore
+    host:
+      path: /var/cache/drone/pnpmstore
   - name: docker_sock
     host:
       path: /var/run/docker.sock

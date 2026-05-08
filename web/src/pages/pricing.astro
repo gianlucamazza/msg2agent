@@ -1,0 +1,33 @@
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import SignupForm from '@/components/pricing/SignupForm';
+---
+<MarketingLayout
+  title="Get API Key — msg2agent"
+  description="Self-serve signup for msg2agent. Free tier with no credit card required. Get your API key instantly."
+>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "msg2agent",
+    "description": "Agent-to-agent messaging relay with W3C DID identity.",
+    "url": "https://msg2agent.xyz/pricing",
+    "offers": [
+      { "@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
+      { "@type": "Offer", "name": "Starter", "price": "19", "priceCurrency": "USD", "billingIncrement": "P1M" },
+      { "@type": "Offer", "name": "Team", "price": "99", "priceCurrency": "USD", "billingIncrement": "P1M" }
+    ]
+  })} />
+
+  <div class="pricing-wrap">
+    <h1>Get your API key</h1>
+    <p class="subtitle">Self-serve signup — free tier requires no credit card.</p>
+
+    <SignupForm client:load />
+
+    <div class="enterprise-cta">
+      <strong>Enterprise</strong> — custom quotas, SLA, dedicated support.
+      <a href="mailto:sales@msg2agent.xyz?subject=Enterprise%20inquiry">Contact sales →</a>
+    </div>
+  </div>
+</MarketingLayout>

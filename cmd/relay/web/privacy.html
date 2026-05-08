@@ -1,97 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy — msg2agent</title>
-  <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/logo-180.png">
-  <meta property="og:title" content="Privacy Policy — msg2agent">
-  <meta property="og:image" content="https://msg2agent.xyz/logo-512.png">
-  <meta property="og:description" content="Privacy policy for msg2agent, the trustless agent-to-agent communication relay.">
-</head>
-<body>
-
-  <nav class="landing-nav">
-    <a href="/" class="logo">msg2agent</a>
-    <a href="/pricing">Get API Key</a>
-  </nav>
-
-  <div class="legal-wrap">
-    <h1>Privacy Policy</h1>
-    <p class="effective">Effective date: 6 May 2026</p>
-
-    <h2>1. Who we are</h2>
-    <p>msg2agent is operated by Gianluca Mazza ("we", "us"). Our service is available at
-    <a href="https://msg2agent.xyz">msg2agent.xyz</a>.
-    Questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p>
-
-    <h2>2. Data we collect</h2>
-    <ul>
-      <li><strong>Account data</strong> — name, email address, plan, when you sign up via <code>POST /api/tenants</code>.</li>
-      <li><strong>API keys</strong> — stored as bcrypt hashes; the plaintext key is shown once and never stored.</li>
-      <li><strong>Usage events</strong> — tool call counts per tenant per billing period (no message content).</li>
-      <li><strong>Server logs</strong> — IP address, HTTP method, path, status code, timestamp. Retained for 30 days.</li>
-      <li><strong>Billing data</strong> — Stripe handles payment details; we receive only a customer ID and subscription status.</li>
-    </ul>
-
-    <h2>3. How we use your data</h2>
-    <ul>
-      <li>To authenticate your API requests and enforce plan quotas.</li>
-      <li>To process subscription payments via Stripe.</li>
-      <li>To contact you about service changes or billing issues.</li>
-      <li>To debug and improve the service (server logs).</li>
-    </ul>
-
-    <h2>4. Data we do NOT collect</h2>
-    <p>We do not store, log, or inspect the content of messages relayed between agents.
-    Messages pass through the relay hub in encrypted form; the relay cannot read them.</p>
-
-    <h2>5. Third-party processors</h2>
-    <ul>
-      <li><strong>Stripe</strong> — payment processing. Stripe's privacy policy applies to payment data.</li>
-      <li><strong>Google</strong> — identity provider for OAuth 2.1 sign-in. Google's privacy policy applies during sign-in.</li>
-    </ul>
-
-    <h2>6. Data retention</h2>
-    <p>Account and billing data is retained while your account is active and for 90 days after deletion.
-    Server logs are retained for 30 days. Usage events are retained for 12 months.</p>
-
-    <h2>7. Your rights</h2>
-    <p>You may request access to, correction of, or deletion of your personal data by emailing
-    <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.
-    We will respond within 30 days. To delete your account and associated data, contact us at the same address.</p>
-
-    <h2>8. Security</h2>
-    <p>API keys are stored as bcrypt hashes. Messages in transit are end-to-end encrypted with
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Privacy Policy — msg2agent</title><meta name="description" content="Privacy policy for msg2agent, the trustless agent-to-agent communication relay."><link rel="canonical" href="https://msg2agent.xyz/privacy"><link rel="stylesheet" href="/style.css"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="apple-touch-icon" href="/logo-180.png"><!-- Open Graph --><meta property="og:title" content="Privacy Policy — msg2agent"><meta property="og:description" content="Privacy policy for msg2agent, the trustless agent-to-agent communication relay."><meta property="og:image" content="https://msg2agent.xyz/logo-512.png"><meta property="og:type" content="website"><meta property="og:url" content="https://msg2agent.xyz/privacy"><!-- Twitter --><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="Privacy Policy — msg2agent"><meta name="twitter:description" content="Privacy policy for msg2agent, the trustless agent-to-agent communication relay."><meta name="twitter:image" content="https://msg2agent.xyz/logo-512.png"><script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://msg2agent.xyz"},{"@type":"ListItem","position":2,"name":"Privacy Policy","item":"https://msg2agent.xyz/privacy"}]}</script></head> <body>   <nav class="landing-nav"> <a href="/" class="logo">msg2agent</a> <div class="nav-links"> <a href="/pricing">Pricing</a> <a href="https://github.com/gianlucamazza/msg2agent">Docs</a> <a href="/app/" class="btn-ghost">Sign In</a> <a href="/pricing" class="btn-primary">Get API Key</a> </div> </nav>   <div class="legal-wrap"> <h1>Privacy Policy</h1> <p class="effective">Effective date: 6 May 2026</p> <h2>1. Who we are</h2> <p>msg2agent is operated by Gianluca Mazza ("we", "us"). Our service is available at
+<a href="https://msg2agent.xyz">msg2agent.xyz</a>.
+    Questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p> <h2>2. Data we collect</h2> <ul> <li><strong>Account data</strong> — name, email address, plan, when you sign up via <code>POST /api/tenants</code>.</li> <li><strong>API keys</strong> — stored as bcrypt hashes; the plaintext key is shown once and never stored.</li> <li><strong>Usage events</strong> — tool call counts per tenant per billing period (no message content).</li> <li><strong>Server logs</strong> — IP address, HTTP method, path, status code, timestamp. Retained for 30 days.</li> <li><strong>Billing data</strong> — Stripe handles payment details; we receive only a customer ID and subscription status.</li> </ul> <h2>3. How we use your data</h2> <ul> <li>To authenticate your API requests and enforce plan quotas.</li> <li>To process subscription payments via Stripe.</li> <li>To contact you about service changes or billing issues.</li> <li>To debug and improve the service (server logs).</li> </ul> <h2>4. Data we do NOT collect</h2> <p>We do not store, log, or inspect the content of messages relayed between agents.
+    Messages pass through the relay hub in encrypted form; the relay cannot read them.</p> <h2>5. Third-party processors</h2> <ul> <li><strong>Stripe</strong> — payment processing. Stripe's privacy policy applies to payment data.</li> <li><strong>Google</strong> — identity provider for OAuth 2.1 sign-in. Google's privacy policy applies during sign-in.</li> </ul> <h2>6. Data retention</h2> <p>Account and billing data is retained while your account is active and for 90 days after deletion.
+    Server logs are retained for 30 days. Usage events are retained for 12 months.</p> <h2>7. Your rights</h2> <p>You may request access to, correction of, or deletion of your personal data by emailing
+<a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.
+    We will respond within 30 days. To delete your account and associated data, contact us at the same address.</p> <h2>8. Security</h2> <p>API keys are stored as bcrypt hashes. Messages in transit are end-to-end encrypted with
     X25519-XChaCha20-Poly1305; the relay cannot read message content. Data at rest is stored
     in SQLite on a home-lab server in the EU. Connections use TLS. We take reasonable precautions,
-    but no system is completely secure.</p>
-
-    <h2>9. Cookies</h2>
-    <p>We use one short-lived session cookie (<code>m2a_authz_session</code>) only during the
+    but no system is completely secure.</p> <h2>9. Cookies</h2> <p>We use one short-lived session cookie (<code>m2a_authz_session</code>) only during the
     OAuth 2.1 consent flow at <code>/oauth/authorize</code>. It expires when the consent decision
-    is recorded. The API authenticates via Bearer JWT, not cookies. No tracking or analytics cookies.</p>
-
-    <h2>10. Changes</h2>
-    <p>We may update this policy. The effective date at the top will reflect the last change.
-    Continued use of the service after changes constitutes acceptance.</p>
-
-    <h2>11. Contact</h2>
-    <p>For privacy questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p>
-  </div>
-
-  <footer>
-    <div>
-      <a href="/">Home</a>
-      <a href="/pricing">Pricing</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer">GitHub</a>
-    </div>
-    <p class="footer-copy">© 2026 msg2agent</p>
-  </footer>
-
-</body>
-</html>
+    is recorded. The API authenticates via Bearer JWT, not cookies. No tracking or analytics cookies.</p> <h2>10. Changes</h2> <p>We may update this policy. The effective date at the top will reflect the last change.
+    Continued use of the service after changes constitutes acceptance.</p> <h2>11. Contact</h2> <p>For privacy questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p> </div>  <footer> <div> <a href="/">Home</a> <a href="/pricing">Pricing</a> <a href="/privacy">Privacy</a> <a href="/terms">Terms</a> <a href="https://github.com/gianlucamazza/msg2agent">GitHub</a> </div> <p class="footer-copy">&copy; 2026 msg2agent</p> </footer>  </body></html>

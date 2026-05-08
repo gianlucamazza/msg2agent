@@ -1,0 +1,4 @@
+# Mark generated front-end chunks as linguist-generated so GitHub collapses
+# them in PR diffs. The source of truth is web/src/.
+cmd/relay/web/_astro/* linguist-generated=true
+cmd/dashboard/web/_astro/* linguist-generated=true

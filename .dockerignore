@@ -51,6 +51,11 @@ relay-agents.json
 # Go dependency vendoring is not used by this Dockerfile.
 vendor/
 
+# Front-end build artifacts (pre-built and committed in cmd/*/web/)
+web/node_modules/
+web/dist/
+web/.astro/
+
 # Terraform local state
 infrastructure/terraform/.terraform/
 infrastructure/terraform/.terraform.lock.hcl

@@ -27,6 +27,7 @@ GOFMT   := gofmt
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
 .PHONY: test-security test-load test-a2a test-mcp test-all loadtest loadtest-http loadtest-ws
 .PHONY: ci ci-e2e setup-certs
+.PHONY: web-install web-build web-deploy web-dev web-check
 
 ## Build
 
@@ -218,6 +219,26 @@ demo: bootstrap ## Bootstrap + seed demo data (3 tenants, 50 events each)
 
 smoke: ## Post-deploy smoke test (env: RELAY_URL, MCP_URL, API_KEY)
 	@./scripts/smoke-test.sh
+
+## Front-end
+
+web-install: ## Install front-end dependencies (requires pnpm)
+	pnpm --dir web install --frozen-lockfile
+
+web-build: ## Build front-end into web/dist/ (requires pnpm)
+	pnpm --dir web build
+
+web-deploy: web-build ## Build front-end and copy into Go embed dirs
+	node web/scripts/split-dist.mjs
+
+web-dev: ## Start Astro dev server with HMR (requires pnpm)
+	pnpm --dir web dev
+
+web-check: ## Build and verify embed dirs match web/dist/ (used in CI from Phase 4)
+	pnpm --dir web install --frozen-lockfile
+	pnpm --dir web build
+	node web/scripts/split-dist.mjs
+	git diff --exit-code cmd/relay/web cmd/dashboard/web pkg/webui/assets/style.css
 
 ## CI
 

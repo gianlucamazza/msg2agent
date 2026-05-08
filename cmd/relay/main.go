@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -406,24 +405,18 @@ func main() {
 
 	// paidEnabled gates Stripe-dependent UI (Starter/Team CTAs). Auto-activates
 	// when STRIPE_SECRET_KEY is present in the environment at startup.
-	type pageData struct{ PaidEnabled bool }
 	paidEnabled := billing.StripeConfigFromEnv() != nil
 	logger.Info("public ui", "paid_enabled", paidEnabled)
 
-	servePage := func(name string) http.HandlerFunc {
+	serveHTML := func(name string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			data, err := fs.ReadFile(webSub, name)
 			if err != nil {
 				http.NotFound(w, r)
 				return
 			}
-			tmpl, err := template.New(name).Parse(string(data))
-			if err != nil {
-				http.Error(w, "template error", http.StatusInternalServerError)
-				return
-			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_ = tmpl.Execute(w, pageData{PaidEnabled: paidEnabled})
+			_, _ = w.Write(data)
 		}
 	}
 	serveAsset := func(name, contentType string) http.HandlerFunc {
@@ -438,16 +431,30 @@ func main() {
 			_, _ = w.Write(data)
 		}
 	}
-	mux.HandleFunc("/pricing", servePage("pricing.html"))
-	mux.HandleFunc("/privacy", servePage("privacy.html"))
-	mux.HandleFunc("/terms", servePage("terms.html"))
+	mux.HandleFunc("/pricing", serveHTML("pricing.html"))
+	mux.HandleFunc("/privacy", serveHTML("privacy.html"))
+	mux.HandleFunc("/terms", serveHTML("terms.html"))
 	mux.HandleFunc("/favicon.svg", serveAsset("favicon.svg", "image/svg+xml"))
 	mux.HandleFunc("/logo-512.png", serveAsset("logo-512.png", "image/png"))
 	mux.HandleFunc("/logo-180.png", serveAsset("logo-180.png", "image/png"))
+	mux.HandleFunc("/robots.txt", serveAsset("robots.txt", "text/plain; charset=utf-8"))
+	mux.HandleFunc("/sitemap-index.xml", serveAsset("sitemap-index.xml", "application/xml"))
+	mux.HandleFunc("/sitemap-0.xml", serveAsset("sitemap-0.xml", "application/xml"))
 	mux.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(webui.CSS())
+	})
+	mux.HandleFunc("/api/public/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]bool{"paid_enabled": paidEnabled})
+	})
+
+	// Astro JS/CSS chunks — served with long-lived cache (content-hashed filenames).
+	astroFileServer := http.FileServer(http.FS(webSub))
+	mux.HandleFunc("/_astro/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		astroFileServer.ServeHTTP(w, r)
 	})
 
 	// Root: WebSocket upgrade for agents, landing page for browsers.
@@ -457,7 +464,7 @@ func main() {
 			return
 		}
 		if r.URL.Path == "/" {
-			servePage("landing.html")(w, r)
+			serveHTML("index.html")(w, r)
 			return
 		}
 		http.NotFound(w, r)

@@ -1,0 +1,12 @@
+---
+import BaseLayout from './BaseLayout.astro';
+
+interface Props {
+  title?: string;
+}
+
+const { title = 'Dashboard — msg2agent' } = Astro.props;
+---
+<BaseLayout {title}>
+  <slot />
+</BaseLayout>

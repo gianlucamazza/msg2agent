@@ -54,6 +54,11 @@ tmp/
 # Go
 vendor/
 
+# Front-end (web/)
+web/node_modules/
+web/dist/
+web/.astro/
+
 # Terraform
 infrastructure/terraform/.terraform/
 infrastructure/terraform/.terraform.lock.hcl

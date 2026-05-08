@@ -1,0 +1,49 @@
+---
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const {
+  title,
+  description = 'msg2agent — the agent messaging relay',
+  ogImage = 'https://msg2agent.xyz/logo-512.png',
+} = Astro.props;
+
+// Strip .html suffix and normalize /index.html → / for canonical URLs.
+// Go serves files without the .html extension (e.g. /pricing → pricing.html).
+const rawPath = Astro.url.pathname;
+const canonicalPath = rawPath
+  .replace(/\/index\.html$/, '/')
+  .replace(/\.html$/, '');
+const canonicalURL = new URL(canonicalPath, Astro.site);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL} />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/logo-180.png" />
+    <!-- Open Graph -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL} />
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

@@ -9,6 +9,25 @@ go test ./... -race
 
 Requires Go 1.24+. No other runtime dependencies are needed for the core packages.
 
+### Front-end dev
+
+The `web/` directory contains the Astro + Preact + Tailwind front-end. Node is **only** needed at build time — Go binaries embed the pre-built output.
+
+```bash
+make web-install   # install pnpm deps (first time)
+make web-dev       # start Astro HMR dev server
+```
+
+After editing anything under `web/src/`:
+
+```bash
+make web-deploy    # rebuild and copy artifacts to cmd/*/web/ + pkg/webui/assets/
+git add cmd/relay/web cmd/dashboard/web pkg/webui/assets/style.css
+git commit -m "chore: update front-end build artifacts"
+```
+
+CI runs `make web-check` which rebuilds the front-end and fails if the committed artifacts are out of date.
+
 ## Workflow
 
 1. Fork the repository and create a branch from `main`.

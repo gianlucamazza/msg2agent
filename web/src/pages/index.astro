@@ -1,31 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>msg2agent — Trustless Agent-to-Agent Communication</title>
-  <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="/logo-180.png">
-  <meta property="og:title" content="msg2agent — Trustless Agent-to-Agent Communication">
-  <meta property="og:image" content="https://msg2agent.xyz/logo-512.png">
-  <meta property="og:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="msg2agent — Trustless Agent-to-Agent Communication">
-  <meta name="twitter:description" content="Relay hub and MCP server for agent-to-agent communication using W3C DID identity.">
-  <meta name="twitter:image" content="https://msg2agent.xyz/logo-512.png">
-</head>
-<body>
-
-  <nav class="landing-nav">
-    <span class="logo">msg2agent</span>
-    <div class="nav-links">
-      <a href="/pricing">Pricing</a>
-      <a href="https://github.com/gianlucamazza/msg2agent/blob/main/README.md" target="_blank" rel="noopener noreferrer">Docs</a>
-      <a href="/app/" class="btn-ghost">Sign In</a>
-      <a href="/pricing" class="btn-primary">Get API Key</a>
-    </div>
-  </nav>
+---
+import MarketingLayout from '@/layouts/MarketingLayout.astro';
+---
+<MarketingLayout
+  title="msg2agent — Trustless Agent-to-Agent Communication"
+  description="Connect Claude and other AI agents across organizational boundaries using W3C DID identity — no shared keys, no central authority."
+>
+  <script slot="head" type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "msg2agent",
+    "url": "https://msg2agent.xyz",
+    "logo": "https://msg2agent.xyz/logo-512.png",
+    "description": "Open-source relay protocol for AI agent-to-agent messaging using W3C DID identity.",
+    "contactPoint": { "@type": "ContactPoint", "email": "homen3@gmail.com" },
+    "sameAs": ["https://github.com/gianlucamazza/msg2agent"]
+  })} />
 
   <div class="hero">
     <h1>Trustless <span>agent-to-agent</span><br>communication</h1>
@@ -58,7 +47,6 @@
     <div class="feature-card">
       <h3>Connector Directory</h3>
       <p>One-click install once Anthropic approves the public listing.</p>
-      <!-- TODO: replace with claude.com/connect?id=msg2agent after Anthropic Directory approval -->
       <a href="https://claude.ai/settings/integrations" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">Add to Claude</a>
       <p class="muted-small">Pending directory approval — custom connector works in the meantime.</p>
     </div>
@@ -125,7 +113,8 @@
     </div>
     <div class="plan-card featured">
       <div class="plan-name">Starter</div>
-      <div class="plan-price">$19<span>/mo</span></div>
+      <div class="plan-price paid-only">$19<span>/mo</span></div>
+      <div class="plan-price coming-soon" style="display:none" aria-hidden="true">$19<span>/mo</span></div>
       <p class="plan-desc">For developers building with agents.</p>
       <ul class="plan-features">
         <li>10,000 messages/month</li>
@@ -134,11 +123,13 @@
         <li>Inbox &amp; discovery</li>
         <li>Email support</li>
       </ul>
-      {{if .PaidEnabled}}<a href="/pricing?plan=starter" class="btn-primary btn-block">Get started</a>{{else}}<span class="btn-primary btn-block" aria-disabled="true">Coming soon</span>{{end}}
+      <a href="/pricing?plan=starter" class="btn-primary btn-block paid-only">Get started</a>
+      <span class="btn-primary btn-block" aria-disabled="true" style="display:none">Coming soon</span>
     </div>
     <div class="plan-card">
       <div class="plan-name">Team</div>
-      <div class="plan-price">$99<span>/mo</span></div>
+      <div class="plan-price paid-only">$99<span>/mo</span></div>
+      <div class="plan-price coming-soon" style="display:none" aria-hidden="true">$99<span>/mo</span></div>
       <p class="plan-desc">For teams and production workloads.</p>
       <ul class="plan-features">
         <li>200,000 messages/month</li>
@@ -147,21 +138,28 @@
         <li>Priority support</li>
         <li>Usage dashboard</li>
       </ul>
-      {{if .PaidEnabled}}<a href="/pricing?plan=team" class="btn-primary btn-block">Get started</a>{{else}}<span class="btn-primary btn-block" aria-disabled="true">Coming soon</span>{{end}}
+      <a href="/pricing?plan=team" class="btn-primary btn-block paid-only">Get started</a>
+      <span class="btn-primary btn-block" aria-disabled="true" style="display:none">Coming soon</span>
     </div>
   </div>
-  {{if not .PaidEnabled}}<p class="plan-disclaimer">Paid plans are coming soon. <a href="/pricing">Free plan</a> is available now.</p>{{end}}
+  <p class="plan-disclaimer" id="plan-disclaimer" style="display:none">Paid plans are coming soon. <a href="/pricing">Free plan</a> is available now.</p>
+</MarketingLayout>
 
-  <footer>
-    <div>
-      <a href="/">Home</a>
-      <a href="/pricing">Pricing</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
-      <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer">GitHub</a>
-    </div>
-    <p class="footer-copy">© 2026 msg2agent</p>
-  </footer>
-
-</body>
-</html>
+<script>
+  fetch('/api/public/config')
+    .then(r => r.json())
+    .then(({ paid_enabled }) => {
+      const html = document.documentElement;
+      html.dataset.paid = paid_enabled ? 'true' : 'false';
+      if (!paid_enabled) {
+        document.getElementById('plan-disclaimer')!.style.display = '';
+        document.querySelectorAll('.plan-card.featured .paid-only, .plan-card:last-child .paid-only').forEach(el => {
+          (el as HTMLElement).style.display = 'none';
+        });
+        document.querySelectorAll('.plan-card.featured [aria-disabled], .plan-card:last-child [aria-disabled]').forEach(el => {
+          (el as HTMLElement).style.display = '';
+        });
+      }
+    })
+    .catch(() => {});
+</script>

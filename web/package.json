@@ -1,0 +1,26 @@
+{
+  "name": "msg2agent-web",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && tailwindcss -i src/styles/global.css -o dist/style.css --minify",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^5.0.0",
+    "@astrojs/preact": "^5.1.2",
+    "@astrojs/sitemap": "^3.0.0",
+    "@preact/signals": "^2.0.0",
+    "astro": "^6.3.0",
+    "preact": "^10.25.4",
+    "wouter-preact": "^3.6.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.0",
+    "tailwindcss": "^4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "sharp", "@parcel/watcher"]
+  }
+}

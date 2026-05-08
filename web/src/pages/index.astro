@@ -146,20 +146,5 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
 </MarketingLayout>
 
 <script>
-  fetch('/api/public/config')
-    .then(r => r.json())
-    .then(({ paid_enabled }) => {
-      const html = document.documentElement;
-      html.dataset.paid = paid_enabled ? 'true' : 'false';
-      if (!paid_enabled) {
-        document.getElementById('plan-disclaimer')!.style.display = '';
-        document.querySelectorAll('.plan-card.featured .paid-only, .plan-card:last-child .paid-only').forEach(el => {
-          (el as HTMLElement).style.display = 'none';
-        });
-        document.querySelectorAll('.plan-card.featured [aria-disabled], .plan-card:last-child [aria-disabled]').forEach(el => {
-          (el as HTMLElement).style.display = '';
-        });
-      }
-    })
-    .catch(() => {});
+  import '@/scripts/paid-gate.ts';
 </script>

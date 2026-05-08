@@ -107,6 +107,7 @@ type meResponse struct {
 	ID                  string              `json:"id"`
 	Name                string              `json:"name"`
 	Email               string              `json:"email"`
+	EmailVerified       bool                `json:"email_verified"`
 	Plan                billing.Plan        `json:"plan"`
 	BillingStatus       string              `json:"billing_status"`
 	Quota               billing.QuotaConfig `json:"quota"`
@@ -128,6 +129,7 @@ func (app *application) handleMe(w http.ResponseWriter, r *http.Request) {
 		ID:            t.ID,
 		Name:          t.Name,
 		Email:         t.Email,
+		EmailVerified: t.EmailVerifiedAt != nil,
 		Plan:          t.Plan,
 		BillingStatus: t.BillingStatus,
 		Quota:         t.Quota,

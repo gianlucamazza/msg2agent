@@ -240,9 +240,13 @@ web-check: ## Build and verify embed dirs match web/dist/ (used in CI from Phase
 	node web/scripts/split-dist.mjs
 	git diff --exit-code cmd/relay/web cmd/dashboard/web pkg/webui/assets/style.css
 
+web-test: ## Run Playwright smoke tests against the built front-end
+	pnpm --dir web exec playwright install chromium --with-deps
+	pnpm --dir web test
+
 ## CI
 
-ci: check test-all ## Run full CI pipeline (lint + all tests)
+ci: web-check web-test check test-all ## Run full CI pipeline (front-end + Go)
 	@echo "CI pipeline complete"
 
 ci-e2e: docker-build ## Run E2E tests with Docker

@@ -1,9 +1,20 @@
-import { accessToken } from './tokens.js';
-import { tryRefresh } from './oauth.js';
+import { accessToken } from "./tokens.js";
+import { tryRefresh } from "./oauth.js";
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export interface MeResponse {
   name: string;
   email: string;
+  email_verified: boolean;
   plan: string;
   billing_status: string;
   did?: string;
@@ -36,23 +47,40 @@ export interface UsageRow {
   count: number;
 }
 
-export async function api<T = unknown>(path: string, opts: RequestInit = {}): Promise<T> {
+export async function api<T = unknown>(
+  path: string,
+  opts: RequestInit = {},
+): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(opts.headers as Record<string, string> | undefined),
   };
   const tok = accessToken.get();
-  if (tok) headers['Authorization'] = 'Bearer ' + tok;
+  if (tok) headers["Authorization"] = "Bearer " + tok;
 
   let r = await fetch(path, { ...opts, headers });
-  if (r.status === 401 && await tryRefresh()) {
+  if (r.status === 401 && (await tryRefresh())) {
     const newTok = accessToken.get();
-    if (newTok) headers['Authorization'] = 'Bearer ' + newTok;
+    if (newTok) headers["Authorization"] = "Bearer " + newTok;
     r = await fetch(path, { ...opts, headers });
   }
   if (!r.ok) {
-    const err = await r.json().catch(() => ({ error: r.statusText }));
-    return Promise.reject(err);
+    const body = await r.json().catch(() => ({ error: r.statusText }));
+    throw new ApiError(r.status, body.error ?? r.statusText);
   }
   return r.status === 204 ? (null as T) : r.json();
+}
+
+export async function fetchPublicConfig(): Promise<{ paid_enabled: boolean }> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (attempt > 0) await new Promise((res) => setTimeout(res, 1000));
+      const r = await fetch("/api/public/config");
+      if (r.ok) return r.json();
+    } catch {
+      // network error — retry once
+    }
+  }
+  // fail-closed: hide paid CTAs if config is unreachable
+  return { paid_enabled: false };
 }

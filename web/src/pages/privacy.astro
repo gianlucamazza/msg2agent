@@ -1,5 +1,6 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { EFFECTIVE_DATE } from '@/site.config.ts';
 ---
 <MarketingLayout
   title="Privacy Policy — msg2agent"
@@ -16,7 +17,7 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
 
   <div class="legal-wrap">
     <h1>Privacy Policy</h1>
-    <p class="effective">Effective date: 6 May 2026</p>
+    <p class="effective">Effective date: {EFFECTIVE_DATE}</p>
 
     <h2>1. Who we are</h2>
     <p>msg2agent is operated by Gianluca Mazza ("we", "us"). Our service is available at

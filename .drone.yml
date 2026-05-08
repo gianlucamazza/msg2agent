@@ -17,6 +17,16 @@ steps:
       - corepack enable
       - make web-check
 
+  - name: web-test
+    image: mcr.microsoft.com/playwright:v1.49-jammy
+    volumes:
+      - name: pnpmstore
+        path: /root/.local/share/pnpm/store
+    commands:
+      - corepack enable
+      - pnpm --dir web install --frozen-lockfile
+      - CI=true pnpm --dir web test
+
   - name: test
     image: golang:1.25-alpine
     environment:
@@ -57,6 +67,16 @@ steps:
     commands:
       - corepack enable
       - make web-check
+
+  - name: web-test
+    image: mcr.microsoft.com/playwright:v1.49-jammy
+    volumes:
+      - name: pnpmstore
+        path: /root/.local/share/pnpm/store
+    commands:
+      - corepack enable
+      - pnpm --dir web install --frozen-lockfile
+      - CI=true pnpm --dir web test
 
   - name: test
     image: golang:1.25-alpine

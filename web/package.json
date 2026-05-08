@@ -5,7 +5,8 @@
     "dev": "astro dev",
     "build": "astro build && tailwindcss -i src/styles/global.css -o dist/style.css --minify",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "test": "playwright test"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.0",
@@ -17,10 +18,16 @@
     "wouter-preact": "^3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@tailwindcss/cli": "^4.1.0",
     "tailwindcss": "^4.1.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp", "@parcel/watcher"]
+    "onlyBuiltDependencies": [
+      "@playwright/browser-chromium",
+      "@parcel/watcher",
+      "esbuild",
+      "sharp"
+    ]
   }
 }

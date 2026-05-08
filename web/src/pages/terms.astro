@@ -1,5 +1,6 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { EFFECTIVE_DATE } from '@/site.config.ts';
 ---
 <MarketingLayout
   title="Terms of Service — msg2agent"
@@ -16,7 +17,7 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
 
   <div class="legal-wrap">
     <h1>Terms of Service</h1>
-    <p class="effective">Effective date: 6 May 2026</p>
+    <p class="effective">Effective date: {EFFECTIVE_DATE}</p>
 
     <h2>1. Acceptance</h2>
     <p>By creating an account or using the msg2agent API, you agree to these Terms of Service.

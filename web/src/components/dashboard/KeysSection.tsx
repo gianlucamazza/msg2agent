@@ -1,12 +1,14 @@
-import { useState } from 'preact/hooks';
-import { keys, addToast, showModal } from './state.js';
-import { api, type ApiKey, type Paginated } from '@/lib/api.js';
+import { useState } from "preact/hooks";
+import { keys, addToast, showModal } from "./state.js";
+import { api, type ApiKey, type Paginated } from "@/lib/api.js";
 
 const KEYS_LIMIT = 20;
 
 async function loadKeys(offset = 0): Promise<void> {
   try {
-    const data = await api<Paginated<ApiKey>>(`/api/dashboard/keys?limit=${KEYS_LIMIT}&offset=${offset}`);
+    const data = await api<Paginated<ApiKey>>(
+      `/api/dashboard/keys?limit=${KEYS_LIMIT}&offset=${offset}`,
+    );
     keys.value = data;
   } catch {
     keys.value = { items: [], total: 0 };
@@ -19,33 +21,49 @@ export default function KeysSection() {
   const keysVal = keys.value;
   const [offset, setOffset] = useState(0);
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [creating, setCreating] = useState(false);
 
   async function createKey() {
-    const label = await showModal({ title: 'New API Key', message: 'Enter a label for the key:', input: true, confirmLabel: 'Create' });
-    if (!label || typeof label !== 'string') return;
+    const label = await showModal({
+      title: "New API Key",
+      message: "Enter a label for the key:",
+      input: true,
+      confirmLabel: "Create",
+    });
+    if (!label || typeof label !== "string") return;
     setCreating(true);
     try {
-      const res = await api<{ key: string }>('/api/dashboard/keys', { method: 'POST', body: JSON.stringify({ label }) });
+      const res = await api<{ key: string }>("/api/dashboard/keys", {
+        method: "POST",
+        body: JSON.stringify({ label }),
+      });
       setRevealedKey(res.key);
       await loadKeys(offset);
     } catch (e: unknown) {
       const err = e as { error?: string };
-      addToast('Failed to create key: ' + (err?.error ?? 'unknown error'), 'error');
+      addToast(
+        "Failed to create key: " + (err?.error ?? "unknown error"),
+        "error",
+      );
     } finally {
       setCreating(false);
     }
   }
 
   async function revokeKey(id: string) {
-    const ok = await showModal({ title: 'Revoke key?', message: 'The key will stop working immediately.', confirmLabel: 'Revoke' });
+    const ok = await showModal({
+      title: "Revoke key?",
+      message: "The key will stop working immediately.",
+      confirmLabel: "Revoke",
+    });
     if (!ok) return;
     try {
-      await api(`/api/dashboard/keys/${id}`, { method: 'DELETE' });
+      await api(`/api/dashboard/keys/${id}`, { method: "DELETE" });
       await loadKeys(offset);
     } catch (e: unknown) {
       const err = e as { error?: string };
-      addToast('Revoke failed: ' + (err?.error ?? 'unknown error'), 'error');
+      addToast("Revoke failed: " + (err?.error ?? "unknown error"), "error");
     }
   }
 
@@ -63,17 +81,37 @@ export default function KeysSection() {
 
       {revealedKey && (
         <div class="key-reveal">
-          <p><strong>Copy your key — it will not be shown again:</strong></p>
+          <p>
+            <strong>Copy your key — it will not be shown again:</strong>
+          </p>
           <code>{revealedKey}</code>
-          <button class="copy-btn" onClick={() => {
-            navigator.clipboard.writeText(revealedKey!).then(() => {});
-          }}>Copy</button>
-          <button style="margin-left: 0.5rem" onClick={() => setRevealedKey(null)}>Dismiss</button>
+          <button
+            class="copy-btn"
+            onClick={() => {
+              navigator.clipboard.writeText(revealedKey!).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }}
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
+          <button
+            style="margin-left: 0.5rem"
+            onClick={() => setRevealedKey(null)}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
-      <button class="btn-primary" id="btn-create-key" onClick={createKey} disabled={creating}>
-        {creating ? '…' : 'New key'}
+      <button
+        class="btn-primary"
+        id="btn-create-key"
+        onClick={createKey}
+        disabled={creating}
+      >
+        {creating ? "…" : "New key"}
       </button>
 
       <div id="keys-list">
@@ -84,17 +122,35 @@ export default function KeysSection() {
         ) : (
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Label</th><th>Prefix</th><th>Created</th><th>Status</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Prefix</th>
+                  <th>Created</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody>
-                {items.map(k => (
+                {items.map((k) => (
                   <tr key={k.id}>
                     <td>{k.label}</td>
-                    <td><code>{k.key_prefix}…</code></td>
+                    <td>
+                      <code>{k.key_prefix}…</code>
+                    </td>
                     <td>{new Date(k.created_at).toLocaleDateString()}</td>
-                    <td>{k.revoked_at ? 'Revoked' : 'Active'}</td>
-                    <td>{!k.revoked_at && (
-                      <button class="danger" onClick={() => revokeKey(k.id)} aria-label={`Revoke key ${k.label}`}>Revoke</button>
-                    )}</td>
+                    <td>{k.revoked_at ? "Revoked" : "Active"}</td>
+                    <td>
+                      {!k.revoked_at && (
+                        <button
+                          class="danger"
+                          onClick={() => revokeKey(k.id)}
+                          aria-label={`Revoke key ${k.label}`}
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -104,9 +160,21 @@ export default function KeysSection() {
 
         {total > KEYS_LIMIT && (
           <div class="pager">
-            <button onClick={() => changePage(Math.max(0, offset - KEYS_LIMIT))} disabled={offset === 0}>‹ Prev</button>
-            <span>{offset + 1}–{Math.min(offset + items.length, total)} / {total}</span>
-            <button onClick={() => changePage(offset + KEYS_LIMIT)} disabled={offset + items.length >= total}>Next ›</button>
+            <button
+              onClick={() => changePage(Math.max(0, offset - KEYS_LIMIT))}
+              disabled={offset === 0}
+            >
+              ‹ Prev
+            </button>
+            <span>
+              {offset + 1}–{Math.min(offset + items.length, total)} / {total}
+            </span>
+            <button
+              onClick={() => changePage(offset + KEYS_LIMIT)}
+              disabled={offset + items.length >= total}
+            >
+              Next ›
+            </button>
           </div>
         )}
       </div>

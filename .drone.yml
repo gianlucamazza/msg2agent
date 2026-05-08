@@ -20,7 +20,7 @@ steps:
       - make web-check
 
   - name: web-test
-    image: mcr.microsoft.com/playwright:v1.49-jammy
+    image: mcr.microsoft.com/playwright:v1.59.1-noble
     volumes:
       - name: pnpmstore
         path: /root/.local/share/pnpm/store
@@ -82,7 +82,7 @@ steps:
       - make web-check
 
   - name: web-test
-    image: mcr.microsoft.com/playwright:v1.49-jammy
+    image: mcr.microsoft.com/playwright:v1.59.1-noble
     volumes:
       - name: pnpmstore
         path: /root/.local/share/pnpm/store

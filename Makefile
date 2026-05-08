@@ -110,6 +110,7 @@ clean: ## Remove build artifacts
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
 	rm -f coverage.out coverage.html
 	rm -f agent relay mcp-server billing-admin dashboard
+	rm -rf web/test-results web/playwright-report
 
 ## Help
 

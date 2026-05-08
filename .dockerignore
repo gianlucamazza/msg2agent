@@ -55,6 +55,8 @@ vendor/
 web/node_modules/
 web/dist/
 web/.astro/
+web/test-results/
+web/playwright-report/
 
 # Terraform local state
 infrastructure/terraform/.terraform/

@@ -38,6 +38,16 @@ steps:
     commands:
       - golangci-lint run --timeout=15m ./...
 
+  - name: vuln
+    image: golang:1.25-alpine
+    volumes:
+      - name: gomodcache
+        path: /root/go/pkg/mod
+    commands:
+      - apk add --no-cache git gcc musl-dev
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+      - govulncheck ./...
+
   - name: test
     image: golang:1.25-alpine
     environment:
@@ -100,6 +110,16 @@ steps:
         path: /root/go/pkg/mod
     commands:
       - golangci-lint run --timeout=15m ./...
+
+  - name: vuln
+    image: golang:1.25-alpine
+    volumes:
+      - name: gomodcache
+        path: /root/go/pkg/mod
+    commands:
+      - apk add --no-cache git gcc musl-dev
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+      - govulncheck ./...
 
   - name: test
     image: golang:1.25-alpine

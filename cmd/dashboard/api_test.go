@@ -46,7 +46,10 @@ func TestHandleMe_unauthenticated(t *testing.T) {
 
 func TestHandleMe_authenticated(t *testing.T) {
 	app, store := testApp(t)
-	tenant := billing.NewTenant("Alice", "alice@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Alice", "alice@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -73,7 +76,7 @@ func TestHandleMe_authenticated(t *testing.T) {
 
 func TestHandleMe_wrongMethod(t *testing.T) {
 	app, _ := testApp(t)
-	tenant := billing.NewTenant("Bob", "bob@example.com", billing.PlanFree)
+	tenant, _ := billing.NewTenant("Bob", "bob@example.com", billing.PlanFree)
 	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/me", nil)
 	req = req.WithContext(withTenant(req.Context(), tenant))
 	rr := httptest.NewRecorder()
@@ -87,7 +90,7 @@ func TestHandleMe_wrongMethod(t *testing.T) {
 
 func TestHandleKeys_getEmpty(t *testing.T) {
 	app, _ := testApp(t)
-	tenant := billing.NewTenant("C", "c@example.com", billing.PlanFree)
+	tenant, _ := billing.NewTenant("C", "c@example.com", billing.PlanFree)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/keys", nil)
 	req = req.WithContext(withTenant(req.Context(), tenant))
@@ -111,7 +114,10 @@ func TestHandleKeys_getEmpty(t *testing.T) {
 
 func TestHandleKeys_createAndList(t *testing.T) {
 	app, store := testApp(t)
-	tenant := billing.NewTenant("D", "d@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("D", "d@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -160,7 +166,10 @@ func TestHandleKeys_createAndList(t *testing.T) {
 
 func TestHandleKeys_pagination(t *testing.T) {
 	app, store := testApp(t)
-	tenant := billing.NewTenant("Pager", "pager@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Pager", "pager@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -235,7 +244,10 @@ func TestHandleKeys_pagination(t *testing.T) {
 
 func TestHandleKeyByID_revoke(t *testing.T) {
 	app, store := testApp(t)
-	tenant := billing.NewTenant("E", "e@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("E", "e@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -261,7 +273,7 @@ func TestHandleKeyByID_revoke(t *testing.T) {
 
 func TestHandleKeyByID_notFound(t *testing.T) {
 	app, _ := testApp(t)
-	tenant := billing.NewTenant("F", "f@example.com", billing.PlanFree)
+	tenant, _ := billing.NewTenant("F", "f@example.com", billing.PlanFree)
 
 	delReq := httptest.NewRequest(http.MethodDelete, "/api/dashboard/keys/nonexistent-id", nil)
 	delReq = delReq.WithContext(withTenant(delReq.Context(), tenant))
@@ -276,8 +288,8 @@ func TestHandleKeyByID_notFound(t *testing.T) {
 func TestHandleKeyByID_wrongTenant(t *testing.T) {
 	app, store := testApp(t)
 
-	owner := billing.NewTenant("Owner", "owner@example.com", billing.PlanFree)
-	attacker := billing.NewTenant("Attacker", "attacker@example.com", billing.PlanFree)
+	owner, _ := billing.NewTenant("Owner", "owner@example.com", billing.PlanFree)
+	attacker, _ := billing.NewTenant("Attacker", "attacker@example.com", billing.PlanFree)
 	_ = store.PutTenant(owner)
 	_ = store.PutTenant(attacker)
 

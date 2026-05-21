@@ -20,7 +20,10 @@ func mustEvent(t *testing.T, raw string) stripe.Event {
 // setupTenant creates a tenant in the store and returns it.
 func setupTenant(t *testing.T, store *MemoryStore) *Tenant {
 	t.Helper()
-	tenant := NewTenant("Test User", "test@example.com", PlanFree)
+	tenant, err := NewTenant("Test User", "test@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}

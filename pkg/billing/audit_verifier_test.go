@@ -46,7 +46,10 @@ func TestStartPeriodicVerifier_ZeroInterval(t *testing.T) {
 // at least once without recording tampering when the chain is clean.
 func TestStartPeriodicVerifier_CleanChain(t *testing.T) {
 	store := NewMemoryStore()
-	tenant := NewTenant("Test Corp", "test@example.com", PlanFree)
+	tenant, err := NewTenant("Test Corp", "test@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -82,7 +85,10 @@ func TestStartPeriodicVerifier_CleanChain(t *testing.T) {
 // RecordAuditChainTampered (the metric counter increments).
 func TestStartPeriodicVerifier_TamperDetected(t *testing.T) {
 	store := NewMemoryStore()
-	tenant := NewTenant("Hack Corp", "hack@example.com", PlanFree)
+	tenant, err := NewTenant("Hack Corp", "hack@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}

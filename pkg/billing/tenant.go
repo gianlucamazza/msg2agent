@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -166,12 +167,11 @@ var (
 )
 
 // NewTenant creates a new tenant with a generated ID and a random DID seed.
-func NewTenant(name, email string, plan Plan) *Tenant {
+func NewTenant(name, email string, plan Plan) (*Tenant, error) {
 	now := time.Now().UTC()
 	seed := make([]byte, 32)
 	if _, err := rand.Read(seed); err != nil {
-		// crypto/rand failure is fatal; the OS entropy pool is exhausted.
-		panic("billing: failed to generate DID seed: " + err.Error())
+		return nil, fmt.Errorf("generate DID seed: %w", err)
 	}
 	return &Tenant{
 		ID:            newID("t"),
@@ -184,7 +184,7 @@ func NewTenant(name, email string, plan Plan) *Tenant {
 		UpdatedAt:     now,
 		BillingStatus: "active",
 		DIDSeed:       seed,
-	}
+	}, nil
 }
 
 // IsActive returns true if the tenant can use the service.

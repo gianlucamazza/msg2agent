@@ -138,7 +138,11 @@ func runCreateTenant(store billing.Store, args []string) {
 		os.Exit(1)
 	}
 
-	t := billing.NewTenant(*name, *email, billing.Plan(*plan))
+	t, err := billing.NewTenant(*name, *email, billing.Plan(*plan))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
 	if err := store.PutTenant(t); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

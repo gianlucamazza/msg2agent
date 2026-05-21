@@ -35,7 +35,10 @@ func TestStore_TenantCRUD(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Acme Corp", "acme@example.com", PlanStarter)
+			tenant, err := NewTenant("Acme Corp", "acme@example.com", PlanStarter)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			if err := s.PutTenant(tenant); err != nil {
 				t.Fatalf("PutTenant: %v", err)
 			}
@@ -62,7 +65,10 @@ func TestStore_SuspendTenant(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Beta Corp", "beta@example.com", PlanFree)
+			tenant, err := NewTenant("Beta Corp", "beta@example.com", PlanFree)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			_ = s.PutTenant(tenant)
 
 			if err := s.SuspendTenant(tenant.ID); err != nil {
@@ -95,7 +101,10 @@ func TestStore_UpdateTenant(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Gamma Corp", "gamma@example.com", PlanFree)
+			tenant, err := NewTenant("Gamma Corp", "gamma@example.com", PlanFree)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			_ = s.PutTenant(tenant)
 
 			tenant.Plan = PlanTeam
@@ -117,7 +126,10 @@ func TestStore_APIKeyCRUD(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Delta Corp", "delta@example.com", PlanStarter)
+			tenant, err := NewTenant("Delta Corp", "delta@example.com", PlanStarter)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			_ = s.PutTenant(tenant)
 
 			plaintext, key, err := GenerateAPIKey(tenant.ID, "ci")
@@ -148,7 +160,10 @@ func TestStore_RevokeAPIKey(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Epsilon Corp", "eps@example.com", PlanFree)
+			tenant, err := NewTenant("Epsilon Corp", "eps@example.com", PlanFree)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			_ = s.PutTenant(tenant)
 
 			plaintext, key, _ := GenerateAPIKey(tenant.ID, "prod")
@@ -172,7 +187,10 @@ func TestStore_ListAPIKeysActive(t *testing.T) {
 		t.Run(f.name, func(t *testing.T) {
 			s := f.factory(t)
 
-			tenant := NewTenant("Zeta Corp", "zeta@example.com", PlanFree)
+			tenant, err := NewTenant("Zeta Corp", "zeta@example.com", PlanFree)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			_ = s.PutTenant(tenant)
 
 			_, k1, _ := GenerateAPIKey(tenant.ID, "active-key")
@@ -214,7 +232,10 @@ func TestSQLiteStore_EventStore(t *testing.T) {
 	}
 	defer s.Close()
 
-	tenant := NewTenant("Eta Corp", "eta@example.com", PlanFree)
+	tenant, err := NewTenant("Eta Corp", "eta@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = s.PutTenant(tenant)
 
 	period := periodKey(time.Now().UTC())
@@ -278,7 +299,10 @@ func TestStore_OAuthIdentity(t *testing.T) {
 	for _, f := range factories(t) {
 		t.Run(f.name, func(t *testing.T) {
 			store := f.factory(t)
-			tenant := NewTenant("OAuth Corp", "oauth@example.com", PlanFree)
+			tenant, err := NewTenant("OAuth Corp", "oauth@example.com", PlanFree)
+			if err != nil {
+				t.Fatalf("NewTenant: %v", err)
+			}
 			if err := store.PutTenant(tenant); err != nil {
 				t.Fatalf("PutTenant: %v", err)
 			}

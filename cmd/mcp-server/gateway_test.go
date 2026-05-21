@@ -72,7 +72,10 @@ func TestGatewayBridge_tenantIdentity_shortSeed(t *testing.T) {
 
 func TestGatewayBridge_tenantIdentity_success(t *testing.T) {
 	g := makeTestGateway()
-	tenant := billing.NewTenant("Alice", "alice@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Alice", "alice@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	// Pre-mark as registered to skip the goroutine that calls g.a (nil in tests).
 	g.registered = map[string]bool{tenant.ID: true}
 
@@ -90,7 +93,10 @@ func TestGatewayBridge_tenantIdentity_success(t *testing.T) {
 
 func TestGatewayBridge_tenantIdentity_cached(t *testing.T) {
 	g := makeTestGateway()
-	tenant := billing.NewTenant("Bob", "bob@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Bob", "bob@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	g.registered = map[string]bool{tenant.ID: true}
 
 	ident1, err := g.tenantIdentity(ctxWithTenant(tenant))

@@ -11,7 +11,10 @@ import (
 func newTestStore(t *testing.T) (*MemoryStore, *Tenant, string) {
 	t.Helper()
 	store := NewMemoryStore()
-	tenant := NewTenant("Test Corp", "test@example.com", PlanStarter)
+	tenant, err := NewTenant("Test Corp", "test@example.com", PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = store.PutTenant(tenant)
 	plaintext, key, err := GenerateAPIKey(tenant.ID, "test")
 	if err != nil {

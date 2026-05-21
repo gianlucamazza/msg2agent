@@ -42,7 +42,10 @@ func TestTenantBucket_refill(t *testing.T) {
 
 func TestTenantRateLimiterPool_Allow(t *testing.T) {
 	store := NewMemoryStore()
-	tenant := NewTenant("T1", "t1@example.com", PlanStarter)
+	tenant, err := NewTenant("T1", "t1@example.com", PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	// PlanStarter: 10/sec, burst 50
 	_ = store.PutTenant(tenant)
 
@@ -66,7 +69,10 @@ func TestTenantRateLimiterPool_Allow(t *testing.T) {
 
 func TestTenantRateLimiterPool_Evict(t *testing.T) {
 	store := NewMemoryStore()
-	tenant := NewTenant("T2", "t2@example.com", PlanFree)
+	tenant, err := NewTenant("T2", "t2@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = store.PutTenant(tenant)
 
 	pool := NewTenantRateLimiterPool(store)

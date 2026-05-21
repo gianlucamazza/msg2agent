@@ -8,7 +8,10 @@ import (
 // TestNewTenant_FieldsAndNonZeroID verifies that NewTenant produces a tenant
 // with the given fields and a non-empty ID.
 func TestNewTenant_FieldsAndNonZeroID(t *testing.T) {
-	tenant := NewTenant("Acme Corp", "acme@example.com", PlanStarter)
+	tenant, err := NewTenant("Acme Corp", "acme@example.com", PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 
 	if tenant.ID == "" {
 		t.Error("ID must not be empty")
@@ -36,8 +39,8 @@ func TestNewTenant_FieldsAndNonZeroID(t *testing.T) {
 // TestNewTenant_UniqueIDs verifies that two consecutive NewTenant calls
 // produce different IDs.
 func TestNewTenant_UniqueIDs(t *testing.T) {
-	a := NewTenant("A", "a@x.com", PlanFree)
-	b := NewTenant("B", "b@x.com", PlanFree)
+	a, _ := NewTenant("A", "a@x.com", PlanFree)
+	b, _ := NewTenant("B", "b@x.com", PlanFree)
 	if a.ID == b.ID {
 		t.Errorf("expected unique IDs, both got %q", a.ID)
 	}
@@ -70,7 +73,7 @@ func TestPlanQuota(t *testing.T) {
 
 // TestTenantIsActive verifies the IsActive predicate for all status values.
 func TestTenantIsActive(t *testing.T) {
-	tenant := NewTenant("T", "t@x.com", PlanFree)
+	tenant, _ := NewTenant("T", "t@x.com", PlanFree)
 
 	if !tenant.IsActive() {
 		t.Error("new tenant should be active")
@@ -98,7 +101,10 @@ func TestTenantIsActive(t *testing.T) {
 func TestTenantSuspendViaStore(t *testing.T) {
 	s := NewMemoryStore()
 
-	tenant := NewTenant("Suspend Me", "s@x.com", PlanFree)
+	tenant, err := NewTenant("Suspend Me", "s@x.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := s.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -122,7 +128,10 @@ func TestTenantSuspendViaStore(t *testing.T) {
 // TestTenantJSONRoundTrip verifies that marshalling and unmarshalling a Tenant
 // preserves all fields.
 func TestTenantJSONRoundTrip(t *testing.T) {
-	original := NewTenant("Round Trip", "rt@example.com", PlanTeam)
+	original, err := NewTenant("Round Trip", "rt@example.com", PlanTeam)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 
 	data, err := json.Marshal(original)
 	if err != nil {

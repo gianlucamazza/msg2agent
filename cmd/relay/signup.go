@@ -134,7 +134,11 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, emai
 			return
 		}
 
-		tenant := billing.NewTenant(req.Name, req.Email, plan)
+		tenant, err := billing.NewTenant(req.Name, req.Email, plan)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to create tenant")
+			return
+		}
 
 		var checkoutURL string
 		if isPaid {

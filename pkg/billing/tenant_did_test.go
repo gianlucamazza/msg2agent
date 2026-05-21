@@ -105,12 +105,18 @@ func TestDeriveTenantIdentity_KeysAreDistinct(t *testing.T) {
 }
 
 func TestNewTenant_GeneratesDIDSeed(t *testing.T) {
-	tenant := NewTenant("Alice Corp", "alice@example.com", PlanFree)
+	tenant, err := NewTenant("Alice Corp", "alice@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if len(tenant.DIDSeed) != 32 {
 		t.Errorf("DIDSeed: want 32 bytes, got %d", len(tenant.DIDSeed))
 	}
 	// Different tenants must have different seeds.
-	tenant2 := NewTenant("Bob Corp", "bob@example.com", PlanFree)
+	tenant2, err := NewTenant("Bob Corp", "bob@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if bytes.Equal(tenant.DIDSeed, tenant2.DIDSeed) {
 		t.Error("two distinct tenants share the same DIDSeed")
 	}

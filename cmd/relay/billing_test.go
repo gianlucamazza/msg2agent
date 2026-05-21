@@ -26,7 +26,10 @@ func testHubWithBilling(t *testing.T) (*RelayHub, billing.Store) {
 // registerTenantAndKey creates a tenant, issues an API key, returns both.
 func registerTenantAndKey(t *testing.T, store billing.Store, name, email string, plan billing.Plan) (*billing.Tenant, string) {
 	t.Helper()
-	tenant := billing.NewTenant(name, email, plan)
+	tenant, err := billing.NewTenant(name, email, plan)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -186,7 +189,10 @@ func TestTenantRateLimit_dualGate(t *testing.T) {
 	hub, store := testHubWithBilling(t)
 
 	// Create a tenant with very small rate limit.
-	tenant := billing.NewTenant("Throttled Corp", "th@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Throttled Corp", "th@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	tenant.Quota.RateLimitMsgPerSec = 0.001 // near-zero
 	tenant.Quota.RateLimitBurstSize = 1
 	if err := store.PutTenant(tenant); err != nil {

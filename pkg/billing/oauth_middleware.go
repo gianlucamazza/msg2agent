@@ -62,7 +62,11 @@ func OAuth2Middleware(validator JWTValidator, store Store, autoProvisionPlan Pla
 			// Resolve (iss, sub) → tenant.
 			tenantID, err := store.GetOAuthIdentityTenant(claims.Issuer, claims.Subject)
 			if err == ErrOAuthIdentityNotFound && autoProvisionPlan != "" {
-				tenant := NewTenant(claims.Email, claims.Email, autoProvisionPlan)
+				tenant, err := NewTenant(claims.Email, claims.Email, autoProvisionPlan)
+				if err != nil {
+					http.Error(w, "failed to create tenant", http.StatusInternalServerError)
+					return
+				}
 				if err := store.PutTenant(tenant); err != nil {
 					http.Error(w, "failed to provision tenant", http.StatusInternalServerError)
 					return

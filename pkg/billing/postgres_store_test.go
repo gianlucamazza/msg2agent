@@ -50,7 +50,10 @@ func pgFactories(t *testing.T) []struct {
 
 func TestPostgresStore_TenantCRUD(t *testing.T) {
 	s := newPGStore(t)
-	tenant := NewTenant("PG Corp", "pg@example.com", PlanStarter)
+	tenant, err := NewTenant("PG Corp", "pg@example.com", PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := s.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -68,7 +71,10 @@ func TestPostgresStore_TenantCRUD(t *testing.T) {
 
 func TestPostgresStore_APIKeyCRUD(t *testing.T) {
 	s := newPGStore(t)
-	tenant := NewTenant("PG Key Corp", "pgkey@example.com", PlanFree)
+	tenant, err := NewTenant("PG Key Corp", "pgkey@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = s.PutTenant(tenant)
 
 	plaintext, key, err := GenerateAPIKey(tenant.ID, "ci")
@@ -90,7 +96,10 @@ func TestPostgresStore_APIKeyCRUD(t *testing.T) {
 
 func TestPostgresStore_OAuthIdentity(t *testing.T) {
 	s := newPGStore(t)
-	tenant := NewTenant("PG OAuth", "pgoauth@example.com", PlanFree)
+	tenant, err := NewTenant("PG OAuth", "pgoauth@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = s.PutTenant(tenant)
 
 	if err := s.PutOAuthIdentity("google", "sub-pg-1", tenant.ID, "pgoauth@example.com"); err != nil {
@@ -112,7 +121,10 @@ func TestPostgresStore_OAuthIdentity(t *testing.T) {
 // for the same tenant produce a valid, untampered audit chain.
 func TestPostgresHashChainConcurrent(t *testing.T) {
 	s := newPGStore(t)
-	tenant := NewTenant("Hash Chain Corp", "hashchain@example.com", PlanTeam)
+	tenant, err := NewTenant("Hash Chain Corp", "hashchain@example.com", PlanTeam)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := s.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -154,7 +166,10 @@ func TestPostgresHashChainConcurrent(t *testing.T) {
 
 func TestPostgresStore_EventStore(t *testing.T) {
 	s := newPGStore(t)
-	tenant := NewTenant("PG Events Corp", "pgevents@example.com", PlanFree)
+	tenant, err := NewTenant("PG Events Corp", "pgevents@example.com", PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	_ = s.PutTenant(tenant)
 
 	period := periodKey(time.Now().UTC())

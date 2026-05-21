@@ -26,7 +26,10 @@ func TestBillingE2E(t *testing.T) {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 
-	tenant := billing.NewTenant("E2E Corp", "e2e@example.com", billing.PlanStarter)
+	tenant, err := billing.NewTenant("E2E Corp", "e2e@example.com", billing.PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -141,7 +144,10 @@ func TestBillingE2E_QuotaExceeded(t *testing.T) {
 	defer store.Close()
 
 	// Free plan: 1000 messages/month.
-	tenant := billing.NewTenant("Quota Corp", "q@example.com", billing.PlanFree)
+	tenant, err := billing.NewTenant("Quota Corp", "q@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -179,7 +185,10 @@ func TestBillingE2E_AuditChain(t *testing.T) {
 	}
 	defer store.Close()
 
-	tenant := billing.NewTenant("Chain Corp", "chain@example.com", billing.PlanStarter)
+	tenant, err := billing.NewTenant("Chain Corp", "chain@example.com", billing.PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}
@@ -244,7 +253,10 @@ func TestBillingE2E_QueryEvents(t *testing.T) {
 	}
 	defer store.Close()
 
-	tenant := billing.NewTenant("Dispute Corp", "dispute@example.com", billing.PlanStarter)
+	tenant, err := billing.NewTenant("Dispute Corp", "dispute@example.com", billing.PlanStarter)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
 	if err := store.PutTenant(tenant); err != nil {
 		t.Fatalf("PutTenant: %v", err)
 	}

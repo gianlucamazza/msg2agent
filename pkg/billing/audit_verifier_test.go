@@ -20,9 +20,12 @@ func (a *testAdminStore) VerifyAuditChain(_ string) ([]AuditChainResult, error) 
 }
 
 func (a *testAdminStore) QueryEvents(_ EventFilter) ([]AuditEvent, error) { return nil, nil }
-func (a *testAdminStore) Verify() (*VerifyReport, error)                  { return &VerifyReport{}, nil }
-func (a *testAdminStore) PurgeEvents(_ time.Time) (int64, error)          { return 0, nil }
-func (a *testAdminStore) Backup(_ string) error                           { return nil }
+func (a *testAdminStore) QueryToolBreakdown(_ string, _ string) ([]ToolUsageRow, error) {
+	return nil, nil
+}
+func (a *testAdminStore) Verify() (*VerifyReport, error)         { return &VerifyReport{}, nil }
+func (a *testAdminStore) PurgeEvents(_ time.Time) (int64, error) { return 0, nil }
+func (a *testAdminStore) Backup(_ string) error                  { return nil }
 
 // TestStartPeriodicVerifier_ZeroInterval verifies that interval=0 is a no-op (no goroutine leak).
 func TestStartPeriodicVerifier_ZeroInterval(t *testing.T) {

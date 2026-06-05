@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { me, addToast } from './state.js';
 import { api } from '@/lib/api.js';
+import { PLANS } from '@/lib/plans.js';
 
 export default function BillingSection() {
   const meVal = me.value;
@@ -54,12 +55,19 @@ export default function BillingSection() {
 
       {!isPaid && (
         <>
-          <button id="btn-upgrade-starter" class="btn-primary" onClick={() => checkout('starter')} disabled={loadingCheckout === 'starter'}>
-            {loadingCheckout === 'starter' ? '…' : 'Upgrade to Starter ($19/mo)'}
-          </button>
-          <button id="btn-upgrade-team" class="btn-primary" onClick={() => checkout('team')} disabled={loadingCheckout === 'team'}>
-            {loadingCheckout === 'team' ? '…' : 'Upgrade to Team ($99/mo)'}
-          </button>
+          {PLANS.map(p => (
+            <button
+              key={p.id}
+              id={`btn-upgrade-${p.id}`}
+              class="btn-primary"
+              onClick={() => checkout(p.id)}
+              disabled={loadingCheckout === p.id}
+            >
+              {loadingCheckout === p.id
+                ? '…'
+                : `Upgrade to ${p.name} (${p.price}/${p.interval})`}
+            </button>
+          ))}
         </>
       )}
 

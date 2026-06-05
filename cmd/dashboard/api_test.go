@@ -13,6 +13,19 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/billing"
 )
 
+// testAppWithEventStore returns an application whose eventStore is also wired
+// to the same MemoryStore that backs the billing store.
+func testAppWithEventStore(t *testing.T) (*application, *billing.MemoryStore) {
+	t.Helper()
+	ms := billing.NewMemoryStore()
+	app := &application{
+		store:      ms,
+		eventStore: ms,
+		logger:     newTestLogger(),
+	}
+	return app, ms
+}
+
 func newTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -303,5 +316,402 @@ func TestHandleKeyByID_wrongTenant(t *testing.T) {
 
 	if delRR.Code != http.StatusNotFound {
 		t.Fatalf("cross-tenant revoke: status %d, want 404 (key not visible to attacker tenant)", delRR.Code)
+	}
+}
+
+// ── handleUsage ───────────────────────────────────────────────────────────────
+
+func TestHandleUsage_authenticated(t *testing.T) {
+	app, store := testAppWithEventStore(t)
+	tenant, err := billing.NewTenant("Usage", "usage@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleUsage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body: %s", rr.Code, rr.Body)
+	}
+}
+
+func TestHandleUsage_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage", nil)
+	rr := httptest.NewRecorder()
+	app.handleUsage(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+func TestHandleUsage_noEventStore(t *testing.T) {
+	app, store := testApp(t)
+	// eventStore stays nil
+	tenant, _ := billing.NewTenant("NoES", "noes@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleUsage(rr, req)
+
+	// Handler returns empty JSON array when eventStore is nil.
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200 (empty list)", rr.Code)
+	}
+}
+
+// ── handleUsageCSV ────────────────────────────────────────────────────────────
+
+func TestHandleUsageCSV_authenticated(t *testing.T) {
+	app, store := testAppWithEventStore(t)
+	tenant, err := billing.NewTenant("CSV", "csv@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage.csv", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleUsageCSV(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body: %s", rr.Code, rr.Body)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/csv") {
+		t.Errorf("Content-Type = %q, want text/csv", ct)
+	}
+	if cd := rr.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment") {
+		t.Errorf("Content-Disposition = %q, want attachment", cd)
+	}
+}
+
+func TestHandleUsageCSV_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage.csv", nil)
+	rr := httptest.NewRecorder()
+	app.handleUsageCSV(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+func TestHandleUsageCSV_noEventStore(t *testing.T) {
+	app, store := testApp(t)
+	tenant, _ := billing.NewTenant("NoESCSV", "noescsv@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage.csv", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleUsageCSV(rr, req)
+
+	// 501 when eventStore is nil.
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501", rr.Code)
+	}
+}
+
+// ── handleUsageByTool ─────────────────────────────────────────────────────────
+
+func TestHandleUsageByTool_noAdminStore(t *testing.T) {
+	app, store := testApp(t)
+	// adminStore is nil — handler should return 200 empty list, not panic.
+	tenant, _ := billing.NewTenant("ByTool", "bytool@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage/by-tool", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleUsageByTool(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200 (empty list); body: %s", rr.Code, rr.Body)
+	}
+}
+
+func TestHandleUsageByTool_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/usage/by-tool", nil)
+	rr := httptest.NewRecorder()
+	app.handleUsageByTool(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+// ── handleProfile ─────────────────────────────────────────────────────────────
+
+func TestHandleProfile_get(t *testing.T) {
+	app, store := testApp(t)
+	tenant, err := billing.NewTenant("Profile", "profile@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/profile", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body: %s", rr.Code, rr.Body)
+	}
+	var resp profileResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Name != "Profile" {
+		t.Errorf("name = %q, want Profile", resp.Name)
+	}
+	if resp.Email != "profile@example.com" {
+		t.Errorf("email = %q, want profile@example.com", resp.Email)
+	}
+}
+
+func TestHandleProfile_patch(t *testing.T) {
+	app, store := testApp(t)
+	tenant, err := billing.NewTenant("OldName", "patch@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	body := `{"name":"NewName"}`
+	req := httptest.NewRequest(http.MethodPatch, "/api/dashboard/profile", strings.NewReader(body))
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleProfile(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d, want 200; body: %s", rr.Code, rr.Body)
+	}
+	var resp profileResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Name != "NewName" {
+		t.Errorf("name = %q, want NewName", resp.Name)
+	}
+}
+
+func TestHandleProfile_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/profile", nil)
+	rr := httptest.NewRecorder()
+	app.handleProfile(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+func TestHandleProfile_patchEmptyName(t *testing.T) {
+	app, store := testApp(t)
+	tenant, _ := billing.NewTenant("PatchEmpty", "patchem@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	body := `{"name":"   "}`
+	req := httptest.NewRequest(http.MethodPatch, "/api/dashboard/profile", strings.NewReader(body))
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleProfile(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status %d, want 400", rr.Code)
+	}
+}
+
+// ── handleOAuthClients ────────────────────────────────────────────────────────
+
+func TestHandleOAuthClients_noAdminStore(t *testing.T) {
+	app, store := testApp(t)
+	// adminStore is nil → 501
+	tenant, _ := billing.NewTenant("OAuthNil", "oauthnil@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/oauth-clients", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleOAuthClients(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501", rr.Code)
+	}
+}
+
+func TestHandleOAuthClients_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodDelete, "/api/dashboard/oauth-clients/some-id", nil)
+	rr := httptest.NewRecorder()
+	app.handleOAuthClients(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+// ── handleAuditVerify ─────────────────────────────────────────────────────────
+
+func TestHandleAuditVerify_noAdminStore(t *testing.T) {
+	app, store := testApp(t)
+	// adminStore is nil → 501
+	tenant, _ := billing.NewTenant("AuditNil", "auditnil@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/audit/verify", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleAuditVerify(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501", rr.Code)
+	}
+}
+
+func TestHandleAuditVerify_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/audit/verify", nil)
+	rr := httptest.NewRecorder()
+	app.handleAuditVerify(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+// ── handleAuditEvents ─────────────────────────────────────────────────────────
+
+func TestHandleAuditEvents_noAdminStore(t *testing.T) {
+	app, store := testApp(t)
+	tenant, _ := billing.NewTenant("AuditEvNil", "auditevnil@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/audit/events", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleAuditEvents(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501", rr.Code)
+	}
+}
+
+func TestHandleAuditEvents_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/audit/events", nil)
+	rr := httptest.NewRecorder()
+	app.handleAuditEvents(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+// ── handleCheckout ────────────────────────────────────────────────────────────
+
+func TestHandleCheckout_noRelayURL(t *testing.T) {
+	app, store := testApp(t)
+	// relayURL is empty → 501
+	tenant, err := billing.NewTenant("Checkout", "checkout@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	body := `{"plan":"starter"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/checkout", strings.NewReader(body))
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleCheckout(rr, req)
+
+	// Without relayURL, handler returns 501.
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501; body: %s", rr.Code, rr.Body)
+	}
+}
+
+func TestHandleCheckout_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/checkout", strings.NewReader(`{"plan":"starter"}`))
+	rr := httptest.NewRecorder()
+	app.handleCheckout(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+func TestHandleCheckout_wrongMethod(t *testing.T) {
+	app, store := testApp(t)
+	tenant, _ := billing.NewTenant("CheckoutGET", "checkoutget@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/checkout", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handleCheckout(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status %d, want 405", rr.Code)
+	}
+}
+
+// ── handlePortal ──────────────────────────────────────────────────────────────
+
+func TestHandlePortal_noRelayURL(t *testing.T) {
+	app, store := testApp(t)
+	tenant, err := billing.NewTenant("Portal", "portal@example.com", billing.PlanFree)
+	if err != nil {
+		t.Fatalf("NewTenant: %v", err)
+	}
+	if err := store.PutTenant(tenant); err != nil {
+		t.Fatalf("PutTenant: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/portal", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handlePortal(rr, req)
+
+	if rr.Code != http.StatusNotImplemented {
+		t.Fatalf("status %d, want 501; body: %s", rr.Code, rr.Body)
+	}
+}
+
+func TestHandlePortal_unauthenticated(t *testing.T) {
+	app, _ := testApp(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/dashboard/portal", nil)
+	rr := httptest.NewRecorder()
+	app.handlePortal(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status %d, want 401", rr.Code)
+	}
+}
+
+func TestHandlePortal_wrongMethod(t *testing.T) {
+	app, store := testApp(t)
+	tenant, _ := billing.NewTenant("PortalGET", "portalget@example.com", billing.PlanFree)
+	_ = store.PutTenant(tenant)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/portal", nil)
+	req = req.WithContext(withTenant(req.Context(), tenant))
+	rr := httptest.NewRecorder()
+	app.handlePortal(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status %d, want 405", rr.Code)
 	}
 }

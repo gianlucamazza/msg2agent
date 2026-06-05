@@ -27,6 +27,16 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	logger.Info("starting dashboard", "version", buildinfo.Version, "commit", buildinfo.Commit, "date", buildinfo.Date)
 
+	// Parse CORS allowed origins from environment (comma-separated).
+	corsOrigins := strings.Split(os.Getenv("MSG2AGENT_DASHBOARD_CORS_ORIGINS"), ",")
+	var validOrigins []string
+	for _, o := range corsOrigins {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			validOrigins = append(validOrigins, o)
+		}
+	}
+
 	// Open billing store (optional).
 	var store billing.Store
 	var eventStore billing.EventStore
@@ -64,8 +74,13 @@ func main() {
 		logger.Warn("OAuth2 not configured (MSG2AGENT_OAUTH2_ISSUER_URL empty); /api/dashboard/* will return 503")
 	}
 
+	var adminStore billing.AdminStore
+	if s, ok := store.(billing.AdminStore); ok {
+		adminStore = s
+	}
 	app := &application{
 		store:      store,
+		adminStore: adminStore,
 		eventStore: eventStore,
 		relayURL:   cfg.RelayURL,
 		domain:     cfg.Domain,
@@ -84,6 +99,15 @@ func main() {
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
+	})
+
+	// Version endpoint — no auth.
+	mux.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"version": buildinfo.Version,
+			"commit":  buildinfo.Commit,
+			"date":    buildinfo.Date,
+		})
 	})
 
 	// API routes — OAuth2 protected. Both the billing store and the OAuth2
@@ -150,7 +174,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         cfg.Addr,
-		Handler:      securityHeaders(mux),
+		Handler:      requestIDMiddleware(securityHeaders(corsMiddleware(validOrigins...)(mux))),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,

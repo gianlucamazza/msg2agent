@@ -36,8 +36,8 @@ export default function Modal() {
   }
 
   return (
-    <dialog ref={dlgRef} onClose={cancel}>
-      <p class="modal-title">{state?.title ?? ''}</p>
+    <dialog ref={dlgRef} onClose={cancel} aria-labelledby="modal-title">
+      <p id="modal-title" class="modal-title">{state?.title ?? ''}</p>
       {state?.message && <p class="modal-message">{state.message}</p>}
       {state?.input && (
         <input

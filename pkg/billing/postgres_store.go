@@ -406,6 +406,17 @@ func (s *PostgresStore) RevokeAPIKey(id string) error {
 	return nil
 }
 
+func (s *PostgresStore) RenameAPIKey(id, name string) error {
+	res, err := s.db.Exec(`UPDATE api_keys SET name=$1 WHERE id=$2`, name, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrAPIKeyNotFound
+	}
+	return nil
+}
+
 // -------------------------------------------------------------------------
 // Store interface — OAuth identity operations
 // -------------------------------------------------------------------------
@@ -714,6 +725,70 @@ func (s *PostgresStore) QueryEvents(f EventFilter) ([]AuditEvent, error) {
 }
 
 // Verify performs a lightweight health check (SELECT 1 FROM tenants LIMIT 1).
+func (s *PostgresStore) ListAggregatesByTenantPeriod(tenantID, period string) ([]UsageSnapshot, error) {
+	q := `SELECT tenant_id, period, event, count FROM usage_aggregates WHERE tenant_id=$1`
+	args := []any{tenantID}
+	if period != "" {
+		q += ` AND period=$2`
+		args = append(args, period)
+	}
+	q += ` ORDER BY period DESC, event ASC`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("billing: pg list aggregates: %w", err)
+	}
+	defer rows.Close()
+	var out []UsageSnapshot
+	for rows.Next() {
+		var snap UsageSnapshot
+		if err := rows.Scan(&snap.TenantID, &snap.Period, (*string)(&snap.Event), &snap.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, snap)
+	}
+	return out, rows.Err()
+}
+
+func (s *PostgresStore) QueryToolBreakdown(tenantID, period string) ([]ToolUsageRow, error) {
+	argN := 1
+	nextArg := func() string { p := fmt.Sprintf("$%d", argN); argN++; return p }
+
+	q := `SELECT tool_name, COUNT(*) AS cnt FROM usage_events WHERE tenant_id=` + nextArg() +
+		` AND event='tool_calls' AND tool_name != ''`
+	args := []any{tenantID}
+
+	if period != "" {
+		var year, month int
+		if _, err := fmt.Sscanf(period, "%d-%d", &year, &month); err == nil && month >= 1 && month <= 12 {
+			from := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+			var to time.Time
+			if month == 12 {
+				to = time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
+			} else {
+				to = time.Date(year, time.Month(month+1), 1, 0, 0, 0, 0, time.UTC)
+			}
+			q += ` AND recorded_at >= ` + nextArg() + ` AND recorded_at < ` + nextArg()
+			args = append(args, from, to)
+		}
+	}
+	q += ` GROUP BY tool_name ORDER BY cnt DESC`
+
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("billing: pg tool breakdown: %w", err)
+	}
+	defer rows.Close()
+	var out []ToolUsageRow
+	for rows.Next() {
+		var r ToolUsageRow
+		if err := rows.Scan(&r.ToolName, &r.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 func (s *PostgresStore) Verify() (*VerifyReport, error) {
 	r := &VerifyReport{}
 	type kv struct {

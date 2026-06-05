@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { keys, addToast, showModal } from "./state.js";
 import { api, type ApiKey, type Paginated } from "@/lib/api.js";
+import { Skeleton } from "@/components/ui/index.js";
 
 const KEYS_LIMIT = 20;
 
@@ -51,6 +52,26 @@ export default function KeysSection() {
     }
   }
 
+  async function renameKey(id: string, currentLabel: string) {
+    const newLabel = await showModal({
+      title: 'Rename API Key',
+      message: `Current name: "${currentLabel}". Enter new name:`,
+      input: true,
+      confirmLabel: 'Rename',
+    });
+    if (!newLabel || typeof newLabel !== 'string') return;
+    try {
+      await api(`/api/dashboard/keys/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ label: newLabel }),
+      });
+      addToast('Key renamed.', 'success');
+      await loadKeys(offset);
+    } catch {
+      addToast('Failed to rename key.', 'error');
+    }
+  }
+
   async function revokeKey(id: string) {
     const ok = await showModal({
       title: "Revoke key?",
@@ -97,7 +118,7 @@ export default function KeysSection() {
             {copied ? "Copied!" : "Copy"}
           </button>
           <button
-            style="margin-left: 0.5rem"
+            class="btn-ghost btn-sm"
             onClick={() => setRevealedKey(null)}
           >
             Dismiss
@@ -116,7 +137,7 @@ export default function KeysSection() {
 
       <div id="keys-list">
         {keysVal === null ? (
-          <p>Loading…</p>
+          <Skeleton class="skeleton-banner" />
         ) : items.length === 0 && offset === 0 ? (
           <p>No API keys yet. Create one to get started.</p>
         ) : (
@@ -128,6 +149,7 @@ export default function KeysSection() {
                   <th>Prefix</th>
                   <th>Created</th>
                   <th>Status</th>
+                  <th>Last used</th>
                   <th></th>
                 </tr>
               </thead>
@@ -140,15 +162,26 @@ export default function KeysSection() {
                     </td>
                     <td>{new Date(k.created_at).toLocaleDateString()}</td>
                     <td>{k.revoked_at ? "Revoked" : "Active"}</td>
+                    <td>{k.last_used ? new Date(k.last_used).toLocaleDateString() : '—'}</td>
                     <td>
                       {!k.revoked_at && (
-                        <button
-                          class="danger"
-                          onClick={() => revokeKey(k.id)}
-                          aria-label={`Revoke key ${k.label}`}
-                        >
-                          Revoke
-                        </button>
+                        <>
+                          <button
+                            class="btn-ghost btn-sm"
+                            onClick={() => renameKey(k.id, k.label)}
+                            aria-label={`Rename key ${k.label}`}
+                          >
+                            Rename
+                          </button>
+                          {' '}
+                          <button
+                            class="btn-danger"
+                            onClick={() => revokeKey(k.id)}
+                            aria-label={`Revoke key ${k.label}`}
+                          >
+                            Revoke
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>

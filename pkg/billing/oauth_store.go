@@ -195,6 +195,61 @@ func (s *SQLiteStore) CleanupOAuthExpired() error {
 	return nil
 }
 
+// ─── Dashboard OAuth client management ──────────────────────────────────────
+
+// OAuthClientSummary is a lightweight view of an OAuth client for the dashboard.
+type OAuthClientSummary struct {
+	ClientID   string    `json:"client_id"`
+	ClientName string    `json:"client_name"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ListOAuthClientsByTenant returns all OAuth clients that have at least one
+// non-revoked refresh token for the given tenant.
+func (s *SQLiteStore) ListOAuthClientsByTenant(tenantID string) ([]OAuthClientSummary, error) {
+	rows, err := s.db.Query(`
+        SELECT DISTINCT oc.client_id, oc.client_name, oc.created_at
+        FROM oauth_clients oc
+        INNER JOIN oauth_refresh_tokens rt ON rt.client_id = oc.client_id
+        WHERE rt.tenant_id = ? AND rt.revoked = 0
+        ORDER BY oc.client_name ASC`,
+		tenantID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("billing: list oauth clients: %w", err)
+	}
+	defer rows.Close()
+	var out []OAuthClientSummary
+	for rows.Next() {
+		var c OAuthClientSummary
+		var createdAt string
+		if err := rows.Scan(&c.ClientID, &c.ClientName, &createdAt); err != nil {
+			return nil, err
+		}
+		if t, err2 := time.Parse(time.RFC3339, createdAt); err2 == nil {
+			c.CreatedAt = t
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RevokeOAuthClientForTenant revokes all refresh tokens for the given
+// (tenant, client) pair, effectively disconnecting the OAuth app.
+func (s *SQLiteStore) RevokeOAuthClientForTenant(tenantID, clientID string) error {
+	res, err := s.db.Exec(
+		`UPDATE oauth_refresh_tokens SET revoked=1 WHERE tenant_id=? AND client_id=?`,
+		tenantID, clientID,
+	)
+	if err != nil {
+		return fmt.Errorf("billing: revoke oauth client: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("billing: no tokens found for client %s", clientID)
+	}
+	return nil
+}
+
 // GetTenantByEmail returns the first active tenant matching the given email address.
 func (s *SQLiteStore) GetTenantByEmail(email string) (*Tenant, error) {
 	row := s.db.QueryRow(`

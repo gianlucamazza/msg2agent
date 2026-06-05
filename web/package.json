@@ -7,7 +7,10 @@
     "build": "astro build && tailwindcss -i src/styles/global.css -o dist/style.css --minify",
     "preview": "astro preview",
     "check": "astro check",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:unit": "vitest run",
+    "lint": "eslint src --ext .ts,.tsx,.astro --max-warnings 0",
+    "format": "prettier --write src"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.0",
@@ -15,13 +18,24 @@
     "@astrojs/sitemap": "^3.0.0",
     "@preact/signals": "^2.0.0",
     "astro": "^6.3.0",
+    "lucide-preact": "^0.488.0",
     "preact": "^10.25.4",
     "wouter-preact": "^3.6.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/cli": "^4.1.0",
-    "tailwindcss": "^4.1.0"
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/preact": "^3.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-preact": "^0.1.0",
+    "jsdom": "^26.0.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-astro": "^0.14.1",
+    "tailwindcss": "^4.1.0",
+    "vitest": "^3.2.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

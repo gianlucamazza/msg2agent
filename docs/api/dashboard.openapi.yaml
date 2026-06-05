@@ -1,0 +1,1039 @@
+openapi: "3.1.0"
+
+info:
+  title: msg2agent Dashboard API
+  version: v1
+  description: |
+    REST API exposed by the msg2agent dashboard server.
+    All `/api/dashboard/*` endpoints require a valid JWT obtained via the
+    PKCE OAuth2 flow (see Auth section). Endpoints `/health`, `/version`, and
+    `/api/email/resend` are public (no auth required).
+
+servers:
+  - url: /
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "authentication required"
+
+    QuotaConfig:
+      type: object
+      description: Per-tenant usage limits.
+      properties:
+        max_messages_per_month:
+          type: integer
+          format: int64
+          example: 1000
+        max_tool_calls_per_month:
+          type: integer
+          format: int64
+          example: 5000
+        max_api_keys:
+          type: integer
+          example: 5
+        max_dids:
+          type: integer
+          example: 1
+        rate_limit_msg_per_sec:
+          type: number
+          format: double
+          example: 2.0
+        rate_limit_burst_size:
+          type: number
+          format: double
+          example: 5.0
+
+    MeResponse:
+      type: object
+      required: [id, name, email, email_verified, plan, billing_status, created_at, quota]
+      properties:
+        id:
+          type: string
+          example: "ten_01j9abc123"
+        name:
+          type: string
+          example: "Alice Smith"
+        email:
+          type: string
+          format: email
+          example: "alice@example.com"
+        email_verified:
+          type: boolean
+          example: true
+        plan:
+          type: string
+          enum: [free, starter, team]
+          example: "starter"
+        billing_status:
+          type: string
+          example: "active"
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-06-01T00:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        quota:
+          $ref: "#/components/schemas/QuotaConfig"
+        did:
+          type: string
+          nullable: true
+          description: Decentralized identifier (DID) derived from the tenant's DID seed.
+          example: "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK"
+        signing_public_key:
+          type: string
+          nullable: true
+          description: Base64-encoded Ed25519 signing public key.
+          example: "MCowBQYDK2VwAyEA..."
+        encryption_public_key:
+          type: string
+          nullable: true
+          description: Base64-encoded X25519 encryption public key.
+          example: "MCowBQYDK2VuAyEA..."
+
+    ProfileResponse:
+      type: object
+      required: [id, name, email, email_verified, created_at]
+      properties:
+        id:
+          type: string
+          example: "ten_01j9abc123"
+        name:
+          type: string
+          example: "Alice Smith"
+        email:
+          type: string
+          format: email
+          example: "alice@example.com"
+        email_verified:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    ApiKey:
+      type: object
+      required: [id, label, key_prefix, created_at]
+      properties:
+        id:
+          type: string
+          example: "key_01j9xyz789"
+        label:
+          type: string
+          maxLength: 64
+          example: "Production server"
+        key_prefix:
+          type: string
+          description: First characters of the key (safe to display).
+          example: "m2a_live_abc1"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-03-10T08:00:00Z"
+        last_used:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-05-20T14:22:00Z"
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+
+    CreateKeyResponse:
+      type: object
+      required: [id, key, label]
+      properties:
+        id:
+          type: string
+          example: "key_01j9xyz789"
+        key:
+          type: string
+          description: Full plaintext key — shown only once.
+          example: "m2a_live_abc1def2ghi3jkl4mno5pqr6stu7vwx8yz90"
+        label:
+          type: string
+          example: "Production server"
+
+    Page:
+      type: object
+      description: Generic paginated envelope.
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: {}
+        total:
+          type: integer
+          example: 42
+        limit:
+          type: integer
+          example: 100
+        offset:
+          type: integer
+          example: 0
+
+    PageApiKey:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ApiKey"
+
+    UsageRow:
+      type: object
+      required: [period, event, count]
+      properties:
+        period:
+          type: string
+          description: Billing period in YYYY-MM format.
+          example: "2026-05"
+        event:
+          type: string
+          description: Event type (e.g. messages, tool_calls).
+          example: "messages"
+        count:
+          type: integer
+          format: int64
+          example: 234
+
+    PageUsageRow:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/UsageRow"
+
+    ToolUsageRow:
+      type: object
+      required: [tool_name, count]
+      properties:
+        tool_name:
+          type: string
+          example: "search_web"
+        count:
+          type: integer
+          format: int64
+          example: 87
+
+    PageToolUsageRow:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/ToolUsageRow"
+
+    AuditVerifyResponse:
+      type: object
+      required: [tenant_id, verified, tampered]
+      properties:
+        tenant_id:
+          type: string
+          example: "ten_01j9abc123"
+        verified:
+          type: integer
+          format: int64
+          description: Number of audit log entries verified.
+          example: 1500
+        tampered:
+          type: boolean
+          description: True if any entries failed chain verification.
+          example: false
+        first_bad_id:
+          type: string
+          nullable: true
+          description: ID of the first tampered entry, if any.
+          example: null
+
+    AuditEventItem:
+      type: object
+      required: [id, event, timestamp]
+      properties:
+        id:
+          type: string
+          example: "evt_01j9abc001"
+        event:
+          type: string
+          example: "tool_call"
+        tool_name:
+          type: string
+          nullable: true
+          example: "search_web"
+        request_id:
+          type: string
+          nullable: true
+          example: "req_01j9xyz999"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-20T12:34:56Z"
+
+    PageAuditEventItem:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/AuditEventItem"
+
+    OAuthClientSummary:
+      type: object
+      required: [client_id, client_name, created_at]
+      properties:
+        client_id:
+          type: string
+          example: "claude-desktop"
+        client_name:
+          type: string
+          example: "Claude Desktop"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-11-01T09:00:00Z"
+
+    CheckoutRequest:
+      type: object
+      required: [plan, success_url, cancel_url]
+      properties:
+        plan:
+          type: string
+          enum: [starter, team]
+          example: "starter"
+        success_url:
+          type: string
+          format: uri
+          example: "https://app.example.com/app/?checkout=success"
+        cancel_url:
+          type: string
+          format: uri
+          example: "https://app.example.com/app/?checkout=cancelled"
+
+    PortalRequest:
+      type: object
+      required: [return_url]
+      properties:
+        return_url:
+          type: string
+          format: uri
+          example: "https://app.example.com/app/"
+
+    BillingUrlResponse:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Redirect URL to Stripe Checkout or Customer Portal.
+          example: "https://checkout.stripe.com/pay/cs_live_abc123"
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: |
+        Returns `ok` (plain text) when the server is healthy. If a billing
+        store is configured, also pings it. No authentication required.
+      security: []
+      operationId: getHealth
+      tags: [system]
+      responses:
+        "200":
+          description: Server and billing store are healthy.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok"
+        "503":
+          description: Billing store is unavailable.
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "billing store unavailable: connection refused"
+
+  /version:
+    get:
+      summary: Build version
+      description: Returns the build version, commit hash and build date. No authentication required.
+      security: []
+      operationId: getVersion
+      tags: [system]
+      responses:
+        "200":
+          description: Version information.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, commit, date]
+                properties:
+                  version:
+                    type: string
+                    example: "v1.2.3"
+                  commit:
+                    type: string
+                    example: "a1b2c3d"
+                  date:
+                    type: string
+                    example: "2026-05-01"
+
+  /api/dashboard/me:
+    get:
+      summary: Current tenant identity
+      description: |
+        Returns full account information for the authenticated tenant,
+        including plan, billing status, quota limits, and optional DID/key
+        data when a DID seed is configured.
+      operationId: getMe
+      tags: [account]
+      responses:
+        "200":
+          description: Tenant identity and quota.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/profile:
+    get:
+      summary: Get profile
+      description: Returns a subset of the tenant's profile (without plan/quota details).
+      operationId: getProfile
+      tags: [account]
+      responses:
+        "200":
+          description: Profile data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      summary: Update profile
+      description: Updates the tenant's display name. Name must be 1–128 characters.
+      operationId: patchProfile
+      tags: [account]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                  example: "Alice Smith"
+      responses:
+        "200":
+          description: Updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          description: Validation error (empty name, name too long, invalid JSON).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/keys:
+    get:
+      summary: List API keys
+      description: |
+        Returns a paginated list of all API keys for the tenant.
+        Supports `?limit=` (default 100, max 500) and `?offset=` query parameters.
+      operationId: listApiKeys
+      tags: [api-keys]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+          example: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          example: 0
+      responses:
+        "200":
+          description: Paginated list of API keys.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageApiKey"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: Create API key
+      description: |
+        Creates a new API key for the tenant. The full key value is returned
+        only in this response and cannot be retrieved again. Label defaults to
+        `"API Key"` when omitted and must be at most 64 characters.
+        Rate-limited per tenant.
+      operationId: createApiKey
+      tags: [api-keys]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                  maxLength: 64
+                  example: "CI pipeline"
+      responses:
+        "201":
+          description: API key created. Store the `key` value — it will not be shown again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateKeyResponse"
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Rate limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds to wait before retrying.
+
+  /api/dashboard/keys/{id}:
+    delete:
+      summary: Revoke API key
+      description: Permanently revokes the specified API key. The key must belong to the authenticated tenant.
+      operationId: deleteApiKey
+      tags: [api-keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "key_01j9xyz789"
+      responses:
+        "204":
+          description: Key revoked successfully.
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Key not found or does not belong to tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      summary: Rename API key
+      description: Updates the label of an existing API key. Label must be 1–64 characters.
+      operationId: patchApiKey
+      tags: [api-keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "key_01j9xyz789"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 64
+                  example: "Staging server"
+      responses:
+        "200":
+          description: Key renamed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "key_01j9xyz789"
+                  label:
+                    type: string
+                    example: "Staging server"
+        "400":
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Key not found or does not belong to tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/usage:
+    get:
+      summary: Usage aggregates
+      description: |
+        Returns paginated usage rows (event counts per period) for the tenant.
+        Filter by `?period=YYYY-MM` to get a specific month. Supports
+        `?limit=` and `?offset=` pagination parameters.
+      operationId: getUsage
+      tags: [usage]
+      parameters:
+        - name: period
+          in: query
+          description: "Month filter in YYYY-MM format."
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}$"
+          example: "2026-05"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+          example: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          example: 0
+      responses:
+        "200":
+          description: Paginated usage rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageUsageRow"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/usage.csv:
+    get:
+      summary: Export usage as CSV
+      description: |
+        Downloads usage aggregates as a CSV file (`period,event,count`).
+        Supports `?period=YYYY-MM` filter.
+      operationId: getUsageCsv
+      tags: [usage]
+      parameters:
+        - name: period
+          in: query
+          description: "Month filter in YYYY-MM format."
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}$"
+          example: "2026-05"
+      responses:
+        "200":
+          description: CSV file attachment.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: 'attachment; filename="usage.csv"'
+          content:
+            text/csv:
+              schema:
+                type: string
+              example: |
+                period,event,count
+                2026-05,messages,234
+                2026-05,tool_calls,87
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/usage/by-tool:
+    get:
+      summary: Usage breakdown by tool
+      description: |
+        Returns a paginated breakdown of tool call counts for the tenant,
+        optionally filtered by `?period=YYYY-MM`. Returns 501 if the admin
+        store is not configured.
+      operationId: getUsageByTool
+      tags: [usage]
+      parameters:
+        - name: period
+          in: query
+          description: "Month filter in YYYY-MM format."
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}$"
+          example: "2026-05"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated tool usage rows.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageToolUsageRow"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Admin store not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/audit/verify:
+    get:
+      summary: Verify audit chain integrity
+      description: |
+        Walks the cryptographic chain of audit events for the authenticated
+        tenant and returns verification results. Returns 501 if the admin
+        store is not configured.
+      operationId: getAuditVerify
+      tags: [audit]
+      responses:
+        "200":
+          description: Audit chain verification result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditVerifyResponse"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Admin store not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/audit/events:
+    get:
+      summary: List audit events
+      description: |
+        Returns paginated audit events for the authenticated tenant.
+        Supports `?period=YYYY-MM` to filter by month and `?limit=` (max 1000).
+        Returns 501 if the admin store is not configured.
+      operationId: listAuditEvents
+      tags: [audit]
+      parameters:
+        - name: period
+          in: query
+          description: "Month filter in YYYY-MM format."
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}$"
+          example: "2026-05"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            maximum: 1000
+          example: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated audit event list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageAuditEventItem"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "501":
+          description: Admin store not configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/oauth-clients:
+    get:
+      summary: List connected OAuth apps
+      description: |
+        Returns all OAuth clients that have at least one active (non-revoked)
+        refresh token for the authenticated tenant.
+      operationId: listOAuthClients
+      tags: [oauth-clients]
+      responses:
+        "200":
+          description: List of connected OAuth clients.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OAuthClientSummary"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/oauth-clients/{id}:
+    delete:
+      summary: Revoke OAuth client
+      description: |
+        Revokes all refresh tokens issued to the specified OAuth client for
+        the authenticated tenant, effectively disconnecting the app.
+      operationId: deleteOAuthClient
+      tags: [oauth-clients]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The OAuth client_id to revoke.
+          schema:
+            type: string
+          example: "claude-desktop"
+      responses:
+        "204":
+          description: Client revoked successfully.
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Client not found for this tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/checkout:
+    post:
+      summary: Create Stripe Checkout session
+      description: |
+        Proxies a checkout request to the relay, which creates a Stripe
+        Checkout session and returns a redirect URL. Returns 503 if the relay
+        URL is not configured.
+      operationId: postCheckout
+      tags: [billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRequest"
+      responses:
+        "200":
+          description: Checkout session URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingUrlResponse"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Relay not configured or unreachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/dashboard/portal:
+    post:
+      summary: Create Stripe Customer Portal session
+      description: |
+        Proxies a portal request to the relay, which creates a Stripe Customer
+        Portal session. Returns 503 if the relay URL is not configured.
+      operationId: postPortal
+      tags: [billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PortalRequest"
+      responses:
+        "200":
+          description: Customer portal URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingUrlResponse"
+        "401":
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Relay not configured or unreachable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/email/resend:
+    post:
+      summary: Resend email verification
+      description: |
+        Sends a new verification email to the specified address. This endpoint
+        lives on the **relay** server, not the dashboard. It is called by the
+        dashboard SPA when the user clicks "Resend email". No authentication
+        is required (uses email address as identifier). Rate-limited to 1
+        request per email address per minute.
+      security: []
+      operationId: resendEmailVerification
+      tags: [account]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "alice@example.com"
+      responses:
+        "200":
+          description: |
+            Request accepted. Returns 200 even when the email address is not
+            found or is already verified (to prevent enumeration).
+        "429":
+          description: Rate limit exceeded. Wait 60 seconds before retrying.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                example: 60
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

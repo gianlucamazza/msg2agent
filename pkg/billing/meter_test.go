@@ -247,3 +247,19 @@ func (s *memEventStore) FlushAggregates(snaps []UsageSnapshot) error {
 	s.mu.Unlock()
 	return nil
 }
+
+func (s *memEventStore) ListAggregatesByTenantPeriod(tenantID, period string) ([]UsageSnapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []UsageSnapshot
+	for _, snap := range s.aggregates {
+		if snap.TenantID != tenantID {
+			continue
+		}
+		if period != "" && snap.Period != period {
+			continue
+		}
+		out = append(out, snap)
+	}
+	return out, nil
+}

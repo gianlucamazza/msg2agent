@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import { Router, Route, Redirect } from "wouter-preact";
+import { Router, Route, Redirect, Link, useLocation } from "wouter-preact";
+import { X } from "lucide-preact";
 import { me, addToast } from "./state.js";
 import { handleCallback, signIn, signOut } from "@/lib/oauth.js";
 import { api, ApiError, type MeResponse } from "@/lib/api.js";
@@ -10,8 +11,38 @@ import AccountSection from "./AccountSection.js";
 import KeysSection, { loadKeys } from "./KeysSection.js";
 import UsageSection, { loadUsage } from "./UsageSection.js";
 import BillingSection from "./BillingSection.js";
+import AuditSection from "./AuditSection.js";
+import SettingsSection from "./SettingsSection.js";
+import IntegrationsSection from "./IntegrationsSection.js";
 
 type AppState = "loading" | "gate" | "ready";
+
+function DashboardTabs() {
+  const [loc] = useLocation();
+  const tabs = [
+    { href: "/account",  label: "Account" },
+    { href: "/keys",     label: "API Keys" },
+    { href: "/usage",    label: "Usage" },
+    { href: "/billing",  label: "Billing" },
+    { href: "/audit",         label: "Audit" },
+    { href: "/settings",      label: "Settings" },
+    { href: "/integrations",  label: "Integrations" },
+  ] as const;
+  return (
+    <nav class="dashboard-tabs" aria-label="Dashboard navigation">
+      {tabs.map(({ href, label }) => (
+        <Link
+          key={href}
+          href={href}
+          class="dashboard-tab"
+          aria-current={loc.startsWith(href) ? "page" : undefined}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 export default function App() {
   const [state, setState] = useState<AppState>("loading");
@@ -83,10 +114,7 @@ export default function App() {
           <span class="logo">msg2agent</span>
         </nav>
         <main>
-          <div
-            class="skeleton skeleton-sm-narrow"
-            style="margin: 2rem auto; width: 200px; height: 1.5rem;"
-          />
+          <div class="skeleton skeleton-banner" />
         </main>
       </>
     );
@@ -123,24 +151,21 @@ export default function App() {
 
   async function resendVerification() {
     try {
-      const r = await fetch("/api/email/resend", {
+      await api("/api/email/resend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: meVal.email }),
       });
-      if (r.status === 429) {
+      addToast("Verification email sent — check your inbox.", "success");
+      sessionStorage.setItem("m2a_verify_dismissed", "1");
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.status === 429) {
         addToast(
           "Verification email already sent recently. Check your inbox.",
           "info",
         );
-      } else if (r.ok) {
-        addToast("Verification email sent — check your inbox.", "success");
-        sessionStorage.setItem("m2a_verify_dismissed", "1");
       } else {
         addToast("Failed to resend verification email.", "error");
       }
-    } catch {
-      addToast("Failed to resend verification email.", "error");
     }
   }
 
@@ -177,17 +202,21 @@ export default function App() {
             }}
             aria-label="Dismiss"
           >
-            ✕
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
       )}
       <main>
         <Router base="/app">
+          <DashboardTabs />
           <Route path="/" component={() => <Redirect to="/account" />} />
           <Route path="/account" component={AccountSection} />
           <Route path="/keys" component={KeysSection} />
           <Route path="/usage" component={UsageSection} />
           <Route path="/billing" component={BillingSection} />
+          <Route path="/audit" component={AuditSection} />
+          <Route path="/settings" component={SettingsSection} />
+          <Route path="/integrations" component={IntegrationsSection} />
         </Router>
       </main>
     </>

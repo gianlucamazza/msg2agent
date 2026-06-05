@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { me, usage } from './state.js';
+import { Skeleton } from '@/components/ui/index.js';
 
 function CopyButton({ text }: { text: string }) {
   const [label, setLabel] = useState('Copy');
@@ -54,14 +55,22 @@ function QuotaBars() {
 
 export default function AccountSection() {
   const meVal = me.value;
-  if (!meVal) return <section id="section-account"><p>Loading…</p></section>;
+  if (!meVal) return <section id="section-account"><Skeleton class="skeleton-banner" /></section>;
 
   return (
     <section id="section-account">
       <h2>Account</h2>
       <div id="account-info">
         <p><strong>{meVal.name}</strong> &lt;{meVal.email}&gt;</p>
-        <p>Plan: <strong>{meVal.plan}</strong> &nbsp; Billing: {meVal.billing_status}</p>
+        <p>
+          Plan: <strong>{meVal.plan}</strong>
+          {' '}&nbsp; Billing: {meVal.billing_status}
+          {meVal.current_period_end && (
+            <span class="muted-small">
+              {' '}— renews {new Date(meVal.current_period_end).toLocaleDateString()}
+            </span>
+          )}
+        </p>
         <QuotaBars />
       </div>
 

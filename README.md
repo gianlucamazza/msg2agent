@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml/badge.svg)](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gianlucamazza/msg2agent)](https://goreportcard.com/report/github.com/gianlucamazza/msg2agent)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 The foundation for clear, secure, and verifiable communication between autonomous AI agents. Build decentralized agent networks with built-in identity, encryption, and interoperability.
 
@@ -16,32 +16,49 @@ The foundation for clear, secure, and verifiable communication between autonomou
 - **Secure Messaging**: End-to-end encryption with X25519-XChaCha20-Poly1305, Ed25519 signatures
 - **Relay Hub**: Central message routing with WebSocket transport
 - **A2A Protocol**: Google Agent-to-Agent protocol support for interoperability
-- **MCP Integration**: Model Context Protocol adapter for AI assistant integration
-- **Observability**: Prometheus metrics, OpenTelemetry tracing
+- **MCP Integration**: Model Context Protocol adapter — 14 tools (`list_agents`, `send_message`, `submit_task`, …) over stdio, streamable-HTTP, and SSE
+- **Multi-Tenancy & Billing**: tenant isolation, Stripe checkout/webhook, plan enforcement, hash-linked audit chain (`pkg/billing/`)
+- **OAuth 2.1 + PKCE**: Dynamic Client Registration, Google IDP, JWKS, consent screen (`pkg/oauth/`)
+- **Operator Dashboard**: tenant/key management UI + REST API (`cmd/dashboard/`)
+- **Observability**: Prometheus metrics, OpenTelemetry tracing (v1.43.0), Grafana dashboards
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph Relay Hub
-        R[Relay<br/>cmd/relay]
-        REG[(Registry)]
+    subgraph RelayHub[Relay Hub — cmd/relay]
+        R[Router]
+        REG[(Registry\nSQLite/Memory)]
         Q[(Offline Queue)]
+        OA[OAuth 2.1\n+ PKCE]
+        BIL[Billing\nMiddleware]
         R --- REG
         R --- Q
+        R --- OA
+        R --- BIL
+    end
+
+    subgraph MCP[MCP Server — cmd/mcp-server]
+        MCPS[14 tools\nstdio · HTTP · SSE]
     end
 
     subgraph Agents
-        A[Alice<br/>did:wba:...:alice]
-        B[Bob<br/>did:wba:...:bob]
-        MCP1[MCP Agent 1<br/>did:wba:...:mcp1<br/>stdio]
-        MCP2[MCP Agent 2<br/>did:wba:...:mcp2<br/>streamable-http]
+        A[Alice\ndid:wba:...:alice]
+        B[Bob\ndid:wba:...:bob]
     end
 
-    CC[Claude Code] -->|stdio| MCP1
-    OC[OpenClaw] -->|streamable-http| MCP2
-    MCP1 & MCP2 & A & B <-->|WebSocket| R
+    subgraph Dashboard[Operator Dashboard — cmd/dashboard]
+        DASH[REST API\n+ SPA]
+    end
+
+    CC[Claude Code] -->|stdio| MCPS
+    CL[Claude.ai] -->|streamable-http| MCPS
+    OC[OpenClaw] -->|streamable-http| MCPS
+    MCPS <-->|WebSocket| R
+    A & B <-->|WebSocket| R
     A <-.->|P2P| B
+    DASH -->|REST| R
+    BIL <-->|webhook| STRIPE[(Stripe)]
 ```
 
 See [Architecture docs](docs/architecture.md) for details.
@@ -137,35 +154,44 @@ See the [Getting Started Guide](docs/getting-started.md) for a complete walkthro
 
 ```
 cmd/
-  relay/          # Relay hub binary
-  mcp-server/     # MCP protocol adapter
+  relay/          # Relay hub binary (WebSocket router, OAuth, billing, signup)
+  mcp-server/     # MCP protocol adapter (14 tools, stdio/HTTP/SSE transports)
+  dashboard/      # Operator dashboard API + SPA (tenant/key management)
+  billing-admin/  # CLI admin tool (create-tenant, issue-key, sync-subscription)
 pkg/
-  agent/          # Agent implementation
-  billing/        # Tenant management, API keys, usage metering
+  agent/          # Agent implementation (identity, handlers, task store)
+  billing/        # Tenant management, API keys, metering, Stripe, audit chain
+  buildinfo/      # Version/commit/date injected at build time
   config/         # Configuration helpers
-  conversation/   # Threaded conversation storage
-  crypto/         # Encryption and signing
-  identity/       # DID management
-  mcp/            # MCP server core (tools, resources, inbox)
-  messaging/      # Message types and routing
-  protocol/       # JSON-RPC wire protocol
-  queue/          # Offline message queueing (store-and-forward)
-  registry/       # Agent storage (memory, file, SQLite)
-  security/       # Access control lists
-  transport/      # WebSocket, stdio, SSE transports
-  telemetry/      # Metrics and tracing
+  conversation/   # Threaded conversation storage (SQLite + in-memory)
+  crypto/         # Encryption (X25519-XChaCha20-Poly1305) and signing (Ed25519)
+  email/          # Email provider abstraction (verification, resend)
+  httputil/       # Shared HTTP middleware (CSP, security headers)
+  identity/       # DID management (did:wba)
+  mcp/            # MCP server core (tools, resources, notifications, inbox)
+  messaging/      # Message types and routing (DIDComm envelopes)
+  oauth/          # OAuth 2.1 + PKCE server (DCR, Google IDP, JWKS, consent)
+  protocol/       # JSON-RPC 2.0 wire protocol
+  queue/          # Offline message queueing (store-and-forward, SQLite)
+  registry/       # Agent storage (memory, SQLite)
+  security/       # Access control lists (ACL policies)
+  telemetry/      # Metrics (Prometheus) and tracing (OpenTelemetry OTLP)
+  transport/      # WebSocket, stdio, SSE, TLS transports
+  webui/          # Embedded frontend assets served by the relay
 adapters/
-  a2a/            # A2A protocol adapter
-  mcp/            # MCP protocol adapter
-infrastructure/   # Docker Compose + agentcard + grafana
-scripts/          # Development/deployment/scenario scripts
+  a2a/            # Google Agent-to-Agent protocol adapter
+  mcp/            # MCP streamable-HTTP / stdio transport adapter
+web/              # Astro + Preact + Tailwind frontend (landing, pricing, dashboard SPA)
+infrastructure/   # Docker Compose overrides, Terraform, Grafana dashboards
+loadtest/         # k6 load-test scenarios (MCP HTTP, relay WebSocket)
+scripts/          # Development, deployment, and scenario scripts
 test/             # Integration and E2E tests
-docker-compose*.yml  # Docker Compose configurations
+docker-compose*.yml  # Docker Compose configurations (sqlite, tls, observability, p2p)
 ```
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.25+
 - Docker (optional, for containerized deployment)
 
 ## Contributing

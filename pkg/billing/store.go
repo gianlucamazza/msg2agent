@@ -33,6 +33,7 @@ type Store interface {
 	ListAPIKeys(tenantID string) ([]*APIKey, error)
 	ListAPIKeysActive(tenantID string) ([]*APIKey, error)
 	RevokeAPIKey(id string) error
+	RenameAPIKey(id, name string) error
 
 	// OAuth identity operations (maps OAuth provider+sub → tenant).
 	PutOAuthIdentity(provider, sub, tenantID, email string) error
@@ -58,6 +59,12 @@ type Store interface {
 	Close() error
 }
 
+// ToolUsageRow holds aggregated tool call count for a single tool.
+type ToolUsageRow struct {
+	ToolName string `json:"tool_name"`
+	Count    int64  `json:"count"`
+}
+
 // AdminStore provides audit and maintenance operations.
 // *SQLiteStore implements both Store and AdminStore.
 type AdminStore interface {
@@ -66,6 +73,10 @@ type AdminStore interface {
 	Verify() (*VerifyReport, error)
 	PurgeEvents(before time.Time) (int64, error)
 	Backup(destPath string) error
+
+	// QueryToolBreakdown returns per-tool call counts for a tenant in a given period.
+	// Period format: "YYYY-MM". Empty period = all time.
+	QueryToolBreakdown(tenantID, period string) ([]ToolUsageRow, error)
 }
 
 // EventStore persists billing audit events and aggregated usage for recovery.
@@ -79,6 +90,10 @@ type EventStore interface {
 
 	// FlushAggregates upserts the given snapshots into usage_aggregates.
 	FlushAggregates(snapshots []UsageSnapshot) error
+
+	// ListAggregatesByTenantPeriod returns usage snapshots for a specific tenant,
+	// optionally filtered by period (YYYY-MM). Returns all periods if period is empty.
+	ListAggregatesByTenantPeriod(tenantID, period string) ([]UsageSnapshot, error)
 }
 
 type memEmailToken struct {
@@ -221,6 +236,23 @@ func (s *MemoryStore) RevokeAPIKey(id string) error {
 		}
 	}
 	return ErrAPIKeyNotFound
+}
+
+func (s *MemoryStore) RenameAPIKey(id, name string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, k := range s.keys {
+		if k.ID == id {
+			k.Name = name
+			return nil
+		}
+	}
+	return ErrAPIKeyNotFound
+}
+
+// ListAggregatesByTenantPeriod implements EventStore for MemoryStore (no-op, used in tests).
+func (s *MemoryStore) ListAggregatesByTenantPeriod(tenantID, period string) ([]UsageSnapshot, error) {
+	return nil, nil
 }
 
 func (s *MemoryStore) PutEmailVerificationToken(tokenHash, tenantID, email string, expiresAt time.Time) error {
@@ -427,6 +459,8 @@ var migrations = []migration{
 	`},
 	// V7: email verification. Uses sentinel to run ALTER TABLE idempotently.
 	{7, `_email_verify_v7`},
+	// V8: track last usage time for API keys.
+	{8, `ALTER TABLE api_keys ADD COLUMN last_used_at TEXT`},
 }
 
 // emailVerifyV7Stmts are the individual SQL statements for the V7 migration.
@@ -704,7 +738,7 @@ func (s *SQLiteStore) MarkTenantEmailVerified(tenantID string, at time.Time) err
 
 func (s *SQLiteStore) ListAPIKeysActive(tenantID string) ([]*APIKey, error) {
 	rows, err := s.db.Query(
-		`SELECT id,tenant_id,name,key_hash,prefix,created_at,expires_at,revoked_at
+		`SELECT id,tenant_id,name,key_hash,prefix,created_at,last_used_at,expires_at,revoked_at
 		 FROM api_keys
 		 WHERE tenant_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
 		tenantID, time.Now().UTC().Format(time.RFC3339),
@@ -729,6 +763,32 @@ func auditHash(prevHash, id, tenantID, event, toolName, requestID, ts string) st
 	canonical := strings.Join([]string{id, tenantID, event, toolName, requestID, ts}, "|")
 	sum := sha256.Sum256([]byte(prevHash + canonical))
 	return hex.EncodeToString(sum[:])
+}
+
+func (s *SQLiteStore) ListAggregatesByTenantPeriod(tenantID, period string) ([]UsageSnapshot, error) {
+	q := `SELECT tenant_id, period, event, count FROM usage_aggregates WHERE tenant_id=?`
+	args := []any{tenantID}
+	if period != "" {
+		q += ` AND period=?`
+		args = append(args, period)
+	}
+	q += ` ORDER BY period DESC, event ASC`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("billing: list aggregates: %w", err)
+	}
+	defer rows.Close()
+	var out []UsageSnapshot
+	for rows.Next() {
+		var snap UsageSnapshot
+		var periodStr string
+		if err := rows.Scan(&snap.TenantID, &periodStr, &snap.Event, &snap.Count); err != nil {
+			return nil, err
+		}
+		snap.Period = periodStr
+		out = append(out, snap)
+	}
+	return out, rows.Err()
 }
 
 // RecordEvent implements EventStore — appends one audit event with a hash chain.
@@ -985,6 +1045,42 @@ func (s *SQLiteStore) QueryEvents(f EventFilter) ([]AuditEvent, error) {
 	return out, rows.Err()
 }
 
+func (s *SQLiteStore) QueryToolBreakdown(tenantID, period string) ([]ToolUsageRow, error) {
+	q := `SELECT tool_name, COUNT(*) as cnt
+          FROM usage_events
+          WHERE tenant_id=? AND event='tool_calls' AND tool_name != ''`
+	args := []any{tenantID}
+	if period != "" {
+		var year, month int
+		if _, err := fmt.Sscanf(period, "%d-%d", &year, &month); err == nil && month >= 1 && month <= 12 {
+			from := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+			var to string
+			if month == 12 {
+				to = time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+			} else {
+				to = time.Date(year, time.Month(month+1), 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339)
+			}
+			q += ` AND ts >= ? AND ts < ?`
+			args = append(args, from, to)
+		}
+	}
+	q += ` GROUP BY tool_name ORDER BY cnt DESC`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("billing: tool breakdown: %w", err)
+	}
+	defer rows.Close()
+	var out []ToolUsageRow
+	for rows.Next() {
+		var r ToolUsageRow
+		if err := rows.Scan(&r.ToolName, &r.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // PurgeEvents deletes audit events older than before from usage_events.
 // usage_aggregates (the source of truth for invoicing) is left intact.
 // Returns the number of rows deleted.
@@ -1076,14 +1172,14 @@ func (s *SQLiteStore) PutAPIKey(k *APIKey) error {
 
 func (s *SQLiteStore) GetAPIKeyByHash(hash string) (*APIKey, error) {
 	row := s.db.QueryRow(
-		`SELECT id,tenant_id,name,key_hash,prefix,created_at,expires_at,revoked_at FROM api_keys WHERE key_hash=?`, hash,
+		`SELECT id,tenant_id,name,key_hash,prefix,created_at,last_used_at,expires_at,revoked_at FROM api_keys WHERE key_hash=?`, hash,
 	)
 	return scanAPIKey(row)
 }
 
 func (s *SQLiteStore) ListAPIKeys(tenantID string) ([]*APIKey, error) {
 	rows, err := s.db.Query(
-		`SELECT id,tenant_id,name,key_hash,prefix,created_at,expires_at,revoked_at FROM api_keys WHERE tenant_id=?`, tenantID,
+		`SELECT id,tenant_id,name,key_hash,prefix,created_at,last_used_at,expires_at,revoked_at FROM api_keys WHERE tenant_id=?`, tenantID,
 	)
 	if err != nil {
 		return nil, err
@@ -1108,6 +1204,17 @@ func (s *SQLiteStore) RevokeAPIKey(id string) error {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
+		return ErrAPIKeyNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteStore) RenameAPIKey(id, name string) error {
+	res, err := s.db.Exec(`UPDATE api_keys SET name=? WHERE id=?`, name, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrAPIKeyNotFound
 	}
 	return nil
@@ -1155,9 +1262,9 @@ func (s *SQLiteStore) Close() error { return s.db.Close() }
 func scanAPIKey(row scanner) (*APIKey, error) {
 	var k APIKey
 	var createdStr string
-	var expiresStr, revokedStr sql.NullString
+	var lastUsedStr, expiresStr, revokedStr sql.NullString
 	err := row.Scan(&k.ID, &k.TenantID, &k.Name, &k.KeyHash, &k.Prefix,
-		&createdStr, &expiresStr, &revokedStr)
+		&createdStr, &lastUsedStr, &expiresStr, &revokedStr)
 	if err == sql.ErrNoRows {
 		return nil, ErrAPIKeyNotFound
 	}
@@ -1165,6 +1272,11 @@ func scanAPIKey(row scanner) (*APIKey, error) {
 		return nil, err
 	}
 	k.CreatedAt, _ = time.Parse(time.RFC3339, createdStr)
+	if lastUsedStr.Valid {
+		if t, err2 := time.Parse(time.RFC3339, lastUsedStr.String); err2 == nil {
+			k.LastUsedAt = &t
+		}
+	}
 	if expiresStr.Valid {
 		t, _ := time.Parse(time.RFC3339, expiresStr.String)
 		k.ExpiresAt = &t

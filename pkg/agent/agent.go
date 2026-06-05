@@ -1577,10 +1577,18 @@ func (a *Agent) verifyMessageSignature(msg *messaging.Message) error {
 		return ErrSignatureInvalid
 	}
 
-	// Look up sender in registry
+	// Look up sender in registry. If unknown, the peer may not have been
+	// discovered yet — e.g. a queued message delivered on reconnect can race
+	// ahead of startup peer discovery. Resolve on demand before giving up.
 	sender, err := a.store.GetByDID(msg.From)
 	if err != nil {
-		return ErrSenderNotFound
+		if rerr := a.resolvePeer(msg.From); rerr != nil {
+			return ErrSenderNotFound
+		}
+		sender, err = a.store.GetByDID(msg.From)
+		if err != nil {
+			return ErrSenderNotFound
+		}
 	}
 
 	// Get sender's signing key
@@ -1636,7 +1644,6 @@ func (a *Agent) encryptMessageBody(msg *messaging.Message) error {
 	if err != nil {
 		return err
 	}
-
 	msg.Body = encrypted
 	msg.Encrypted = true
 	return nil
@@ -1648,10 +1655,16 @@ func (a *Agent) decryptMessageBody(msg *messaging.Message) error {
 		return nil // Not encrypted or empty
 	}
 
-	// Look up sender in registry
+	// Look up sender in registry (resolve on demand if not yet discovered).
 	sender, err := a.store.GetByDID(msg.From)
 	if err != nil {
-		return ErrSenderNotFound
+		if rerr := a.resolvePeer(msg.From); rerr != nil {
+			return ErrSenderNotFound
+		}
+		sender, err = a.store.GetByDID(msg.From)
+		if err != nil {
+			return ErrSenderNotFound
+		}
 	}
 
 	// Get sender's encryption key

@@ -178,6 +178,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run gosec
-        uses: securego/gosec@v2
+        uses: securego/gosec@v2.27.1
         with:
-          args: '-severity medium -exclude-dir vendor ./...'
+          # Mirror the gosec policy in .golangci.yml: medium severity+confidence,
+          # G104 (covered by errcheck) and G304 (CLI file paths) excluded.
+          args: '-severity medium -confidence medium -exclude=G104,G304 -exclude-dir vendor ./...'

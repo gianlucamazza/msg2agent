@@ -68,7 +68,7 @@ func (t *WebSocketTransport) Connect(ctx context.Context) error {
 		opts.HTTPClient = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, //nolint:gosec // Explicitly allowed via config
+					InsecureSkipVerify: true, // #nosec G402 -- opt-in via TLSSkipVerify config for test environments only
 				},
 			},
 		}

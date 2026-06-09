@@ -340,12 +340,12 @@ func ExportCSV(w io.Writer, period string, store EventStore) error {
 	if err != nil {
 		return fmt.Errorf("billing: load aggregates: %w", err)
 	}
-	fmt.Fprintln(w, "tenant_id,period,event,count")
+	_, _ = fmt.Fprintln(w, "tenant_id,period,event,count")
 	for _, s := range snaps {
 		if period != "" && s.Period != period {
 			continue
 		}
-		fmt.Fprintf(w, "%s,%s,%s,%d\n", s.TenantID, s.Period, string(s.Event), s.Count)
+		_, _ = fmt.Fprintf(w, "%s,%s,%s,%d\n", s.TenantID, s.Period, string(s.Event), s.Count)
 	}
 	return nil
 }

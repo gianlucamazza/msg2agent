@@ -264,7 +264,7 @@ func (h *RelayHub) Route(msg *messaging.Message, data []byte) error {
 		if msg.RequestAck && senderClient != nil {
 			h.sendDeliveryAck(senderClient, msg.ID, false, "buffer full")
 		}
-		return fmt.Errorf("client send buffer full")
+		return errors.New("client send buffer full")
 	}
 }
 

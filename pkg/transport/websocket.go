@@ -88,6 +88,7 @@ func (t *WebSocketTransport) Connect(ctx context.Context) error {
 	t.logger.Info("websocket connected", "addr", t.remoteAddr)
 
 	// Start ping goroutine to keep connection alive
+	// #nosec G118 -- keepalive loop runs for the connection lifetime, not request-scoped
 	go t.pingLoop()
 	return nil
 }

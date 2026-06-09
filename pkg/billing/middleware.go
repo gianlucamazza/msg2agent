@@ -16,7 +16,9 @@ const tenantContextKey contextKey = "billing_tenant"
 
 // TenantContextKey returns the context key used to store the authenticated Tenant.
 // Use this when setting tenant in context outside the billing middleware (e.g. A2A handler).
-func TenantContextKey() contextKey { return tenantContextKey }
+// The concrete key type is unexported; callers only pass the returned value to
+// context.WithValue / Context.Value, so an opaque any is sufficient.
+func TenantContextKey() any { return tenantContextKey }
 
 // TenantFromContext extracts the authenticated Tenant from the request context.
 // Returns nil if no tenant is set (e.g. unauthenticated or auth disabled).

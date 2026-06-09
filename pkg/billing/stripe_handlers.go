@@ -2,6 +2,7 @@ package billing
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -70,7 +71,7 @@ func handleCheckoutCompleted(store Store, eventStore EventStore, event stripe.Ev
 
 	tenantID := sess.ClientReferenceID
 	if tenantID == "" {
-		return fmt.Errorf("billing: checkout.session.completed: missing client_reference_id")
+		return errors.New("billing: checkout.session.completed: missing client_reference_id")
 	}
 
 	tenant, err := store.GetTenant(tenantID)

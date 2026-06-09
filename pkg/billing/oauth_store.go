@@ -65,8 +65,12 @@ func (s *SQLiteStore) GetClient(clientID string) (*oauth.Client, error) {
 	if createdIP.Valid {
 		c.CreatedIP = createdIP.String
 	}
-	json.Unmarshal([]byte(ruJSON), &c.RedirectURIs)
-	json.Unmarshal([]byte(gtJSON), &c.GrantTypes)
+	if err := json.Unmarshal([]byte(ruJSON), &c.RedirectURIs); err != nil {
+		return nil, fmt.Errorf("oauth: decode redirect_uris: %w", err)
+	}
+	if err := json.Unmarshal([]byte(gtJSON), &c.GrantTypes); err != nil {
+		return nil, fmt.Errorf("oauth: decode grant_types: %w", err)
+	}
 	if t, err2 := time.Parse(time.RFC3339, createdAt); err2 == nil {
 		c.ClientIDIssuedAt = t.Unix()
 	}
@@ -92,7 +96,7 @@ func (s *SQLiteStore) UseCode(codeHash string) (*oauth.Code, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var code oauth.Code
 	var scope sql.NullString
@@ -143,7 +147,7 @@ func (s *SQLiteStore) RotateRefreshToken(oldHash string, newRT *oauth.RefreshTok
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	var revoked int
 	var expiresAt string

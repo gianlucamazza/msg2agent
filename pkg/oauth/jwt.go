@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"time"
 
@@ -97,8 +98,9 @@ type JWTVerifier struct {
 
 // NewJWTVerifier creates a verifier for access tokens produced by JWTIssuer.
 func NewJWTVerifier(priv ed25519.PrivateKey, issuer, audience string) *JWTVerifier {
+	pub, _ := priv.Public().(ed25519.PublicKey)
 	return &JWTVerifier{
-		pubKey:   priv.Public().(ed25519.PublicKey),
+		pubKey:   pub,
 		issuer:   issuer,
 		audience: audience,
 	}
@@ -122,7 +124,7 @@ func (v *JWTVerifier) ValidateClaims(token string) (tenantID string, err error) 
 	}
 	tenantID = tok.Subject()
 	if tenantID == "" {
-		return "", fmt.Errorf("oauth: access token missing sub claim")
+		return "", errors.New("oauth: access token missing sub claim")
 	}
 	return tenantID, nil
 }

@@ -14,6 +14,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -85,7 +86,7 @@ func (g *gatewayBridge) SendAsync(ctx context.Context, to, method string, params
 func (g *gatewayBridge) tenantIdentity(ctx context.Context) (*identity.Identity, error) {
 	tenant := billing.TenantFromContext(ctx)
 	if tenant == nil {
-		return nil, fmt.Errorf("no tenant in context")
+		return nil, errors.New("no tenant in context")
 	}
 	if len(tenant.DIDSeed) != 32 {
 		return nil, fmt.Errorf("tenant %s has no DID seed (pre-V5 account)", tenant.ID)
@@ -115,6 +116,7 @@ func (g *gatewayBridge) tenantIdentity(ctx context.Context) (*identity.Identity,
 			g.registered = make(map[string]bool)
 		}
 		g.registered[tenant.ID] = true
+		// #nosec G118 -- fire-and-forget registration must outlive the request, so context.Background is intentional
 		go g.registerSubordinate(ident, tenant.ID)
 	}
 

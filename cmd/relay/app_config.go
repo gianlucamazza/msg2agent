@@ -1,8 +1,8 @@
 package main
 
 import (
+	"errors"
 	"flag"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -130,15 +130,13 @@ func parseAppConfig() (appConfig, error) {
 	}
 
 	if cfg.TLSEnabled && (cfg.TLSCert == "" || cfg.TLSKey == "") {
-		return appConfig{}, fmt.Errorf("TLS enabled but certificate or key file not specified")
+		return appConfig{}, errors.New("TLS enabled but certificate or key file not specified")
 	}
 	return cfg, nil
 }
 
 func parseLogLevel(value string) (slog.Level, error) {
 	switch value {
-	case "debug":
-		return slog.LevelDebug, nil
 	case "info":
 		return slog.LevelInfo, nil
 	case "warn":
@@ -146,6 +144,7 @@ func parseLogLevel(value string) (slog.Level, error) {
 	case "error":
 		return slog.LevelError, nil
 	default:
+		// "debug" and unknown values default to debug level.
 		return slog.LevelDebug, nil
 	}
 }

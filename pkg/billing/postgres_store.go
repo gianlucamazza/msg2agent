@@ -150,6 +150,17 @@ var pgMigrations = []pgMigration{
 		);
 		CREATE INDEX IF NOT EXISTS idx_email_tokens_expires ON email_verification_tokens(expires_at);
 	`},
+	// V8: monotonic insert-order key for the usage_events hash chain. recorded_at
+	// is sampled before the per-tenant advisory lock, so it is NOT monotonic with
+	// chain (lock) order — two concurrent inserts can land in the chain in the
+	// opposite order of their timestamps, which made VerifyAuditChain (ordered by
+	// recorded_at) reconstruct a different order than RecordEvent linked, reporting
+	// a false "tampered". seq is assigned by the DB under the advisory lock at
+	// INSERT time, so ordering by seq matches the true chain order.
+	{8, `
+		ALTER TABLE usage_events ADD COLUMN IF NOT EXISTS seq BIGSERIAL;
+		CREATE INDEX IF NOT EXISTS usage_events_tenant_seq ON usage_events(tenant_id, seq);
+	`},
 }
 
 // NewPostgresStore opens a billing Postgres database at dsn and runs migrations.
@@ -526,7 +537,7 @@ func (s *PostgresStore) RecordEvent(tenantID, event, toolName, requestID string)
 
 	var prevHash string
 	_ = tx.QueryRowContext(context.Background(),
-		`SELECT COALESCE(hash,'') FROM usage_events WHERE tenant_id=$1 ORDER BY recorded_at DESC LIMIT 1`,
+		`SELECT COALESCE(hash,'') FROM usage_events WHERE tenant_id=$1 ORDER BY seq DESC LIMIT 1`,
 		tenantID,
 	).Scan(&prevHash)
 
@@ -616,7 +627,7 @@ func (s *PostgresStore) VerifyAuditChain(tenantID string) ([]AuditChainResult, e
 		res := AuditChainResult{TenantID: tid}
 		rows, err := s.db.Query(
 			`SELECT id,tenant_id,event,tool_name,request_id,recorded_at,hash,prev_hash
-			 FROM usage_events WHERE tenant_id=$1 ORDER BY recorded_at ASC`,
+			 FROM usage_events WHERE tenant_id=$1 ORDER BY seq ASC`,
 			tid,
 		)
 		if err != nil {
@@ -756,6 +767,7 @@ func (s *PostgresStore) Backup(destPath string) error {
 	}
 	// pg_dump reads the DSN from the standard PG* env vars or $DATABASE_URL.
 	// Callers must set PGDATABASE, PGHOST, PGUSER, PGPASSWORD (or PGSERVICE) before calling.
+	// #nosec G204 G702 -- pgDump path and destPath are operator-configured (MSG2AGENT_PG_DUMP / backup target), not user input
 	cmd := exec.Command(pgDump, "--file="+destPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("billing: pg backup: %w\n%s\n"+

@@ -220,10 +220,7 @@ func (d *Discovery) AddPeer(did, displayName string, keys []PeerKey) error {
 	// Decode and add public keys
 	for _, key := range keys {
 		keyType := KeyTypeEd25519
-		switch key.Type {
-		case "Ed25519":
-			keyType = KeyTypeEd25519
-		case "X25519":
+		if key.Type == "X25519" {
 			keyType = KeyTypeX25519
 		}
 

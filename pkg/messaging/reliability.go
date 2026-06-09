@@ -150,7 +150,7 @@ func (cb *CircuitBreaker) allowRequest() bool {
 	defer cb.mu.Unlock()
 
 	switch cb.state {
-	case CircuitClosed:
+	case CircuitClosed, CircuitHalfOpen:
 		return true
 	case CircuitOpen:
 		// Check if we should transition to half-open
@@ -160,8 +160,6 @@ func (cb *CircuitBreaker) allowRequest() bool {
 			return true
 		}
 		return false
-	case CircuitHalfOpen:
-		return true
 	}
 	return false
 }

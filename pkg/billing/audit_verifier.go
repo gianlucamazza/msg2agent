@@ -9,7 +9,7 @@ import (
 // StartPeriodicVerifier launches a goroutine that verifies the audit hash chain
 // for all active tenants at the given interval. When tampering is detected,
 // it logs an error and increments the billing_audit_chain_tampered_total metric.
-// Returns immediately; the goroutine is stopped when ctx is cancelled.
+// Returns immediately; the goroutine is stopped when ctx is canceled.
 // interval == 0 disables the verifier (no-op).
 func StartPeriodicVerifier(ctx context.Context, store Store, admin AdminStore, interval time.Duration, logger *slog.Logger) {
 	if interval == 0 {

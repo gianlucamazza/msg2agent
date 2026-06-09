@@ -3,6 +3,7 @@ package a2a
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -241,7 +242,7 @@ func (r *AgentRouter) TaskHandler() TaskHandler {
 		}
 
 		// No recipient and no local handlers - return error
-		return nil, nil, fmt.Errorf("no recipient specified and no local handlers configured")
+		return nil, nil, errors.New("no recipient specified and no local handlers configured")
 	}
 }
 
@@ -313,8 +314,6 @@ func (r *AgentRouter) Handler() *Handler {
 // TaskStateToThreadState converts an A2A task state to a thread state.
 func TaskStateToThreadState(taskState string) conversation.ThreadState {
 	switch taskState {
-	case TaskStateSubmitted, TaskStateWorking:
-		return conversation.ThreadStateActive
 	case TaskStateInputRequired:
 		return conversation.ThreadStateAwaitingInput
 	case TaskStateCompleted:
@@ -322,6 +321,7 @@ func TaskStateToThreadState(taskState string) conversation.ThreadState {
 	case TaskStateFailed, TaskStateCanceled:
 		return conversation.ThreadStateFailed
 	default:
+		// TaskStateSubmitted, TaskStateWorking and unknown states map to Active.
 		return conversation.ThreadStateActive
 	}
 }
@@ -329,8 +329,6 @@ func TaskStateToThreadState(taskState string) conversation.ThreadState {
 // ThreadStateToTaskState converts a thread state to an A2A task state.
 func ThreadStateToTaskState(threadState conversation.ThreadState) string {
 	switch threadState {
-	case conversation.ThreadStateActive:
-		return TaskStateWorking
 	case conversation.ThreadStateAwaitingInput:
 		return TaskStateInputRequired
 	case conversation.ThreadStateCompleted:
@@ -338,6 +336,7 @@ func ThreadStateToTaskState(threadState conversation.ThreadState) string {
 	case conversation.ThreadStateFailed:
 		return TaskStateFailed
 	default:
+		// ThreadStateActive and unknown states map to Working.
 		return TaskStateWorking
 	}
 }

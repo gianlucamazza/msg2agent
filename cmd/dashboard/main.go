@@ -40,7 +40,7 @@ func main() {
 		if es, ok := s.(billing.EventStore); ok {
 			eventStore = es
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 	}
 
 	// Build OAuth2 validator. The dashboard's /api/dashboard/* needs OAuth2

@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -215,7 +216,7 @@ func (s *Server) inboxMessageResourceHandler(ctx context.Context, request mcp.Re
 	// Extract ID from URI: msg2agent://inbox/{id}
 	id := extractIDFromURI(request.Params.URI, "msg2agent://inbox/")
 	if id == "" {
-		return nil, fmt.Errorf("invalid message URI")
+		return nil, errors.New("invalid message URI")
 	}
 
 	msg := s.inbox.Get(id)
@@ -245,7 +246,7 @@ func (s *Server) taskResourceHandler(ctx context.Context, request mcp.ReadResour
 	// Extract ID from URI: msg2agent://tasks/{id}
 	id := extractIDFromURI(request.Params.URI, "msg2agent://tasks/")
 	if id == "" {
-		return nil, fmt.Errorf("invalid task URI")
+		return nil, errors.New("invalid task URI")
 	}
 
 	s.tasksMu.RLock()

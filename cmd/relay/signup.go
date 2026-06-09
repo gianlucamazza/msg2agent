@@ -53,12 +53,12 @@ func newIPRateLimiter() *ipRateLimiter {
 }
 
 func (l *ipRateLimiter) allow(ip string, maxPerWindow int, windowSec int64) bool {
-	now := time.Now().Unix()
+	nowSec := time.Now().Unix()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	b, ok := l.buckets[ip]
-	if !ok || now >= b.reset {
-		b = &ipBucket{count: 0, reset: now + windowSec}
+	if !ok || nowSec >= b.reset {
+		b = &ipBucket{count: 0, reset: nowSec + windowSec}
 		l.buckets[ip] = b
 	}
 	b.count++
@@ -147,7 +147,7 @@ func signupHandler(store billing.Store, stripeClient *billing.StripeClient, emai
 
 			origin := fmt.Sprintf("https://%s", r.Host)
 			if r.Header.Get("X-Forwarded-Proto") == "" {
-				origin = fmt.Sprintf("http://%s", r.Host)
+				origin = fmt.Sprintf("http://%s", r.Host) //nolint:revive // dev-only fallback when no TLS-terminating proxy sets X-Forwarded-Proto
 			}
 			sess, err := stripeClient.CreateCheckoutSession(
 				tenant.ID, plan,

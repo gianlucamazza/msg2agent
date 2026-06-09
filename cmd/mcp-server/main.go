@@ -177,8 +177,8 @@ func main() {
 
 	// Register with relay (proof of DID ownership).
 	{
-		ts := time.Now().Unix()
-		proofMessage := fmt.Sprintf("%s:%d", a.DID(), ts)
+		tsSec := time.Now().Unix()
+		proofMessage := fmt.Sprintf("%s:%d", a.DID(), tsSec)
 		proof := a.Sign([]byte(proofMessage))
 
 		regReq := map[string]any{
@@ -190,7 +190,7 @@ func main() {
 			"capabilities":         a.Record().Capabilities,
 			"status":               a.Record().Status,
 			"proof":                proof,
-			"timestamp":            ts,
+			"timestamp":            tsSec,
 			"role":                 "gateway",
 			"delegation_namespace": fmt.Sprintf("did:wba:%s:tenant:*", agentDomain),
 		}

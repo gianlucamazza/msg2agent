@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -84,7 +85,7 @@ func (g *GoogleIDP) ExchangeCode(ctx context.Context, code, _ string) (string, e
 		IDToken string `json:"id_token"`
 	}
 	if err := json.Unmarshal(raw, &tok); err != nil || tok.IDToken == "" {
-		return "", fmt.Errorf("google: no id_token in response")
+		return "", errors.New("google: no id_token in response")
 	}
 
 	return g.emailFromIDToken(ctx, tok.IDToken)
@@ -111,11 +112,11 @@ func (g *GoogleIDP) emailFromIDToken(ctx context.Context, idToken string) (strin
 
 	emailRaw, ok := parsed.Get("email")
 	if !ok {
-		return "", fmt.Errorf("google: id_token missing email claim")
+		return "", errors.New("google: id_token missing email claim")
 	}
 	email, ok := emailRaw.(string)
 	if !ok || email == "" {
-		return "", fmt.Errorf("google: id_token email claim is not a string")
+		return "", errors.New("google: id_token email claim is not a string")
 	}
 	return email, nil
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -115,7 +116,7 @@ func DCRHandler(store Store) http.Handler {
 		}
 
 		clientID := "cli_" + randomHex(16)
-		now := time.Now().Unix()
+		nowSec := time.Now().Unix()
 
 		c := &Client{
 			ClientID:                clientID,
@@ -124,7 +125,7 @@ func DCRHandler(store Store) http.Handler {
 			GrantTypes:              req.GrantTypes,
 			Scope:                   req.Scope,
 			TokenEndpointAuthMethod: authMethod,
-			ClientIDIssuedAt:        now,
+			ClientIDIssuedAt:        nowSec,
 			ClientSecretExpiresAt:   0,
 			CreatedIP:               ip,
 		}
@@ -152,7 +153,7 @@ func DCRHandler(store Store) http.Handler {
 			GrantTypes:              c.GrantTypes,
 			Scope:                   c.Scope,
 			TokenEndpointAuthMethod: c.TokenEndpointAuthMethod,
-			ClientIDIssuedAt:        now,
+			ClientIDIssuedAt:        nowSec,
 			ClientSecretExpiresAt:   0,
 		}
 		if plainSecret != "" {
@@ -161,7 +162,8 @@ func DCRHandler(store Store) http.Handler {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
+		// #nosec G117 -- RFC 7591 dynamic client registration returns client_secret once in this response
+		_ = json.NewEncoder(w).Encode(resp)
 	})
 }
 
@@ -171,7 +173,7 @@ func validateRedirectURI(raw string) error {
 		return fmt.Errorf("redirect_uri %q is not a valid URL", raw)
 	}
 	if u.Fragment != "" {
-		return fmt.Errorf("redirect_uri must not contain a fragment")
+		return errors.New("redirect_uri must not contain a fragment")
 	}
 	host := u.Hostname()
 	switch u.Scheme {
@@ -181,7 +183,7 @@ func validateRedirectURI(raw string) error {
 		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
 			return nil
 		}
-		return fmt.Errorf("redirect_uri http scheme is only allowed for localhost")
+		return errors.New("redirect_uri http scheme is only allowed for localhost")
 	default:
 		return fmt.Errorf("redirect_uri scheme %q is not allowed", u.Scheme)
 	}

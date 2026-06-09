@@ -48,7 +48,7 @@ func generateAndSave(path string) (ed25519.PrivateKey, error) {
 func parsePEM(data []byte) (ed25519.PrivateKey, error) {
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, fmt.Errorf("oauth: no PEM block in signing key file")
+		return nil, errors.New("oauth: no PEM block in signing key file")
 	}
 	if len(block.Bytes) != ed25519.PrivateKeySize {
 		return nil, fmt.Errorf("oauth: signing key PEM has wrong size %d (want %d)", len(block.Bytes), ed25519.PrivateKeySize)
@@ -59,7 +59,7 @@ func parsePEM(data []byte) (ed25519.PrivateKey, error) {
 // BuildJWK constructs a JWK set from an Ed25519 private key.
 // The kid is the first 16 hex chars of SHA-256(publicKey) — stable across restarts.
 func BuildJWK(priv ed25519.PrivateKey) (jwk.Set, string, error) {
-	pub := priv.Public().(ed25519.PublicKey)
+	pub, _ := priv.Public().(ed25519.PublicKey)
 	sum := sha256.Sum256(pub)
 	kid := hex.EncodeToString(sum[:8])
 

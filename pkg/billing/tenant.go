@@ -25,7 +25,7 @@ func loadQuotaOverrides() (map[string]QuotaConfig, error) {
 		if path == "" {
 			return
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G703 -- path is the operator-set BILLING_QUOTAS_FILE env var, not user input
 		if err != nil {
 			quotaOverrideError = err
 			return

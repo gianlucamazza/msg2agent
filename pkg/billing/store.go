@@ -480,15 +480,16 @@ func (s *SQLiteStore) migrate() error {
 		}
 
 		// Sentinel-based migrations run individual statements for idempotent ALTER TABLE.
-		if m.sql == "_stripe_v4" {
+		switch m.sql {
+		case "_stripe_v4":
 			if err := s.migrateStripeV4(); err != nil {
 				return err
 			}
-		} else if m.sql == "_email_verify_v7" {
+		case "_email_verify_v7":
 			if err := s.migrateEmailVerifyV7(); err != nil {
 				return err
 			}
-		} else {
+		default:
 			tx, err := s.db.Begin()
 			if err != nil {
 				return fmt.Errorf("billing: begin migration v%d: %w", m.version, err)
@@ -880,7 +881,7 @@ func (s *SQLiteStore) FlushAggregates(snapshots []UsageSnapshot) error {
 	return nil
 }
 
-// VerifyReport summarises the billing DB state.
+// VerifyReport summarizes the billing DB state.
 type VerifyReport struct {
 	SchemaVersion  int
 	TenantCount    int

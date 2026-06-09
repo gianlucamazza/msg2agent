@@ -32,7 +32,8 @@ func DeriveTenantIdentity(domain, tenantID string, seed []byte) (*identity.Ident
 	// Ed25519 from seed.
 	edPriv := ed25519.NewKeyFromSeed(seed)
 	signingPriv := []byte(edPriv)                             // 64 bytes (seed||pub)
-	signingPub := []byte(edPriv.Public().(ed25519.PublicKey)) // 32 bytes
+	edPub, _ := edPriv.Public().(ed25519.PublicKey)
+	signingPub := []byte(edPub) // 32 bytes
 
 	// X25519 from SHA-512(seed)[0:32] — same derivation as libsodium sign_to_curve25519.
 	h := sha512.Sum512(seed)

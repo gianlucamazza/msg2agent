@@ -109,6 +109,8 @@ func (c *Claims) UnmarshalJSON(data []byte) error {
 				c.Audience = append(c.Audience, s)
 			}
 		}
+	default:
+		// Missing or unexpected "aud" type: leave Audience empty.
 	}
 
 	// Handle scope (can be string or array)
@@ -121,6 +123,8 @@ func (c *Claims) UnmarshalJSON(data []byte) error {
 				c.Scopes = append(c.Scopes, str)
 			}
 		}
+	default:
+		// Missing or unexpected "scope" type: leave Scopes empty.
 	}
 
 	return nil
@@ -413,7 +417,7 @@ type billingValidatorAdapter struct {
 
 // NewBillingValidator wraps an OAuth2Validator so it satisfies billing.JWTValidator.
 // Use this when passing an a2a validator to billing.OAuth2Middleware.
-func NewBillingValidator(v *OAuth2Validator) billingValidatorAdapter {
+func NewBillingValidator(v *OAuth2Validator) billing.JWTValidator {
 	return billingValidatorAdapter{v: v}
 }
 
@@ -438,6 +442,8 @@ func base64URLDecode(s string) ([]byte, error) {
 		s += "=="
 	case 3:
 		s += "="
+	default:
+		// len%4 of 0 (already padded) or 1 (invalid) needs no padding added.
 	}
 	return base64.URLEncoding.DecodeString(s)
 }

@@ -321,11 +321,11 @@ func (app *application) handleUsage(w http.ResponseWriter, r *http.Request) {
 		if s.TenantID != t.ID {
 			continue
 		}
-		if period != "" && string(s.Period) != period {
+		if period != "" && s.Period != period {
 			continue
 		}
 		rows = append(rows, usageRow{
-			Period: string(s.Period),
+			Period: s.Period,
 			Event:  string(s.Event),
 			Count:  s.Count,
 		})
@@ -334,12 +334,6 @@ func (app *application) handleUsage(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- POST /api/dashboard/checkout ---
-
-type checkoutReq struct {
-	Plan       string `json:"plan"`
-	SuccessURL string `json:"success_url"`
-	CancelURL  string `json:"cancel_url"`
-}
 
 func (app *application) handleCheckout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {

@@ -19,7 +19,7 @@ import (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `billing-admin — msg2agent billing management
+	fmt.Fprint(os.Stderr, `billing-admin — msg2agent billing management
 
 Usage:
   billing-admin -db <path> <command> [flags]
@@ -78,7 +78,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: open billing db: %v\n", err)
 		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() { _ = store.Close() }()
 
 	cmd := args[0]
 	cmdArgs := args[1:]
@@ -130,7 +130,7 @@ func runCreateTenant(store billing.Store, args []string) {
 	name := fs.String("name", "", "tenant display name (required)")
 	email := fs.String("email", "", "tenant email (required)")
 	plan := fs.String("plan", "free", "plan: free|starter|team|enterprise")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *name == "" || *email == "" {
 		fmt.Fprintln(os.Stderr, "error: -name and -email are required")
@@ -157,18 +157,18 @@ func runListTenants(store billing.Store) {
 		os.Exit(1)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tEMAIL\tPLAN\tSTATUS\tCREATED")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tEMAIL\tPLAN\tSTATUS\tCREATED")
 	for _, t := range tenants {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			t.ID, t.Name, t.Email, t.Plan, t.Status, t.CreatedAt.Format("2006-01-02"))
 	}
-	w.Flush()
+	_ = w.Flush()
 }
 
 func runSuspendTenant(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("suspend-tenant", flag.ExitOnError)
 	id := fs.String("id", "", "tenant ID (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *id == "" {
 		fmt.Fprintln(os.Stderr, "error: -id is required")
@@ -187,14 +187,14 @@ func runIssueKey(store billing.Store, args []string) {
 	name := fs.String("name", "default", "key label")
 	ttl := fs.Duration("ttl", 0, "key TTL (e.g. 720h); 0 = no expiry")
 	env := fs.String("env", "", "key environment: live (default) or test")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
 		os.Exit(1)
 	}
 	if *env != "" {
-		os.Setenv("MSG2AGENT_ENV", *env)
+		_ = os.Setenv("MSG2AGENT_ENV", *env)
 	}
 
 	plaintext, key, err := billing.GenerateAPIKey(*tenantID, *name)
@@ -220,7 +220,7 @@ func runIssueKey(store billing.Store, args []string) {
 func runRevokeKey(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("revoke-key", flag.ExitOnError)
 	id := fs.String("id", "", "key ID (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *id == "" {
 		fmt.Fprintln(os.Stderr, "error: -id is required")
@@ -236,7 +236,7 @@ func runRevokeKey(store billing.Store, args []string) {
 func runListKeys(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("list-keys", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
@@ -249,7 +249,7 @@ func runListKeys(store billing.Store, args []string) {
 		os.Exit(1)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tLABEL\tPREFIX\tSTATUS\tCREATED")
+	_, _ = fmt.Fprintln(w, "ID\tLABEL\tPREFIX\tSTATUS\tCREATED")
 	for _, k := range keys {
 		status := "active"
 		if k.RevokedAt != nil {
@@ -257,17 +257,17 @@ func runListKeys(store billing.Store, args []string) {
 		} else if k.ExpiresAt != nil && time.Now().After(*k.ExpiresAt) {
 			status = "expired"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s...\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s...\t%s\t%s\n",
 			k.ID, k.Name, k.Prefix, status, k.CreatedAt.Format("2006-01-02"))
 	}
-	w.Flush()
+	_ = w.Flush()
 }
 
 func runListUsage(store *billing.SQLiteStore, args []string) {
 	fs := flag.NewFlagSet("list-usage", flag.ExitOnError)
 	period := fs.String("period", "", "billing period YYYY-MM (default: current month)")
 	tenantID := fs.String("tenant", "", "filter by tenant ID")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *period == "" {
 		*period = time.Now().UTC().Format("2006-01")
@@ -280,7 +280,7 @@ func runListUsage(store *billing.SQLiteStore, args []string) {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TENANT\tPERIOD\tEVENT\tCOUNT")
+	_, _ = fmt.Fprintln(w, "TENANT\tPERIOD\tEVENT\tCOUNT")
 	for _, s := range snaps {
 		if *period != "" && s.Period != *period {
 			continue
@@ -288,15 +288,15 @@ func runListUsage(store *billing.SQLiteStore, args []string) {
 		if *tenantID != "" && s.TenantID != *tenantID {
 			continue
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", s.TenantID, s.Period, string(s.Event), s.Count)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%d\n", s.TenantID, s.Period, string(s.Event), s.Count)
 	}
-	w.Flush()
+	_ = w.Flush()
 }
 
 func runExportCSV(store *billing.SQLiteStore, args []string) {
 	fs := flag.NewFlagSet("export-csv", flag.ExitOnError)
 	period := fs.String("period", "", "billing period YYYY-MM (empty = all)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if err := billing.ExportCSV(os.Stdout, *period, store); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -308,7 +308,7 @@ func runPurgeEvents(store *billing.SQLiteStore, args []string) {
 	fs := flag.NewFlagSet("purge-events", flag.ExitOnError)
 	before := fs.String("before", "", "delete events older than this date (YYYY-MM-DD or RFC3339, required)")
 	yes := fs.Bool("yes", false, "skip confirmation prompt")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *before == "" {
 		fmt.Fprintln(os.Stderr, "error: -before is required")
@@ -356,7 +356,7 @@ func runQueryEvents(store *billing.SQLiteStore, args []string) {
 	to := fs.String("to", "", "end date inclusive (YYYY-MM-DD or RFC3339)")
 	format := fs.String("format", "table", "output format: table|json|csv|tsv")
 	limit := fs.Int("limit", 10000, "maximum rows to return")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
@@ -421,12 +421,12 @@ func runQueryEvents(store *billing.SQLiteStore, args []string) {
 		}
 	default: // table
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tTENANT\tEVENT\tTOOL\tTS")
+		_, _ = fmt.Fprintln(w, "ID\tTENANT\tEVENT\tTOOL\tTS")
 		for _, ev := range events {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				ev.ID, ev.TenantID, ev.Event, ev.ToolName, ev.Timestamp.Format("2006-01-02T15:04:05Z"))
 		}
-		w.Flush()
+		_ = w.Flush()
 	}
 	fmt.Fprintf(os.Stderr, "(%d event(s))\n", len(events))
 }
@@ -434,7 +434,7 @@ func runQueryEvents(store *billing.SQLiteStore, args []string) {
 func runBackup(store *billing.SQLiteStore, args []string) {
 	fs := flag.NewFlagSet("backup", flag.ExitOnError)
 	out := fs.String("out", "", "destination file path (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *out == "" {
 		fmt.Fprintln(os.Stderr, "error: -out is required")
@@ -451,7 +451,7 @@ func runBackup(store *billing.SQLiteStore, args []string) {
 func runVerifyAudit(store *billing.SQLiteStore, args []string) {
 	fs := flag.NewFlagSet("verify-audit", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "verify only this tenant (default: all tenants)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	results, err := store.VerifyAuditChain(*tenantID)
 	if err != nil {
@@ -492,7 +492,7 @@ func runAttachStripe(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("attach-stripe", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
 	customerID := fs.String("customer", "", "Stripe customer ID, e.g. cus_xxx (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" || *customerID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant and -customer are required")
@@ -519,7 +519,7 @@ func runAttachStripe(store billing.Store, args []string) {
 func runSyncSubscription(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("sync-subscription", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
@@ -561,6 +561,8 @@ func runSyncSubscription(store billing.Store, args []string) {
 		newStatus = "canceled"
 	case stripe.SubscriptionStatusIncomplete:
 		newStatus = "incomplete"
+	default:
+		// Other Stripe statuses keep the raw status string set above.
 	}
 
 	// Resolve current period end from subscription items (Stripe v82 API).
@@ -604,7 +606,7 @@ func runSeedEvents(store billing.Store, args []string) {
 	count := fs.Int("count", 50, "number of events to seed")
 	event := fs.String("event", "tool_call", "event type: tool_call|message|task_submit")
 	toolName := fs.String("tool", "demo_tool", "tool name recorded with each event")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")
@@ -633,7 +635,7 @@ func runSeedEvents(store billing.Store, args []string) {
 func runListStripe(store billing.Store, args []string) {
 	fs := flag.NewFlagSet("list-stripe", flag.ExitOnError)
 	tenantID := fs.String("tenant", "", "tenant ID (required)")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	if *tenantID == "" {
 		fmt.Fprintln(os.Stderr, "error: -tenant is required")

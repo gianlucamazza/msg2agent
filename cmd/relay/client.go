@@ -423,13 +423,13 @@ func (c *Client) verifyDIDProof(regReq *RegistrationRequest) error {
 	// Get the agent's signing key
 	signingKey := regReq.GetSigningKey()
 	if signingKey == nil {
-		return fmt.Errorf("no signing key provided")
+		return errors.New("no signing key provided")
 	}
 
 	// Verify timestamp is recent (within 5 minutes) to prevent replay attacks
 	proofAge := time.Now().Unix() - regReq.Timestamp
 	if proofAge < -60 || proofAge > 300 { // Allow 1 min clock skew, 5 min max age
-		return fmt.Errorf("proof timestamp out of range")
+		return errors.New("proof timestamp out of range")
 	}
 
 	// Reconstruct the signed message: DID + timestamp

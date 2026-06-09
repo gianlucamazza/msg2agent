@@ -133,6 +133,7 @@ func (s *AuthorizeServer) HandleAuthorize(w http.ResponseWriter, r *http.Request
 			renderError(w, http.StatusInternalServerError, "Internal error", "Something went wrong. Please try again.")
 			return
 		}
+		// #nosec G710 -- internal IdP authorize URL, not a user-supplied redirect target
 		http.Redirect(w, r, s.idp.AuthURL(idpState), http.StatusFound)
 		return
 	}
@@ -227,13 +228,23 @@ func (s *AuthorizeServer) HandleConfirm(w http.ResponseWriter, r *http.Request) 
 
 	redirectURI := r.FormValue("redirect_uri")
 	state := r.FormValue("state")
+	clientID := r.FormValue("client_id")
+
+	// Re-validate redirect_uri against the registered client before using it as a
+	// redirect target. The GET handler validated it, but this POST endpoint must
+	// not trust the form value — otherwise a tampered consent submission sends the
+	// authorization code to an attacker-controlled URI (open redirect / code theft).
+	c, err := s.store.GetClient(clientID)
+	if err != nil || !slices.Contains(c.RedirectURIs, redirectURI) {
+		renderError(w, http.StatusBadRequest, "Invalid request", "redirect_uri is not registered for this client.")
+		return
+	}
 
 	if r.FormValue("action") != "allow" {
 		redirectWithError(w, r, redirectURI, "access_denied", "user denied the request", state)
 		return
 	}
 
-	clientID := r.FormValue("client_id")
 	codeChallenge := r.FormValue("code_challenge")
 	codeChallengeMethod := r.FormValue("code_challenge_method")
 	scope := r.FormValue("scope")
@@ -264,6 +275,7 @@ func (s *AuthorizeServer) HandleConfirm(w http.ResponseWriter, r *http.Request) 
 	if state != "" {
 		q.Set("state", state)
 	}
+	// #nosec G710 -- redirectURI is validated against the client's registered RedirectURIs before this redirect
 	http.Redirect(w, r, redirectURI+"?"+q.Encode(), http.StatusFound)
 }
 
@@ -294,7 +306,7 @@ func (s *AuthorizeServer) showConsent(w http.ResponseWriter, _ *http.Request,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	consentTmpl.Execute(w, consentData{
+	_ = consentTmpl.Execute(w, consentData{
 		ClientName:          c.ClientName,
 		TenantName:          tenantName,
 		Scopes:              scopeList(scope),
@@ -345,7 +357,7 @@ func (s *AuthorizeServer) decodeIDPState(encoded string) (*idpStatePayload, erro
 		return nil, fmt.Errorf("oauth: unmarshal idp state: %w", err)
 	}
 	if time.Since(time.Unix(p.IssuedAt, 0)) > 10*time.Minute {
-		return nil, fmt.Errorf("oauth: idp state expired")
+		return nil, errors.New("oauth: idp state expired")
 	}
 	return &p, nil
 }
@@ -357,6 +369,7 @@ func redirectWithError(w http.ResponseWriter, r *http.Request, redirectURI, errC
 	if state != "" {
 		q.Set("state", state)
 	}
+	// #nosec G710 -- redirectURI is validated against the client's registered RedirectURIs before this redirect
 	http.Redirect(w, r, redirectURI+"?"+q.Encode(), http.StatusFound)
 }
 
@@ -372,7 +385,7 @@ func pkceVerify(verifier, challenge string) error {
 	h := sha256.Sum256([]byte(verifier))
 	got := base64.RawURLEncoding.EncodeToString(h[:])
 	if got != challenge {
-		return fmt.Errorf("oauth: PKCE code_verifier does not match code_challenge")
+		return errors.New("oauth: PKCE code_verifier does not match code_challenge")
 	}
 	return nil
 }

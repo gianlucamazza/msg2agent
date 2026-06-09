@@ -2,6 +2,11 @@ module github.com/gianlucamazza/msg2agent
 
 go 1.25.0
 
+// Build with the 1.25.11 toolchain: it carries the stdlib security fixes for
+// GO-2026-5037/5039 (crypto/x509, net/textproto) and GO-2026-4980/4982
+// (html/template) that govulncheck flags against the bare go1.25 stdlib.
+toolchain go1.25.11
+
 require (
 	github.com/coder/websocket v1.8.14
 	github.com/google/uuid v1.6.0

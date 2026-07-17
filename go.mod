@@ -1,6 +1,6 @@
 module github.com/gianlucamazza/msg2agent
 
-go 1.25.5
+go 1.25.12
 
 // Build with the 1.25.11 toolchain: it carries the stdlib security fixes for
 // GO-2026-5037/5039 (crypto/x509, net/textproto) and GO-2026-4980/4982

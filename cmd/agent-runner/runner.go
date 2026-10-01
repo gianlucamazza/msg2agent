@@ -209,7 +209,7 @@ func (r *Runner) Submit(worker, from string, params json.RawMessage) (any, error
 	r.cancels[t.ID] = cancel
 	r.mu.Unlock()
 	r.wg.Add(1)
-	go r.run(ctx, t)
+	go r.run(ctx, cancel, t)
 	return map[string]string{"status": "accepted", "task_id": t.ID, "state": StateSubmitted}, nil
 }
 
@@ -255,13 +255,13 @@ func (r *Runner) ownedTask(from string, params json.RawMessage) (*Task, error) {
 	return t, nil
 }
 
-func (r *Runner) run(ctx context.Context, t *Task) {
+// run owns the task's cancel func: it always releases the context and drops the
+// registration used by Cancel/CancelAll.
+func (r *Runner) run(ctx context.Context, cancel context.CancelFunc, t *Task) {
 	defer r.wg.Done()
 	defer func() {
+		cancel()
 		r.mu.Lock()
-		if c := r.cancels[t.ID]; c != nil {
-			c()
-		}
 		delete(r.cancels, t.ID)
 		r.mu.Unlock()
 	}()

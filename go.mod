@@ -1,6 +1,6 @@
 module github.com/gianlucamazza/msg2agent
 
-go 1.25.12
+go 1.25.14
 
 require (
 	github.com/coder/websocket v1.8.15

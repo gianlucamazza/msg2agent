@@ -164,7 +164,8 @@ jobs:
           cache: true
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        # Pinned: v1.8.0+ requires Go >= 1.26 and go.mod is on 1.25 (GOTOOLCHAIN=local).
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
 
       - name: Run govulncheck
         run: govulncheck ./...

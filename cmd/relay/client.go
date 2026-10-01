@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -286,6 +287,14 @@ func (c *Client) handleRegister(req *protocol.JSONRPCRequest) {
 		}
 	}
 
+	if c.hub.config.PinDIDKeys {
+		if err := c.checkPinnedKey(&regReq); err != nil {
+			c.hub.logger.Warn("DID key pinning rejected registration", "did", agent.DID, "error", err)
+			c.sendError(req.ID, protocol.CodeAccessDenied, err.Error())
+			return
+		}
+	}
+
 	// Check DID allowlist if configured
 	if c.hub.allowlistACL != nil {
 		relay := &registry.Agent{ACL: c.hub.allowlistACL}
@@ -410,6 +419,30 @@ func (c *Client) handleRegisterSubordinate(req *protocol.JSONRPCRequest) {
 
 	c.sendResult(req.ID, map[string]string{"status": "registered", "did": subReq.DID})
 	c.hub.logger.Info("subordinate registered", "gateway", c.DID, "sub_did", subReq.DID)
+}
+
+// checkPinnedKey rejects a registration whose signing key differs from the one already stored
+// for the DID. A DID never seen before, or stored without a signing key, is accepted and its
+// key becomes the pinned one when the agent record is stored.
+func (c *Client) checkPinnedKey(regReq *RegistrationRequest) error {
+	existing, err := c.hub.store.GetByDID(regReq.DID)
+	if err != nil || existing == nil {
+		return nil
+	}
+	var pinned []byte
+	for _, k := range existing.PublicKeys {
+		if k.Purpose == "signing" {
+			pinned = k.Key
+			break
+		}
+	}
+	if pinned == nil {
+		return nil
+	}
+	if k := regReq.GetSigningKey(); k == nil || !bytes.Equal(k.Key, pinned) {
+		return ErrDIDKeyMismatch
+	}
+	return nil
 }
 
 // verifyDIDProof verifies that the registering agent owns the claimed DID.

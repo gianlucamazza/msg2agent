@@ -21,6 +21,7 @@ var (
 	ErrMaxConnections      = errors.New("max connections reached")
 	ErrDIDProofRequired    = errors.New("DID ownership proof required")
 	ErrDIDProofInvalid     = errors.New("DID ownership proof invalid")
+	ErrDIDKeyMismatch      = errors.New("DID is bound to a different signing key")
 	ErrInvalidDIDFormat    = errors.New("invalid DID format: must be did:wba:*")
 	ErrInvalidPath         = errors.New("invalid or unsafe file path")
 )
@@ -98,6 +99,10 @@ type RelayConfig struct {
 
 	// Security
 	RequireDIDProof bool // Require agents to prove DID ownership during registration
+	// PinDIDKeys binds a DID to the first signing key it registers with (trust on first use).
+	// Without it the proof only shows possession of the key sent in the same request, so any
+	// client allowed to connect can re-register an existing DID with a fresh key.
+	PinDIDKeys bool
 }
 
 // DefaultRelayConfig returns sensible defaults.

@@ -30,6 +30,7 @@ type appConfig struct {
 	AllowedOrigins      []string
 	AllowedDIDs         []string
 	SkipDIDVerification bool
+	PinDIDKeys          bool
 
 	BillingDBPath         string
 	AuditVerifierInterval time.Duration
@@ -66,6 +67,7 @@ func parseAppConfig() (appConfig, error) {
 	traceStdout := flag.Bool("trace-stdout", false, "Enable stdout tracing for debugging (env: MSG2AGENT_TRACE_STDOUT)")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated list of allowed CORS origins (env: MSG2AGENT_CORS_ORIGINS)")
 
+	pinDIDKeys := flag.Bool("pin-did-keys", false, "Bind each DID to the first signing key it registers with (TOFU) (env: MSG2AGENT_PIN_DID_KEYS)")
 	skipDIDProof := flag.Bool("skip-did-proof", false, "Skip DID ownership verification during registration (NOT recommended) (env: MSG2AGENT_SKIP_DID_PROOF)")
 	allowedDIDs := flag.String("allowed-dids", "", "Comma-separated list of allowed DIDs (empty = open relay) (env: MSG2AGENT_ALLOWED_DIDS)")
 
@@ -110,6 +112,7 @@ func parseAppConfig() (appConfig, error) {
 		AllowedOrigins:      splitCSV(config.FlagOrEnv(*corsOrigins, "CORS_ORIGINS", "")),
 		AllowedDIDs:         splitCSV(config.FlagOrEnv(*allowedDIDs, "ALLOWED_DIDS", "")),
 		SkipDIDVerification: config.FlagOrEnvBool(*skipDIDProof, "SKIP_DID_PROOF", false),
+		PinDIDKeys:          config.FlagOrEnvBool(*pinDIDKeys, "PIN_DID_KEYS", false),
 
 		BillingDBPath:         config.FlagOrEnv(*billingDBPath, "BILLING_DB", ""),
 		AuditVerifierInterval: *auditVerifierInterval,

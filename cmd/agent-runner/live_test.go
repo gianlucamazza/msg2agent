@@ -21,7 +21,7 @@ func TestLiveJail(t *testing.T) {
 		t.Fatal("bwrap unavailable")
 	}
 	home, _ := os.UserHomeDir()
-	names := []string{"claude", "codex", "grok"}
+	names := []string{"claude", "codex", "grok", "opencode"}
 	if v := os.Getenv("A2A_LIVE_TOOLS"); v != "" {
 		names = strings.Split(v, ",")
 	}
@@ -40,13 +40,20 @@ func TestLiveJail(t *testing.T) {
 		"you can call (or say NO-MCP). Report exactly what happened for each step."
 	for _, tool := range names {
 		t.Run(tool, func(t *testing.T) {
-			argv := tools[tool].argv(ProfileRO, buildPrompt(tool+"-worker", "did:test", ProfileRO, task), dir)
-			overlays, err := materializeOverlays(t.TempDir(), tool, home)
+			model, extraRO := "", []string(nil)
+			if tool == "opencode" { // mirrors runner.json on this machine
+				model, extraRO = "hetzner/Qwen3.8-27B", []string{".config/hetzner/inference.token"}
+			}
+			argv := tools[tool].argv(ProfileRO, buildPrompt(tool+"-worker", "did:test", ProfileRO, task), dir, model)
+			if extra := os.Getenv("A2A_LIVE_ARGS"); extra != "" { // debugging aid, e.g. --print-logs
+				argv = append(argv, strings.Fields(extra)...)
+			}
+			overlays, err := materializeOverlays(t.TempDir(), tool, home, tools[tool].Overlays)
 			if err != nil {
 				t.Fatal(err)
 			}
-			argv = wrapSandbox(argv, sandboxSpec{Tool: tool, Cwd: dir, Home: home, Overlays: overlays})
-			env := append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}, tools[tool].Env...)
+			argv = wrapSandbox(argv, sandboxSpec{Tool: tool, Cwd: dir, Home: home, Overlays: overlays, ExtraRO: extraRO})
+			env := append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}, tools[tool].env(ProfileRO)...)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 			out, code, err := ex.Run(ctx, "a2a-live-"+tool, dir, argv, env)
@@ -77,7 +84,7 @@ func TestLiveClaudeSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	argv := tools["claude"].argv(ProfileRO, "say ok", dir)
+	argv := tools["claude"].argv(ProfileRO, "say ok", dir, "")
 	argv = append(argv, "--output-format", "stream-json", "--verbose", "--max-turns", "1")
 	argv = wrapSandbox(argv, sandboxSpec{Tool: "claude", Cwd: dir, Home: home})
 	ex := systemdExecutor{Slice: "agents.slice", RuntimeMax: 3 * time.Minute}

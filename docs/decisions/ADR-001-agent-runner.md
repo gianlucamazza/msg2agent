@@ -125,3 +125,22 @@ Field findings that changed the per-tool flags in Decision §4. The jail and the
   its allowlist, and the runner rejected rw from a sender outside `rw_allow`, `hops=2`, and a
   directory outside the roots.
   The model-independent oracle `TestJailEnforcement` fails without the jail (baseline checked).
+
+### Errata 2 (2026-10-01): opencode worker, key pinning
+
+- **The fourth worker, `opencode-worker`, runs `opencode run --standalone`.** It never uses the
+  shared `opencode.service`, because that server's tools run outside the jail. Permissions come
+  from `OPENCODE_CONFIG_CONTENT`: a catch-all `"*":"deny"` first, since opencode applies the last
+  matching rule. The ro profile adds read/glob/grep/list; rw adds edit and bash; web, task and
+  skills stay denied.
+- **The shared server's password is a jail escape.** With it, a worker could drive the unjailed
+  server on 127.0.0.1:4096 over the shared network. Both copies (`~/.config/opencode/service.json`
+  and `~/.local/state/opencode/service.json`) are overlaid with a random password per run, and
+  `server.env` is emptied. The oracle is `TestJailOverlayMasksServerPassword`.
+- **Per-worker config gained `model`, `ro_binds` and `overlays`.** The opencode free tier is unusable
+  headless: "not available in your country" without an OpenRouter key, "only from within OpenCode",
+  and timeouts. The worker therefore uses the user's own Hetzner endpoint, with only its token
+  file bound read-only.
+- **A DID can no longer be re-keyed (msg2agent#37, `--pin-did-keys`).** Before this, any local
+  process, including an rw worker with Bash, could re-register a session DID with a fresh key and
+  take over its mailbox and its `rw_allow` rights. The relay unit now enables pinning.

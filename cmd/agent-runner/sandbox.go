@@ -29,6 +29,7 @@ type sandboxSpec struct {
 	RepoGit  string // main repo .git for a linked worktree (rw, hooks/config re-denied ro)
 	Home     string
 	Overlays map[string]string // host path to mask -> read-only source file
+	ExtraRO  []string          // extra $HOME-relative paths bound read-only
 }
 
 // sandboxAvailable probes that bwrap exists and unprivileged user namespaces work.
@@ -67,6 +68,10 @@ func wrapSandbox(argv []string, s sandboxSpec) []string {
 	}
 	// Read-only allow-list first, so a writable subpath bound later wins.
 	for _, p := range toolRuntimeRO {
+		hp := filepath.Join(s.Home, p)
+		a = append(a, "--ro-bind-try", hp, hp)
+	}
+	for _, p := range s.ExtraRO {
 		hp := filepath.Join(s.Home, p)
 		a = append(a, "--ro-bind-try", hp, hp)
 	}

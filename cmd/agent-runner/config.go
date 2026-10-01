@@ -15,7 +15,15 @@ import (
 // WorkerConfig binds one network identity to one CLI tool.
 type WorkerConfig struct {
 	Name string `json:"name"` // agent name -> did:wba:<domain>:agent:<name>
-	Tool string `json:"tool"` // claude | codex | grok
+	Tool string `json:"tool"` // claude | codex | grok | opencode
+	// Model overrides the tool's default model (e.g. a route reachable without extra secrets).
+	Model string `json:"model,omitempty"`
+	// ROBinds are extra $HOME-relative paths exposed read-only in the jail (e.g. the token
+	// file a provider config references). Everything not listed stays masked.
+	ROBinds []string `json:"ro_binds,omitempty"`
+	// Overlays mask extra $HOME-relative files inside the jail with this content, e.g. a
+	// credential the user's tool config references but the worker must not see.
+	Overlays map[string]string `json:"overlays,omitempty"`
 }
 
 // Config is the runner configuration (JSON, see docs/decisions/ADR-001-agent-runner.md).
@@ -105,6 +113,15 @@ func (c *Config) normalize() error {
 	for _, w := range c.Workers {
 		if _, ok := tools[w.Tool]; !ok {
 			return fmt.Errorf("worker %q: unknown tool %q", w.Name, w.Tool)
+		}
+		rels := append([]string{}, w.ROBinds...)
+		for rel := range w.Overlays {
+			rels = append(rels, rel)
+		}
+		for _, rel := range rels {
+			if filepath.IsAbs(rel) || strings.HasPrefix(filepath.Clean(rel), "..") {
+				return fmt.Errorf("worker %q: path %q must be relative to $HOME", w.Name, rel)
+			}
 		}
 		if w.Name == "" || seen[w.Name] {
 			return fmt.Errorf("worker name %q empty or duplicated", w.Name)

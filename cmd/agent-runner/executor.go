@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const stderrTail = 4 << 10
+
 // systemdExecutor runs each task as a transient unit in the agents slice, so CPU/IO/memory
 // limits and oomd apply, and a cancel can stop the whole process tree by unit name.
 type systemdExecutor struct {
@@ -49,10 +51,15 @@ func (e systemdExecutor) Run(ctx context.Context, unit, cwd string, argv, env []
 	case err == nil:
 		return stdout.Bytes(), 0, nil
 	case errors.As(err, &exitErr):
-		if stdout.Len() == 0 && stderr.Len() > 0 {
-			return stderr.Bytes(), exitErr.ExitCode(), nil
+		// On failure the reason is usually on stderr: append its tail for the sender.
+		out := stdout.Bytes()
+		if tail := stderr.Bytes(); len(tail) > 0 {
+			if len(tail) > stderrTail {
+				tail = tail[len(tail)-stderrTail:]
+			}
+			out = append(append(out, "\n--- stderr (tail) ---\n"...), tail...)
 		}
-		return stdout.Bytes(), exitErr.ExitCode(), nil
+		return out, exitErr.ExitCode(), nil
 	default:
 		return stdout.Bytes(), -1, err
 	}

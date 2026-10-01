@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -313,17 +314,17 @@ func (r *Runner) execute(ctx context.Context, t *Task) {
 	defer cleanup()
 
 	home, _ := os.UserHomeDir()
-	argv := tools[tool].argv(t.Profile, buildPrompt(t.Worker, t.Sender, t.Profile, t.Prompt), cwd)
+	argv := tools[tool].argv(t.Profile, buildPrompt(t.Worker, t.Sender, t.Profile, t.Prompt), cwd, r.modelOf(t.Worker))
 	if *r.cfg.Sandbox {
-		overlays, err := materializeOverlays(r.cfg.StateDir, tool, home)
+		overlays, err := materializeOverlays(r.cfg.StateDir, t.Worker, home, r.overlaysOf(t.Worker))
 		if err != nil {
 			t.State, t.Error = StateFailed, err.Error()
 			return
 		}
 		argv = wrapSandbox(argv, sandboxSpec{Tool: tool, Cwd: cwd, Writable: t.Profile == ProfileRW,
-			RepoGit: repoGit, Home: home, Overlays: overlays})
+			RepoGit: repoGit, Home: home, Overlays: overlays, ExtraRO: r.worker(t.Worker).ROBinds})
 	}
-	env := append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}, tools[tool].Env...)
+	env := append([]string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}, tools[tool].env(t.Profile)...)
 
 	runCtx, cancel := context.WithTimeout(ctx, r.cfg.Timeout.Duration)
 	defer cancel()
@@ -358,13 +359,37 @@ func (r *Runner) execute(ctx context.Context, t *Task) {
 	}
 }
 
-// materializeOverlays writes the tool's overlay files under stateDir and maps host targets to them.
-func materializeOverlays(stateDir, tool, home string) (map[string]string, error) {
+// overlaysOf merges the tool's built-in overlays with the worker's configured ones.
+func (r *Runner) overlaysOf(worker string) map[string]string {
 	m := map[string]string{}
-	for rel, content := range tools[tool].Overlays {
-		src := filepath.Join(stateDir, "overlays", tool, filepath.Base(rel))
+	for _, w := range r.cfg.Workers {
+		if w.Name == worker {
+			for k, v := range tools[w.Tool].Overlays {
+				m[k] = v
+			}
+			for k, v := range w.Overlays {
+				m[k] = v
+			}
+		}
+	}
+	return m
+}
+
+// materializeOverlays writes overlay files under stateDir/overlays/<worker> and maps each
+// host target ($HOME-relative key) to its source file.
+func materializeOverlays(stateDir, worker, home string, overlays map[string]string) (map[string]string, error) {
+	m := map[string]string{}
+	for rel, content := range overlays {
+		src := filepath.Join(stateDir, "overlays", worker, strings.ReplaceAll(rel, "/", "__"))
 		if err := os.MkdirAll(filepath.Dir(src), 0o700); err != nil {
 			return nil, err
+		}
+		if strings.Contains(content, overlayRandom) {
+			b := make([]byte, 24)
+			if _, err := rand.Read(b); err != nil {
+				return nil, err
+			}
+			content = strings.ReplaceAll(content, overlayRandom, hex.EncodeToString(b))
 		}
 		if err := os.WriteFile(src, []byte(content), 0o600); err != nil {
 			return nil, err
@@ -372,6 +397,17 @@ func materializeOverlays(stateDir, tool, home string) (map[string]string, error)
 		m[filepath.Join(home, rel)] = src
 	}
 	return m, nil
+}
+
+func (r *Runner) modelOf(worker string) string { return r.worker(worker).Model }
+
+func (r *Runner) worker(name string) WorkerConfig {
+	for _, w := range r.cfg.Workers {
+		if w.Name == name {
+			return w
+		}
+	}
+	return WorkerConfig{}
 }
 
 func (r *Runner) toolOf(worker string) string {

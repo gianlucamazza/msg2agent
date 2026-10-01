@@ -20,7 +20,10 @@ import (
 	"github.com/gianlucamazza/msg2agent/pkg/identity"
 )
 
-const healthInterval = 30 * time.Second
+const (
+	healthInterval  = 30 * time.Second
+	connectAttempts = 15
+)
 
 func main() {
 	cfgPath := flag.String("config", expandHome("~/.config/msg2agent/runner.json"), "Runner config (JSON)")
@@ -137,8 +140,20 @@ func startWorker(ctx context.Context, cfg *Config, w WorkerConfig, r *Runner, lo
 	if err := a.Start(ctx); err != nil {
 		return nil, err
 	}
-	if err := a.Connect(ctx, cfg.Relay); err != nil {
-		return nil, err
+	// The relay is Type=simple: right after its (re)start it may not listen yet.
+	for attempt := 1; ; attempt++ {
+		err = a.Connect(ctx, cfg.Relay)
+		if err == nil {
+			break
+		}
+		if attempt == connectAttempts || ctx.Err() != nil {
+			return nil, err
+		}
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 	tsSec := time.Now().Unix()
 	rec := a.Record()

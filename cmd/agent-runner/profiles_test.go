@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,9 @@ func TestExtractText(t *testing.T) {
 		{"grok", `{"text":"b","stopReason":"end_turn"}`, "b"},
 		{"codex", "  plain\n", "plain"},
 		{"claude", "not json", "not json"},
+		{"opencode", `{"type":"text","part":{"messageID":"m1","text":"draft"}}` + "\n" +
+			`{"type":"step","part":{}}` + "\n" + `{"type":"text","part":{"messageID":"m2","text":"fin"}}` + "\n" +
+			`{"type":"text","part":{"messageID":"m2","text":"al"}}`, "final"},
 	}
 	for _, c := range cases {
 		if got := extractText(c.tool, []byte(c.out)); got != c.want {
@@ -35,13 +39,32 @@ func TestExtractText(t *testing.T) {
 }
 
 func TestGrokROKeepsLoadBearingDenies(t *testing.T) {
-	argv := tools["grok"].argv(ProfileRO, "p", "/w")
+	argv := tools["grok"].argv(ProfileRO, "p", "/w", "")
 	i := slices.Index(argv, "--disallowed-tools")
 	if i < 0 || !strings.Contains(argv[i+1], "CallMcpTool") || !strings.Contains(argv[i+1], "Shell") {
 		t.Fatalf("grok ro denies: %q", argv)
 	}
 	if !slices.Contains(tools["grok"].Env, "GROK_CLAUDE_MCPS_ENABLED=0") {
 		t.Fatal("grok must not inherit Claude MCP servers")
+	}
+}
+
+func TestOpencodePermissionLastRuleWins(t *testing.T) {
+	var cfg struct {
+		Permission map[string]string `json:"permission"`
+	}
+	for _, p := range []Profile{ProfileRO, ProfileRW} {
+		raw := opencodePermission(p)
+		if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+			t.Fatalf("%s: invalid JSON: %v", p, err)
+		}
+		if !strings.HasPrefix(raw, `{"permission":{"*":"deny"`) {
+			t.Errorf("%s: catch-all deny must be the first rule", p)
+		}
+		want := map[Profile]string{ProfileRO: "deny", ProfileRW: "allow"}[p]
+		if cfg.Permission["edit"] != want || cfg.Permission["bash"] != want || cfg.Permission["webfetch"] != "deny" {
+			t.Errorf("%s: %v", p, cfg.Permission)
+		}
 	}
 }
 
@@ -136,5 +159,43 @@ func TestJailEnforcement(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(home, "escape")); err == nil {
 			t.Errorf("writable=%v: write outside the jail reached the host", writable)
 		}
+	}
+}
+
+// TestJailOverlayMasksServerPassword: inside the jail neither copy of the shared
+// opencode.service password is readable (else a worker could drive the unjailed server).
+func TestJailOverlayMasksServerPassword(t *testing.T) {
+	if !sandboxAvailable() {
+		t.Skip("bwrap/userns unavailable")
+	}
+	home := t.TempDir()
+	targets := []string{".config/opencode/service.json", ".local/state/opencode/service.json"}
+	for _, rel := range targets {
+		p := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(`{"password":"REAL-SECRET"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := filepath.Join(home, "Workspace")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	overlays, err := materializeOverlays(t.TempDir(), "opencode-worker", home, tools["opencode"].Overlays)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := `cat "$H/.config/opencode/service.json" "$H/.local/state/opencode/service.json"`
+	argv := wrapSandbox([]string{"sh", "-c", script}, sandboxSpec{Tool: "opencode", Cwd: dir, Home: home, Overlays: overlays})
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Env = []string{"H=" + home, "PATH=/usr/bin"}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	if strings.Contains(string(out), "REAL-SECRET") || strings.Count(string(out), `"password"`) != 2 {
+		t.Fatalf("jail exposes the real password or lost the overlay: %s", out)
 	}
 }

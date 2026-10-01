@@ -69,6 +69,7 @@ func main() {
 	relayCfg.MessageRateLimit = cfg.MessageRateLimit
 	relayCfg.AllowedOrigins = cfg.AllowedOrigins
 	relayCfg.RequireDIDProof = !cfg.SkipDIDVerification
+	relayCfg.PinDIDKeys = cfg.PinDIDKeys
 
 	// Validate configuration
 	if err := relayCfg.Validate(); err != nil {

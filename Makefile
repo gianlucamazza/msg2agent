@@ -21,7 +21,7 @@ GOBUILD := $(GO) build $(GOFLAGS) $(LDFLAGS)
 GOVET   := $(GO) vet
 GOFMT   := gofmt
 
-.PHONY: all build build-relay build-mcp build-billing-admin build-dashboard clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help bootstrap demo smoke
+.PHONY: all build build-relay build-mcp build-runner build-billing-admin build-dashboard clean test test-unit test-integration test-e2e test-coverage lint fmt vet docker-build docker-push install help bootstrap demo smoke
 .PHONY: dev dev-up dev-down dev-logs dev-ps
 .PHONY: scenario-p2p scenario-relay scenario-tls scenario-mcp
 .PHONY: compose-sqlite compose-tls compose-observability compose-p2p
@@ -33,13 +33,16 @@ GOFMT   := gofmt
 
 all: build
 
-build: build-relay build-mcp build-billing-admin build-dashboard ## Build all binaries
+build: build-relay build-mcp build-runner build-billing-admin build-dashboard ## Build all binaries
 
 build-relay: ## Build relay binary
 	$(GOBUILD) -o $(BUILD_DIR)/relay ./cmd/relay
 
 build-mcp: ## Build mcp-server binary
 	$(GOBUILD) -o $(BUILD_DIR)/mcp-server ./cmd/mcp-server
+
+build-runner: ## Build agent-runner binary (headless CLI workers, ADR-001)
+	$(GOBUILD) -o $(BUILD_DIR)/agent-runner ./cmd/agent-runner
 
 build-billing-admin: ## Build billing-admin CLI
 	$(GOBUILD) -o $(BUILD_DIR)/billing-admin ./cmd/billing-admin

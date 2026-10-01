@@ -38,7 +38,7 @@ func sandboxAvailable() bool {
 	if err != nil {
 		return false
 	}
-	return exec.Command(path, "--ro-bind", "/", "/", "--unshare-all", "--", "true").Run() == nil //nolint:gosec // G204: resolved bwrap path, constant args
+	return exec.Command(path, "--ro-bind", "/", "/", "--unshare-all", "--", "true").Run() == nil // #nosec G204 -- resolved bwrap path, constant args
 }
 
 func exists(p string) bool { _, err := os.Lstat(p); return err == nil }

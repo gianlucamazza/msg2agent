@@ -29,7 +29,7 @@ func (e systemdExecutor) args(unit, cwd string, argv, env []string) []string {
 }
 
 func (e systemdExecutor) Run(ctx context.Context, unit, cwd string, argv, env []string) ([]byte, int, error) {
-	cmd := exec.Command("systemd-run", e.args(unit, cwd, argv, env)...) //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+	cmd := exec.Command("systemd-run", e.args(unit, cwd, argv, env)...) // #nosec G204 G702 -- argv list, never a shell; paths validated against roots
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
@@ -43,7 +43,7 @@ func (e systemdExecutor) Run(ctx context.Context, unit, cwd string, argv, env []
 	case err = <-done:
 	case <-ctx.Done():
 		// Stopping the unit kills the jailed tree; systemd-run --wait then returns.
-		_ = exec.Command("systemctl", "--user", "stop", unit+".service").Run() //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+		_ = exec.Command("systemctl", "--user", "stop", unit+".service").Run() // #nosec G204 -- argv list, never a shell; paths validated against roots
 		err = <-done
 	}
 	var exitErr *exec.ExitError

@@ -151,7 +151,7 @@ func (r *Runner) validate(from string, req *taskRequest) (string, error) {
 		return "", err
 	}
 	if req.Profile == ProfileRW {
-		if out, err := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree").Output(); err != nil || //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+		if out, err := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree").Output(); err != nil || // #nosec G204 -- argv list, never a shell; paths validated against roots
 			strings.TrimSpace(string(out)) != "true" {
 			return "", fmt.Errorf("%s is not a git work tree", dir)
 		}
@@ -433,16 +433,16 @@ func (r *Runner) prepareDir(t *Task) (cwd, repoGit string, cleanup func(), err e
 		}
 		return d, "", func() { _ = os.RemoveAll(d) }, nil
 	}
-	common, err := exec.Command("git", "-C", t.Dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output() //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+	common, err := exec.Command("git", "-C", t.Dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output() // #nosec G204 -- argv list, never a shell; paths validated against roots
 	if err != nil {
 		return "", "", noop, fmt.Errorf("git common dir: %w", err)
 	}
 	wt := filepath.Join(r.cfg.StateDir, "worktrees", t.ID)
-	if out, err := exec.Command("git", "-C", t.Dir, "worktree", "add", "--detach", wt, "HEAD").CombinedOutput(); err != nil { //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+	if out, err := exec.Command("git", "-C", t.Dir, "worktree", "add", "--detach", wt, "HEAD").CombinedOutput(); err != nil { // #nosec G204 -- argv list, never a shell; paths validated against roots
 		return "", "", noop, fmt.Errorf("worktree add: %v: %s", err, bytes.TrimSpace(out))
 	}
 	rm := func() {
-		if out, err := exec.Command("git", "-C", t.Dir, "worktree", "remove", "--force", wt).CombinedOutput(); err != nil { //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+		if out, err := exec.Command("git", "-C", t.Dir, "worktree", "remove", "--force", wt).CombinedOutput(); err != nil { // #nosec G204 -- argv list, never a shell; paths validated against roots
 			r.logger.Warn("worktree remove", "path", wt, "error", err, "output", string(out))
 		}
 	}
@@ -451,16 +451,16 @@ func (r *Runner) prepareDir(t *Task) (cwd, repoGit string, cleanup func(), err e
 
 // worktreeDiff returns every change in the worktree against HEAD, new files included.
 func worktreeDiff(wt string) (string, error) {
-	if out, err := exec.Command("git", "-C", wt, "add", "-A").CombinedOutput(); err != nil { //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+	if out, err := exec.Command("git", "-C", wt, "add", "-A").CombinedOutput(); err != nil { // #nosec G204 -- argv list, never a shell; paths validated against roots
 		return "", fmt.Errorf("git add: %v: %s", err, bytes.TrimSpace(out))
 	}
-	out, err := exec.Command("git", "-C", wt, "diff", "--cached", "--binary", "HEAD").Output() //nolint:gosec // G204: argv list, never a shell; paths validated against roots
+	out, err := exec.Command("git", "-C", wt, "diff", "--cached", "--binary", "HEAD").Output() // #nosec G204 -- argv list, never a shell; paths validated against roots
 	return string(out), err
 }
 
 func (r *Runner) saveOutput(id string, out []byte) {
 	p := filepath.Join(r.cfg.StateDir, "results", id+".out")
-	if err := os.WriteFile(p, out, 0o600); err != nil { //nolint:gosec // G703: id is a runner-generated UUID
+	if err := os.WriteFile(p, out, 0o600); err != nil { // #nosec G703 -- id is a runner-generated UUID
 		r.logger.Warn("save output", "error", err)
 	}
 }

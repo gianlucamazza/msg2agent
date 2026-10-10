@@ -1,6 +1,8 @@
 # Getting Started
 
-This guide walks you through building msg2agent, running a local setup, and sending your first message between agents.
+This guide walks you through building msg2agent, running a **local** relay + MCP server, and sending your first message.
+
+There is no standalone `./agent` binary in this repo — agents on the network are the MCP server (and any A2A/agent-runner processes you start).
 
 ## Prerequisites
 
@@ -27,11 +29,11 @@ go build -o mcp-server ./cmd/mcp-server
 This produces two binaries:
 
 - `relay` - The message routing hub
-- `mcp-server` - MCP protocol adapter for Claude / OpenClaw
+- `mcp-server` - MCP protocol adapter for Claude / OpenClaw (also registers as an agent on the relay)
 
 ## Run Locally
 
-You'll need three terminals.
+You'll need two terminals.
 
 ### Terminal 1: Start the Relay
 
@@ -45,47 +47,24 @@ Expected output:
 INFO server started addr=:8080
 ```
 
-### Terminal 2: Start Alice (Agent 1)
+Check liveness:
 
 ```bash
-./agent -name alice -relay ws://localhost:8080 -log-level debug
+curl http://localhost:8080/health
+# ok
 ```
 
-Expected output:
-
-```
-INFO agent started name=alice did=did:wba:localhost:agent:alice
-INFO connected to relay addr=ws://localhost:8080
-```
-
-### Terminal 3: Start Bob (Agent 2)
+### Terminal 2: Start the MCP server (your first agent)
 
 ```bash
-./agent -name bob -relay ws://localhost:8080 -log-level debug
+./mcp-server -name alice -relay ws://localhost:8080 -transport streamable-http -addr :3001
 ```
 
-Expected output:
-
-```
-INFO agent started name=bob did=did:wba:localhost:agent:bob
-INFO connected to relay addr=ws://localhost:8080
-```
+The process connects to the relay as `did:wba:<domain>:agent:alice` and serves MCP at `http://localhost:3001/mcp`. To add a second agent, start another MCP server with a different `-name` and `-addr`.
 
 ## Send Your First Message
 
-With the relay and both agents running, you can send messages between them using the MCP server or by connecting directly to the relay WebSocket.
-
-### Using curl (HTTP API)
-
-If you started agents with HTTP enabled:
-
-```bash
-# Start Alice with HTTP server
-./agent -name alice -relay ws://localhost:8080 -http :8081
-
-# Get Alice's agent card
-curl http://localhost:8081/.well-known/agent.json
-```
+With the relay and an MCP server running, discover agents on the relay WebSocket or call MCP tools from Claude / OpenClaw.
 
 ### Using WebSocket
 
@@ -102,7 +81,7 @@ Discover registered agents to verify connection:
 { "jsonrpc": "2.0", "method": "relay.discover", "id": "1" }
 ```
 
-Expected response (array of registered agents):
+Expected response (array of registered agents; `alice` appears after the MCP server connects):
 
 ```json
 {
@@ -119,12 +98,6 @@ Expected response (array of registered agents):
 
 ### Using the MCP Server
 
-The MCP server lets AI assistants interact with the agent network. Build it alongside the other binaries:
-
-```bash
-go build -o mcp-server ./cmd/mcp-server
-```
-
 **Stdio mode** (for Claude Code — add to `.mcp.json`):
 
 ```json
@@ -138,7 +111,7 @@ go build -o mcp-server ./cmd/mcp-server
 }
 ```
 
-**HTTP mode** (for OpenClaw plugin or other HTTP clients):
+**HTTP mode** (for the in-repo OpenClaw plugin or other HTTP clients):
 
 ```bash
 ./mcp-server \
@@ -163,12 +136,12 @@ The relay is the central hub that:
 
 ### Agent
 
-Each agent:
+In this tree, the shipped agent process is `mcp-server` (plus optional `agent-runner`). Each agent:
 
 - Has a unique DID (e.g., `did:wba:localhost:agent:alice`)
 - Connects to the relay for message routing
-- Can expose an HTTP server with its agent card
-- Handles incoming JSON-RPC requests
+- Exposes MCP tools over stdio or streamable-HTTP
+- Handles incoming JSON-RPC requests on the relay connection
 
 ### Message Flow
 
@@ -209,7 +182,7 @@ Key configuration options:
 | Flag         | Environment Variable   | Description                     |
 | ------------ | ---------------------- | ------------------------------- |
 | `-name`      | `MSG2AGENT_NAME`       | Agent name (required for agent) |
-| `-relay`     | `MSG2AGENT_RELAY`      | Relay WebSocket URL             |
+| `-relay`     | `MSG2AGENT_RELAY_URL`  | Relay WebSocket URL             |
 | `-addr`      | `MSG2AGENT_RELAY_ADDR` | Relay listen address            |
 | `-log-level` | `MSG2AGENT_LOG_LEVEL`  | debug, info, warn, error        |
 

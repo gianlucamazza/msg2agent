@@ -1,6 +1,6 @@
 # Documentation
 
-Welcome to the msg2agent documentation.
+Welcome to the msg2agent documentation. This project is self-host only.
 
 ## Quick Navigation
 
@@ -9,13 +9,13 @@ Welcome to the msg2agent documentation.
 **Understand the system**
 
 - [Architecture](architecture.md) - System design, components, message flow
-- [Glossary](glossary.md) - Definitions of DID, A2A, DIDComm, and other terms
+- [Glossary](glossary.md) - Definitions of DID, A2A, and other terms
 
 **Run locally**
 
 - [Getting Started](getting-started.md) - Build and run your first agents
 
-**Deploy to production**
+**Deploy (self-host)**
 
 - [Docker](deployment/docker.md) - Docker and Docker Compose deployment
 - [Kubernetes](deployment/kubernetes.md) - Kubernetes manifests and setup

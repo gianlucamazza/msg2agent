@@ -57,11 +57,11 @@ Using certbot:
 sudo apt install certbot
 
 # Obtain certificate
-sudo certbot certonly --standalone -d relay.msg2agent.xyz
+sudo certbot certonly --standalone -d relay.example.com
 
 # Certificates are saved to:
-# /etc/letsencrypt/live/relay.msg2agent.xyz/fullchain.pem
-# /etc/letsencrypt/live/relay.msg2agent.xyz/privkey.pem
+# /etc/letsencrypt/live/relay.example.com/fullchain.pem
+# /etc/letsencrypt/live/relay.example.com/privkey.pem
 ```
 
 ## Relay TLS Configuration
@@ -97,46 +97,12 @@ curl -k https://localhost:8443/health
 wscat -c wss://localhost:8443 --no-check
 ```
 
-## Agent TLS Configuration
+## Connecting an MCP server to a TLS relay
 
-### WebSocket Listener TLS
-
-Enable TLS for the agent's P2P WebSocket listener:
+There is no standalone `./agent` binary and `mcp-server` has no `-tls-skip-verify` flag. Point it at a `wss://` relay whose certificate the process trusts:
 
 ```bash
-./agent \
-    -name alice \
-    -listen :8082 \
-    -tls \
-    -tls-cert /path/to/server.crt \
-    -tls-key /path/to/server.key
-```
-
-### HTTP Server TLS
-
-Enable TLS for the agent card HTTP server:
-
-```bash
-./agent \
-    -name alice \
-    -http :8443 \
-    -http-tls \
-    -tls-cert /path/to/server.crt \
-    -tls-key /path/to/server.key
-```
-
-### Connecting to TLS Relay
-
-When connecting to a TLS-enabled relay:
-
-```bash
-# With certificate verification
-./agent -name alice -relay wss://relay.msg2agent.xyz:8443
-
-# Skip verification (development only!)
-./agent -name alice \
-    -relay wss://localhost:8443 \
-    -tls-skip-verify
+./mcp-server -name alice -relay wss://localhost:8443
 ```
 
 ## TLS Settings Reference

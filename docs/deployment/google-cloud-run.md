@@ -63,18 +63,15 @@ curl https://msg2agent-relay-xyz.a.run.app/health
 Start local agents pointing to the Cloud Run Relay:
 
 ```bash
-# Agent Alice
-./agent -name alice -relay wss://msg2agent-relay-prod-568831106201.europe-west1.run.app
-
-# Agent Bob
-./agent -name bob -relay wss://msg2agent-relay-prod-568831106201.europe-west1.run.app
+# There is no standalone ./agent binary. Point an MCP server at the Cloud Run relay:
+./mcp-server -name alice -relay wss://YOUR_CLOUD_RUN_HOST
 ```
 
 Note the use of `wss://` (WebSocket Secure) since Cloud Run provides HTTPS by default.
 
 ## Production Setup (Best Practices)
 
-For a production-ready environment with **data persistence** and **security hardening**, use the `deploy-prod.sh` script.
+For persistence (GCS-backed SQLite) and a dedicated service account, use the `deploy-prod.sh` script.
 
 ### Features
 
@@ -121,18 +118,18 @@ Wait 5-10 minutes for the LB to provision, then test:
 
 ## SSL and Custom Domain
 
-To secure the service with HTTPS and a custom domain (`msg2agent.xyz`), use the `setup-ssl.sh` script.
+To secure the service with HTTPS and a domain you control, use the `setup-ssl.sh` script.
 
 ### Prerequisites
 
-1.  **DNS A Record**: Point `msg2agent.xyz` to the Global IP Address of the Load Balancer (`136.110.209.218`).
+1.  **DNS A Record**: Point your domain to the Global IP Address of the Load Balancer.
 2.  **Wait**: Ensure DNS propagation logic has started.
 
 ### Usage
 
 ```bash
 # Syntax: ./scripts/setup-ssl.sh <DOMAIN> <PROJECT_ID>
-./scripts/setup-ssl.sh msg2agent.xyz message2agent
+./scripts/setup-ssl.sh relay.example.com your-gcp-project
 ```
 
 ### What it does
@@ -144,4 +141,4 @@ To secure the service with HTTPS and a custom domain (`msg2agent.xyz`), use the 
 ### Verification
 
 The certificate status will be `PROVISIONING` for 15-60 minutes while Google validates the DNS.
-Once `ACTIVE`, your service will be available at `https://msg2agent.xyz`.
+Once `ACTIVE`, your service will be available at `https://<your-domain>`.

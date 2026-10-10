@@ -67,22 +67,25 @@ An agent card is a JSON document describing an agent's capabilities, served at `
 }
 ```
 
-### DIDComm Messaging
+### Message envelope
 
-Messages are wrapped in DIDComm envelopes:
+On-the-wire messages use the custom `pkg/messaging.Message` JSON envelope (not DIDComm 2.0):
 
 ```json
 {
-  "id": "unique-message-id",
-  "type": "https://didcomm.org/basicmessage/2.0/message",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "from": "did:wba:example.com:agent:alice",
-  "to": ["did:wba:example.com:agent:bob"],
-  "created_time": 1706180400,
-  "body": { ... }
+  "to": "did:wba:example.com:agent:bob",
+  "type": "request",
+  "method": "echo",
+  "body": "<JSON-RPC 2.0 payload bytes>",
+  "encrypted": false,
+  "signature": "<Ed25519 signature bytes>",
+  "timestamp": "2026-10-10T00:00:00Z"
 }
 ```
 
-The body contains a JSON-RPC 2.0 request or response.
+`body` is a JSON-RPC 2.0 request or response (plaintext or NaCl-box ciphertext).
 
 ## Components
 
@@ -141,7 +144,7 @@ Responsibilities:
 - Register method handlers for incoming requests
 - Connect to relay or listen for P2P connections
 - Sign outgoing messages (Ed25519)
-- Encrypt messages when required (X25519-XChaCha20-Poly1305)
+- Encrypt message bodies when the recipient key is known (X25519 + NaCl box / XSalsa20-Poly1305)
 - Manage A2A protocol tasks
 
 ### Transport Layer
@@ -206,7 +209,7 @@ Each agent has two key pairs:
 
 1. **Signing**: All messages are signed with the sender's Ed25519 private key
 2. **Verification**: Recipients verify signatures using the sender's public key from their DID Document
-3. **Encryption** (optional): Message bodies can be encrypted using X25519-XChaCha20-Poly1305
+3. **Encryption** (optional): message bodies can be encrypted with X25519 + NaCl box (XSalsa20-Poly1305) when the recipient's encryption key is in the local registry. `RequireEncryption` fails the send if encryption cannot be applied.
 
 ### Access Control
 

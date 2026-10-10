@@ -4,23 +4,25 @@ This document describes the JSON-RPC methods available in msg2agent.
 
 ## Overview
 
-msg2agent uses JSON-RPC 2.0 for all inter-agent communication. Messages are wrapped in the DIDComm envelope format.
+msg2agent uses JSON-RPC 2.0 for inter-agent method calls. Those payloads sit in the custom `pkg/messaging.Message` envelope (not DIDComm 2.0).
 
 ### Message Envelope
 
 ```json
 {
-  "id": "unique-message-id",
-  "type": "https://didcomm.org/basicmessage/2.0/message",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
   "from": "did:wba:example.com:agent:alice",
-  "to": ["did:wba:example.com:agent:bob"],
-  "created_time": 1706180400,
+  "to": "did:wba:example.com:agent:bob",
+  "type": "request",
+  "method": "method_name",
   "body": {
     "jsonrpc": "2.0",
     "method": "method_name",
     "params": {},
     "id": "request-id"
-  }
+  },
+  "encrypted": false,
+  "timestamp": "2026-10-10T00:00:00Z"
 }
 ```
 
@@ -916,35 +918,32 @@ ws://agent:8082            # Direct P2P
 
 ### Message Format
 
-All messages are JSON-RPC wrapped in DIDComm envelopes:
+All messages are JSON-RPC payloads inside `pkg/messaging.Message`:
 
 ```json
 {
   "id": "msg-id",
-  "type": "https://didcomm.org/basicmessage/2.0/message",
   "from": "did:wba:...",
-  "to": ["did:wba:..."],
-  "body": { "jsonrpc": "2.0", ... }
+  "to": "did:wba:...",
+  "type": "request",
+  "method": "echo",
+  "body": { "jsonrpc": "2.0", ... },
+  "encrypted": false
 }
 ```
 
 ### Encrypted Messages
 
-When encryption is enabled, the body is encrypted using X25519-XChaCha20-Poly1305:
+When encryption succeeds, the same envelope is used with `encrypted: true` and `body` replaced by NaCl box ciphertext (24-byte nonce || XSalsa20-Poly1305 box), not a JWE/DIDComm encrypted message:
 
 ```json
 {
   "id": "msg-id",
-  "type": "https://didcomm.org/encrypted/2.0/message",
   "from": "did:wba:...",
-  "to": ["did:wba:..."],
-  "body": {
-    "protected": "base64url...",
-    "recipients": [...],
-    "iv": "base64url...",
-    "ciphertext": "base64url...",
-    "tag": "base64url..."
-  }
+  "to": "did:wba:...",
+  "encrypted": true,
+  "body": "<binary: nonce || nacl box>",
+  "signature": "<Ed25519 over the unsigned envelope>"
 }
 ```
 

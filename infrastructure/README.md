@@ -1,6 +1,6 @@
 # msg2agent Infrastructure
 
-Production deployment files for the msg2agent stack on odroid (home lab).
+Self-host Compose files for a home-lab msg2agent stack (odroid example).
 
 ## Architecture
 
@@ -31,9 +31,9 @@ docker compose -f infrastructure/docker-compose.odroid.yml up -d
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.odroid.yml` | Production stack — source of truth, deployed by Drone CI |
+| `docker-compose.odroid.yml` | Compose stack — source of truth, deployed by Drone CI |
 | `agentcard-msg2agent.json` | A2A AgentCard served at `/.well-known/agent.json` |
-| `connector-manifest.json` | Anthropic Connectors directory manifest |
+| `connector-manifest.json` | Optional JSON the relay can serve via `-connector-manifest` |
 | `grafana/billing-dashboard.json` | Grafana dashboard for billing metrics |
 
 ## AgentCard

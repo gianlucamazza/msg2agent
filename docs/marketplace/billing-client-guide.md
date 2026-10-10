@@ -1,6 +1,6 @@
 # Client Integration Guide — Billing & Rate Limits
 
-This guide covers how to use a cloud-hosted msg2agent relay that enforces tenant billing. For self-hosted deployments without `--billing-db`, skip this guide — no authentication is required.
+This guide covers a self-hosted relay started with `--billing-db` (tenant API keys and quotas). For deployments without `--billing-db`, skip this guide — no authentication is required.
 
 ## Getting an API key
 
@@ -22,7 +22,7 @@ Authorization: Bearer msg2a_AbCdEfGh...
 
 ```sh
 mcp-server \
-  --relay wss://relay.msg2agent.xyz \
+  --relay ws://localhost:8080 \
   --name my-agent \
   --transport streamable-http \
   --addr :3001
@@ -46,7 +46,7 @@ conn, _, err := websocket.DefaultDialer.DialContext(ctx, relayURL, header)
 
 ```sh
 curl -H "Authorization: Bearer msg2a_AbCdEfGh..." \
-     https://relay.msg2agent.xyz/health
+     http://localhost:8080/health
 ```
 
 ## Error codes and client behaviour

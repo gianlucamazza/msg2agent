@@ -146,7 +146,7 @@ metadata:
     nginx.ingress.kubernetes.io/websocket-services: "relay"
 spec:
   rules:
-    - host: relay.msg2agent.xyz
+    - host: relay.example.com
       http:
         paths:
           - path: /
@@ -169,12 +169,14 @@ kind: ConfigMap
 metadata:
   name: agent-config
 data:
-  MSG2AGENT_DOMAIN: "msg2agent.xyz"
+  MSG2AGENT_DOMAIN: "example.com"
   MSG2AGENT_RELAY: "ws://relay:8080"
   MSG2AGENT_LOG_LEVEL: "info"
 ```
 
 ### Deployment
+
+There is no standalone `msg2agent/agent` image in this repo. Use the `mcp-server` image (`msg2agent-mcp-server`) and point `-relay` at the in-cluster relay. The YAML below is a sketch, not a published image.
 
 ```yaml
 # agent-deployment.yaml
@@ -290,7 +292,7 @@ spec:
     name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
-    - relay.msg2agent.xyz
+    - relay.example.com
 ```
 
 ### Mounting TLS Secrets

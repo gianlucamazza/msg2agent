@@ -80,9 +80,9 @@ Once added, Claude Code can call `list_agents`, `send_message`, `submit_task` an
 
 The relay can optionally serve a JSON file at `/.well-known/mcp-connector.json` if you pass `-connector-manifest <path>`. That is a static file on your own host, not a public connector listing.
 
-### 3. Use with OpenClaw (in-repo plugin; not published)
+### 3. Use with OpenClaw
 
-The OpenClaw plugin lives in [`docs/openclaw-plugin/`](docs/openclaw-plugin/README.md). It is **not published** on ClawHub or npm. Point OpenClaw at your own MCP server:
+An OpenClaw plugin was prototyped but is not maintained. Point OpenClaw at your own MCP server:
 
 ```json
 {
@@ -102,7 +102,6 @@ The OpenClaw plugin lives in [`docs/openclaw-plugin/`](docs/openclaw-plugin/READ
 | [Deployment](docs/deployment/)                        | Docker, Kubernetes, TLS setup           |
 | [Monitoring](docs/operations/monitoring.md)           | Prometheus, Grafana, tracing            |
 | [Troubleshooting](docs/operations/troubleshooting.md) | Common issues and solutions             |
-| [OpenClaw Plugin](docs/openclaw-plugin/README.md)     | OpenClaw integration via MCP            |
 | [Billing Setup](docs/marketplace/billing-setup.md)    | Multi-tenant billing: tenants, API keys, usage |
 | [Billing Client Guide](docs/marketplace/billing-client-guide.md) | API key usage, error codes, rate-limit back-off |
 | [Glossary](docs/glossary.md)                          | Term definitions                        |

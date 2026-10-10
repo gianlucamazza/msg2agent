@@ -176,6 +176,8 @@ data:
 
 ### Deployment
 
+There is no standalone `msg2agent/agent` image in this repo. Use the `mcp-server` image (`msg2agent-mcp-server`) and point `-relay` at the in-cluster relay. The YAML below is a sketch, not a published image.
+
 ```yaml
 # agent-deployment.yaml
 apiVersion: apps/v1

@@ -63,18 +63,15 @@ curl https://msg2agent-relay-xyz.a.run.app/health
 Start local agents pointing to the Cloud Run Relay:
 
 ```bash
-# Agent Alice
-./agent -name alice -relay wss://msg2agent-relay-prod-568831106201.europe-west1.run.app
-
-# Agent Bob
-./agent -name bob -relay wss://msg2agent-relay-prod-568831106201.europe-west1.run.app
+# There is no standalone ./agent binary. Point an MCP server at the Cloud Run relay:
+./mcp-server -name alice -relay wss://YOUR_CLOUD_RUN_HOST
 ```
 
 Note the use of `wss://` (WebSocket Secure) since Cloud Run provides HTTPS by default.
 
 ## Production Setup (Best Practices)
 
-For a production-ready environment with **data persistence** and **security hardening**, use the `deploy-prod.sh` script.
+For persistence (GCS-backed SQLite) and a dedicated service account, use the `deploy-prod.sh` script.
 
 ### Features
 

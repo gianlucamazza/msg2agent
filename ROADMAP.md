@@ -4,7 +4,7 @@
 
 ### Roadmap I — Core Messaging
 - DID-based agent identity (`did:wba:`)
-- Ed25519 signing and X25519-XChaCha20-Poly1305 encryption
+- Ed25519 signing and X25519 + NaCl box (XSalsa20-Poly1305) encryption
 - Relay hub with WebSocket transport and offline queue
 - JSON-RPC wire protocol
 

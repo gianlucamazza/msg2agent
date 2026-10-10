@@ -1,6 +1,8 @@
 # Client Integration Guide — Billing & Rate Limits
 
-This guide covers how to use a cloud-hosted msg2agent relay that enforces tenant billing. For self-hosted deployments without `--billing-db`, skip this guide — no authentication is required.
+This guide covers a relay started with `--billing-db` (tenant API keys and quotas). For deployments without `--billing-db`, skip this guide — no authentication is required.
+
+The public host `msg2agent.xyz` / `relay.msg2agent.xyz` is **currently unavailable; self-host**. Examples below that use those hostnames are templates, not a live endpoint.
 
 ## Getting an API key
 

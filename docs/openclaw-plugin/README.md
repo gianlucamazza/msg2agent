@@ -1,6 +1,8 @@
 # OpenClaw Plugin
 
-The OpenClaw plugin is a bridge between [OpenClaw](https://github.com/openclaw/openclaw) (an open-source personal AI assistant) and the msg2agent agent network. It allows OpenClaw to discover agents, send messages, and read incoming replies — all through MCP Streamable HTTP.
+The OpenClaw plugin is a bridge between [OpenClaw](https://github.com/openclaw/openclaw) (an open-source personal AI assistant) and a msg2agent relay. It allows OpenClaw to discover agents, send messages, and read incoming replies — all through MCP Streamable HTTP.
+
+This plugin lives in this directory. It is **not published** on ClawHub or npm (checked 10 Oct 2026: `https://clawhub.ai/api/v1/skills/msg2agent` → 404; `npm view msg2agent` → 404). Copy or point OpenClaw at these files and your own MCP server. The public hosted MCP URL is **currently unavailable; self-host**.
 
 ## Architecture
 
@@ -92,9 +94,9 @@ go build -o mcp-server ./cmd/mcp-server
 # 3. Configure the plugin with mcpUrl = http://localhost:3001/mcp
 ```
 
-### Production (Docker Compose)
+### Docker Compose (self-host)
 
-See [`infrastructure/docker-compose.odroid.yml`](../../infrastructure/docker-compose.odroid.yml) for the production stack with relay, MCP server, and dashboard.
+See [`infrastructure/docker-compose.odroid.yml`](../../infrastructure/docker-compose.odroid.yml) for a compose stack with relay, MCP server, and dashboard.
 
 ```bash
 docker compose -f infrastructure/docker-compose.odroid.yml up -d
@@ -102,38 +104,40 @@ docker compose -f infrastructure/docker-compose.odroid.yml up -d
 
 The MCP server will be available at `http://<host>:3010/mcp`.
 
-## Publishing to ClawHub
+## Publishing to ClawHub (not done)
 
-[ClawHub](https://clawhub.io) is OpenClaw's official skill marketplace (90/10 revenue split, no listing fee).
+This plugin is **not listed** on [ClawHub](https://clawhub.ai) or npm. OpenClaw's registry is `clawhub.ai` (not `clawhub.io`). The steps below are a draft for a future publish; they do not mean a listing exists.
 
-### Prepare your listing
+### Prepare a listing
 
-1. **Build and host the MCP server** on a public HTTPS endpoint, e.g. `https://relay.msg2agent.xyz/mcp`.
-2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB` in the cloud Docker Compose).
-3. **Update `openclaw.plugin.json`** — change the `mcpUrl` placeholder to your hosted endpoint.
+1. **Build and host the MCP server** on a public HTTPS endpoint you control. `https://relay.msg2agent.xyz/mcp` is **currently unavailable**.
+2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB` in the cloud Docker Compose) if you want keyed access.
+3. **Update `openclaw.plugin.json`** — change the `mcpUrl` placeholder to your endpoint.
 
 ### Submit to ClawHub
 
-```bash
-# Install the ClawHub CLI
-npm install -g @clawhub/cli
+Use the current OpenClaw / ClawHub publish flow from [docs.openclaw.ai/clawhub](https://docs.openclaw.ai/clawhub) (the `@clawhub/cli` package on npm is a different, unrelated project). Typical shape:
 
-# Login and publish
+```bash
+# See current OpenClaw docs for the supported CLI and flags.
 clawhub login
-clawhub publish --manifest ./docs/openclaw-plugin/openclaw.plugin.json \
-                --readme ./docs/openclaw-plugin/README.md \
-                --price 19.00         # monthly subscription price in USD
+clawhub skill publish ./docs/openclaw-plugin \
+                --slug msg2agent \
+                --name msg2agent \
+                --version 0.1.0
 ```
 
-### Pricing suggestions
+### Pricing suggestions (hypothetical)
+
+These are listing ideas only. This repo does not sell those hosted tiers, and `msg2agent.xyz` is **currently unavailable**.
 
 | Tier | Price | What to include |
 |---|---|---|
 | Free / self-hosted | $0 | Skill lists self-hosted setup |
-| Cloud Starter | $19/mo | Hosted relay, 5 agent DIDs, 10k msg/mo |
-| Cloud Team | $99/mo | 50 agents, 200k msg/mo, A2A endpoint |
+| Cloud Starter | $19/mo | Only if you actually host a relay |
+| Cloud Team | $99/mo | Only if you actually host a relay |
 
-Buyers connect their own `mcpUrl` (self-hosted) or use your hosted URL with the `apiKey` you issue them via the billing dashboard.
+Buyers would connect their own `mcpUrl` (self-host) or a host you operate.
 
 ## Files
 

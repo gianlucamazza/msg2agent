@@ -42,7 +42,7 @@ A cryptographic proof of DID ownership submitted during relay registration. The 
 
 ### DIDComm
 
-A messaging protocol built on DIDs. Messages are wrapped in envelopes that specify sender, recipients, and message type. msg2agent uses DIDComm 2.0 envelope format.
+A messaging protocol built on DIDs. msg2agent does **not** implement DIDComm 2.0; it uses the custom `pkg/messaging.Message` envelope (`id`, `from`, `to`, `type`, `method`, `body`, `encrypted`, `signature`, `timestamp`).
 
 ## E
 
@@ -52,7 +52,7 @@ An elliptic curve digital signature algorithm used for message authentication. E
 
 ### Encryption
 
-Optional message body encryption using X25519-XChaCha20-Poly1305. When enabled (`-require-encryption`), all message bodies are encrypted for the recipient.
+Optional message body encryption using X25519 + NaCl box (XSalsa20-Poly1305). Agents encrypt when the recipient's public key is known; `RequireEncryption` (agent config, not a CLI flag on `relay`/`mcp-server`) fails the send if encryption cannot be applied.
 
 ## J
 
@@ -72,7 +72,7 @@ The msg2agent component (`cmd/mcp-server`) that bridges AI assistants to the age
 
 ### Message Envelope
 
-The DIDComm wrapper around a JSON-RPC payload. Contains `id`, `type`, `from`, `to`, `created_time`, and `body` fields.
+The `pkg/messaging.Message` wrapper around a JSON-RPC payload. Fields include `id`, `from`, `to`, `type`, `method`, `body`, `encrypted`, `signature`, and `timestamp`.
 
 ## O
 
@@ -158,8 +158,8 @@ A protocol for bidirectional communication over a single TCP connection. Primary
 
 ### X25519
 
-An elliptic curve Diffie-Hellman function for key agreement. Used with XChaCha20-Poly1305 for message encryption. Each agent has an X25519 key pair for encryption.
+An elliptic curve Diffie-Hellman function for key agreement. Used with NaCl box (XSalsa20-Poly1305) for message encryption. Each agent has an X25519 key pair for encryption.
 
-### XChaCha20-Poly1305
+### XSalsa20-Poly1305 (NaCl box)
 
-An authenticated encryption algorithm. Combined with X25519 key agreement for end-to-end message encryption.
+Authenticated encryption used by `pkg/crypto.Encrypt`. Combined with X25519 key agreement (`golang.org/x/crypto/nacl/box`). Docs previously called this XChaCha20-Poly1305; that algorithm is not what the code uses.

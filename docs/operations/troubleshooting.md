@@ -26,11 +26,11 @@ This guide covers common issues and their solutions when running msg2agent.
 2. **Wrong relay address**
 
    ```bash
-   # Check agent is using correct URL
-   ./agent -name alice -relay ws://localhost:8080
+   # There is no standalone ./agent binary. Point mcp-server at the relay:
+   ./mcp-server -name alice -relay ws://localhost:8080
 
-   # For TLS relay
-   ./agent -name alice -relay wss://localhost:8443
+   # For a TLS relay
+   ./mcp-server -name alice -relay wss://localhost:8443
    ```
 
 3. **Firewall blocking connection**
@@ -46,10 +46,8 @@ This guide covers common issues and their solutions when running msg2agent.
 4. **TLS certificate issues**
 
    ```bash
-   # For development, skip verification
-   ./agent -name alice -relay wss://localhost:8443 -tls-skip-verify
-
-   # Verify certificate
+   # mcp-server has no -tls-skip-verify flag. Use a trusted cert, or test with:
+   curl -k https://localhost:8443/health
    openssl s_client -connect localhost:8443 -servername localhost
    ```
 
@@ -174,7 +172,7 @@ This guide covers common issues and their solutions when running msg2agent.
 
 2. **Use skip-verify for development**
    ```bash
-   ./agent -name alice -relay wss://localhost:8443 -tls-skip-verify
+   # mcp-server has no -tls-skip-verify flag; trust the cert or use curl -k against /health.
    ```
 
 ### Certificate Expired

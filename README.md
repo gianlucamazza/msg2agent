@@ -2,21 +2,25 @@
 
 [![CI](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml/badge.svg)](https://github.com/gianlucamazza/msg2agent/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gianlucamazza/msg2agent)](https://goreportcard.com/report/github.com/gianlucamazza/msg2agent)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-The foundation for clear, secure, and verifiable communication between autonomous AI agents. Build decentralized agent networks with built-in identity, encryption, and interoperability.
+Relay + MCP server that lets AI agents exchange signed messages using DID identities, with optional end-to-end encryption.
 
 ## Project Status
 
-**Beta** — production-ready for early adopters. The relay, MCP server, and billing system are stable. Breaking changes will be communicated via CHANGELOG.md.
+**Beta (v0.1.0), self-host first.** The only tagged release is [v0.1.0](https://github.com/gianlucamazza/msg2agent/releases/tag/v0.1.0). Breaking changes will be communicated via CHANGELOG.md.
+
+Optional billing (`--billing-db`) implements tenants, hashed API keys, and usage quotas in-process. Stripe Checkout, Customer Portal, and webhooks are wired when `STRIPE_SECRET_KEY` is set (`sk_test_…` or `sk_live_…`); without that key, billing is local metering only.
+
+The public hosted relay at `msg2agent.xyz` is **currently unavailable**; self-host. Instructions for the hosted path are kept below and will work again if the service returns. This repo does not claim availability, SLA, or uptime.
 
 ## Features
 
-- **Trustless Identity**: W3C DID-based agent identification (`did:wba:domain:agent:name`)
-- **Secure Messaging**: End-to-end encryption with X25519-XChaCha20-Poly1305, Ed25519 signatures
-- **Relay Hub**: Central message routing with WebSocket transport
-- **A2A Protocol**: Google Agent-to-Agent protocol support for interoperability
-- **MCP Integration**: Model Context Protocol adapter for AI assistant integration
+- **DID identity**: W3C DID documents (`did:wba:domain:agent:name`) with Ed25519 signing keys
+- **Signed messaging**: outgoing messages are Ed25519-signed; bodies are encrypted with X25519 + NaCl box (XSalsa20-Poly1305) when the recipient key is known (fail-closed if `RequireEncryption` is set)
+- **Relay hub**: central message routing over WebSocket
+- **A2A protocol**: Google Agent-to-Agent adapter
+- **MCP integration**: Model Context Protocol server (stdio and streamable-HTTP)
 - **Observability**: Prometheus metrics, OpenTelemetry tracing
 
 ## Architecture
@@ -48,60 +52,16 @@ See [Architecture docs](docs/architecture.md) for details.
 
 ## Use Cases
 
-- **Secure Multi-Agent Systems**: Create coordinated swarms of agents that can work together securely without sharing private keys or relying on central authorities for trust.
-- **Local-First AI Assistant Extensions**: Expose your local tools and services as agents that can be securely accessed by LLMs (via MCP) or other applications.
-- **Decentralized Service Mesh**: Route messages between microservices/agents purely based on DIDs, decoupling identity from network location.
-- **Cross-Organization Interoperability**: Allow agents from different organizations to communicate securely using standard protocols (DID, A2A).
+- **Local multi-agent setups**: agents share a self-hosted relay, keep their own signing/encryption keys, and address each other by DID.
+- **Local-first AI assistant extensions**: expose a local MCP server so Claude or OpenClaw can list agents, send messages, and submit A2A tasks.
+- **DID-addressed routing**: the relay routes by DID rather than by a hard-coded host:port (the relay itself is still a central hop).
+- **Cross-protocol interop**: DID identity plus the A2A and MCP adapters, when you run both sides yourself.
 
 ## Quick Start
 
-### Use with Claude Code (one command)
+Self-host first. The public relay at `msg2agent.xyz` is **currently unavailable**.
 
-```bash
-# Add msg2agent as an MCP server directly from the registry
-claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080
-
-# Or against the hosted relay (get an API key at msg2agent.xyz)
-claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
-  ./mcp-server -name my-agent -relay wss://msg2agent.xyz \
-  -transport streamable-http -addr :3001
-```
-
-Once added, Claude can call `list_agents`, `send_message`, `submit_task` and all other tools directly.
-
-### Use with Claude.ai (custom connector)
-
-The hosted relay ships an OAuth 2.1 + PKCE endpoint and a discoverable connector
-manifest, so you can install msg2agent from any Claude surface (web, desktop, mobile)
-without writing code.
-
-1. Open Claude → **Settings → Connectors → Add Custom Connector**
-2. Paste this URL:
-
-   ```
-   https://msg2agent.xyz/.well-known/mcp-connector.json
-   ```
-
-3. Click **Connect**. Claude will redirect you to sign in with Google. Approve
-   the consent screen, and the 14 msg2agent tools (`list_agents`, `send_message`,
-   `submit_task`, …) become available in your conversations.
-
-No API key required — authentication is handled per-user via OAuth 2.1 with PKCE
-and Dynamic Client Registration. Sign-up is free at
-[msg2agent.xyz](https://msg2agent.xyz).
-
-### Use with OpenClaw (ClawHub marketplace)
-
-Install the published plugin from [ClawHub](https://clawhub.io/skills/msg2agent) or point OpenClaw at your own MCP server:
-
-```json
-{
-  "mcpUrl": "http://localhost:3001/mcp",
-  "apiKey": "msg2a_your_key_here"
-}
-```
-
-### Build & run locally
+### 1. Build and run locally
 
 ```bash
 go build -o relay ./cmd/relay
@@ -114,7 +74,53 @@ go build -o mcp-server ./cmd/mcp-server
 ./mcp-server -name my-agent -relay ws://localhost:8080 -transport streamable-http -addr :3001
 ```
 
-See the [Getting Started Guide](docs/getting-started.md) for a complete walkthrough.
+Relay liveness: `curl http://localhost:8080/health` → `ok`. See the [Getting Started Guide](docs/getting-started.md) for a complete walkthrough.
+
+### 2. Use with Claude Code (local)
+
+```bash
+claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080
+```
+
+Once added, Claude can call `list_agents`, `send_message`, `submit_task` and the other MCP tools.
+
+### 3. Hosted relay (currently unavailable; self-host)
+
+The hosted path is kept here so it can be reused if `msg2agent.xyz` comes back. Do not treat it as an availability promise.
+
+```bash
+# Currently unavailable — self-host instead (step 1).
+# If the hosted relay returns: get an API key at msg2agent.xyz, then:
+claude mcp add msg2agent -e MSG2AGENT_API_KEY=your_key -- \
+  ./mcp-server -name my-agent -relay wss://msg2agent.xyz \
+  -transport streamable-http -addr :3001
+```
+
+### 4. Use with Claude.ai (custom connector; currently unavailable)
+
+The relay code can serve OAuth 2.1 + PKCE and a connector manifest at `/.well-known/mcp-connector.json`. That hosted URL is **currently unavailable**; point a custom connector at your own HTTPS MCP server instead.
+
+1. Open Claude → **Settings → Connectors → Add Custom Connector**
+2. When hosting your own relay, paste your connector URL (self-host). The previous hosted URL was:
+
+   ```
+   https://msg2agent.xyz/.well-known/mcp-connector.json
+   ```
+
+3. Click **Connect**. On a working host, Claude redirects to Google sign-in; after consent, the 14 MCP tools (`list_agents`, `send_message`, `submit_task`, …) appear.
+
+Auth on a working host is per-user OAuth 2.1 with PKCE and Dynamic Client Registration. Sign-up on [msg2agent.xyz](https://msg2agent.xyz) is **currently unavailable**.
+
+### 5. Use with OpenClaw (in-repo plugin; not published)
+
+The OpenClaw plugin lives in [`docs/openclaw-plugin/`](docs/openclaw-plugin/README.md). It is **not published** on ClawHub or npm (`clawhub.ai/api/v1/skills/msg2agent` → 404; `npm view msg2agent` → 404). Point OpenClaw at your own MCP server:
+
+```json
+{
+  "mcpUrl": "http://localhost:3001/mcp",
+  "apiKey": "msg2a_your_key_here"
+}
+```
 
 ## Documentation
 

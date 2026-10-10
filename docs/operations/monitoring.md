@@ -350,8 +350,7 @@ services:
 # Relay with OTLP tracing
 ./relay -addr :8080 -otlp-endpoint http://localhost:4318
 
-# Agent with OTLP tracing
-./agent -name alice -relay ws://localhost:8080 -otlp-endpoint http://localhost:4318
+# mcp-server has no -otlp-endpoint flag; enable tracing on the relay (above).
 
 # Debug: stdout tracing
 ./relay -addr :8080 -trace-stdout

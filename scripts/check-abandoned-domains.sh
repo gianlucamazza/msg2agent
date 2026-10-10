@@ -21,13 +21,14 @@ alias="$(printf '%s.%s' promptkids app)"
 pattern="$(printf '%s|%s' "${apex//./\\.}" "${alias//./\\.}")"
 
 if command -v rg >/dev/null 2>&1; then
-	hits="$(rg -n --hidden --no-ignore \
+	# Explicit path so non-TTY CI stdin is not searched instead of the tree.
+	hits="$(rg -n --hidden \
 		-g '!**/.git/**' \
 		-g '!**/node_modules/**' \
 		-g '!**/vendor/**' \
 		-g '!**/build/**' \
 		-g '!**/dist/**' \
-		-e "$pattern" || true)"
+		-e "$pattern" . || true)"
 else
 	hits="$(git ls-files -z | xargs -0 grep -nE -e "$pattern" || true)"
 fi

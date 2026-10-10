@@ -3,6 +3,7 @@
 package email
 
 import (
+	"errors"
 	"fmt"
 	"net/smtp"
 	"os"
@@ -38,7 +39,7 @@ func NewSMTPSenderFromEnv() (Sender, error) {
 	}
 	from := strings.TrimSpace(os.Getenv("MSG2AGENT_SMTP_FROM"))
 	if from == "" {
-		return nil, fmt.Errorf("email sending is enabled (MSG2AGENT_SMTP_HOST is set) but MSG2AGENT_SMTP_FROM is empty; set MSG2AGENT_SMTP_FROM to the sender address (e.g. noreply@example.com)")
+		return nil, errors.New("email sending is enabled (MSG2AGENT_SMTP_HOST is set) but MSG2AGENT_SMTP_FROM is empty; set MSG2AGENT_SMTP_FROM to the sender address (e.g. noreply@example.com)")
 	}
 	port := 587
 	if p := os.Getenv("MSG2AGENT_SMTP_PORT"); p != "" {

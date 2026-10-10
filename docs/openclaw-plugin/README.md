@@ -2,7 +2,7 @@
 
 The OpenClaw plugin is a bridge between [OpenClaw](https://github.com/openclaw/openclaw) (an open-source personal AI assistant) and a msg2agent relay. It allows OpenClaw to discover agents, send messages, and read incoming replies — all through MCP Streamable HTTP.
 
-This plugin lives in this directory. It is **not published** on ClawHub or npm (checked 10 Oct 2026: `https://clawhub.ai/api/v1/skills/msg2agent` → 404; `npm view msg2agent` → 404). Copy or point OpenClaw at these files and your own MCP server. The public hosted MCP URL is **currently unavailable; self-host**.
+This plugin lives in this directory. It is **not published** on ClawHub or npm. Copy or point OpenClaw at these files and your own MCP server.
 
 ## Architecture
 
@@ -110,9 +110,9 @@ This plugin is **not listed** on [ClawHub](https://clawhub.ai) or npm. OpenClaw'
 
 ### Prepare a listing
 
-1. **Build and host the MCP server** on a public HTTPS endpoint you control. `https://relay.msg2agent.xyz/mcp` is **currently unavailable**.
-2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB` in the cloud Docker Compose) if you want keyed access.
-3. **Update `openclaw.plugin.json`** — change the `mcpUrl` placeholder to your endpoint.
+1. **Run the MCP server** on an endpoint you control (local HTTP is enough).
+2. **Enable API key auth** in your deployment (see `MSG2AGENT_BILLING_DB`) if you want keyed access.
+3. **Update `openclaw.plugin.json`** — set `mcpUrl` to that endpoint (for example `http://localhost:3001/mcp`).
 
 ### Submit to ClawHub
 
@@ -129,15 +129,11 @@ clawhub skill publish ./docs/openclaw-plugin \
 
 ### Pricing suggestions (hypothetical)
 
-These are listing ideas only. This repo does not sell those hosted tiers, and `msg2agent.xyz` is **currently unavailable**.
+These are listing ideas only. This repo is self-host only and does not sell hosted tiers.
 
 | Tier | Price | What to include |
 |---|---|---|
 | Free / self-hosted | $0 | Skill lists self-hosted setup |
-| Cloud Starter | $19/mo | Only if you actually host a relay |
-| Cloud Team | $99/mo | Only if you actually host a relay |
-
-Buyers would connect their own `mcpUrl` (self-host) or a host you operate.
 
 ## Files
 

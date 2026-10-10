@@ -2,7 +2,7 @@
 
 This guide walks you through building msg2agent, running a **local** relay + MCP server, and sending your first message.
 
-The public hosted relay at `msg2agent.xyz` is **currently unavailable; self-host**. There is no standalone `./agent` binary in this repo — agents on the network are the MCP server (and any A2A/agent-runner processes you start).
+There is no standalone `./agent` binary in this repo — agents on the network are the MCP server (and any A2A/agent-runner processes you start).
 
 ## Prerequisites
 
@@ -122,10 +122,6 @@ Expected response (array of registered agents; `alice` appears after the MCP ser
 ```
 
 The MCP endpoint will be available at `http://localhost:3001/mcp`. See [MCP Server Configuration](operations/configuration.md#mcp-server-configuration) for all options, or the [OpenClaw Plugin guide](openclaw-plugin/README.md) for OpenClaw integration.
-
-### Hosted relay (currently unavailable)
-
-`https://msg2agent.xyz/` (and `/health`, `/.well-known/mcp-connector.json`) timed out from an external check on 10 Oct 2026. Keep using the local commands above. If the host returns, you can point `-relay` at `wss://msg2agent.xyz` and add a connector URL — that is not an availability promise.
 
 ## Understanding the Components
 

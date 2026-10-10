@@ -57,11 +57,11 @@ Using certbot:
 sudo apt install certbot
 
 # Obtain certificate
-sudo certbot certonly --standalone -d relay.msg2agent.xyz
+sudo certbot certonly --standalone -d relay.example.com
 
 # Certificates are saved to:
-# /etc/letsencrypt/live/relay.msg2agent.xyz/fullchain.pem
-# /etc/letsencrypt/live/relay.msg2agent.xyz/privkey.pem
+# /etc/letsencrypt/live/relay.example.com/fullchain.pem
+# /etc/letsencrypt/live/relay.example.com/privkey.pem
 ```
 
 ## Relay TLS Configuration
@@ -104,8 +104,6 @@ There is no standalone `./agent` binary and `mcp-server` has no `-tls-skip-verif
 ```bash
 ./mcp-server -name alice -relay wss://localhost:8443
 ```
-
-`relay.msg2agent.xyz` is an example hostname for a self-hosted TLS relay, not a live public endpoint. The apex host `msg2agent.xyz` is **currently unavailable**.
 
 ## TLS Settings Reference
 

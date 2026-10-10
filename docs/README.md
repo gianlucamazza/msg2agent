@@ -1,8 +1,6 @@
 # Documentation
 
-Welcome to the msg2agent documentation.
-
-Self-host first. The public relay at `msg2agent.xyz` is **currently unavailable**.
+Welcome to the msg2agent documentation. This project is self-host only.
 
 ## Quick Navigation
 

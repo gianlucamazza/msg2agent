@@ -13,7 +13,7 @@
       },
       "apiKey": {
         "type": "string",
-        "description": "API key for hosted relay (starts with msg2a_). Required when connecting to msg2agent.xyz cloud relay; optional for self-hosted."
+        "description": "API key for a self-hosted relay that has --billing-db enabled (starts with msg2a_). Optional when billing is off."
       },
       "enabled": {
         "type": "boolean"
@@ -23,7 +23,7 @@
   "uiHints": {
     "mcpUrl": {
       "label": "MCP Server URL",
-      "placeholder": "https://relay.msg2agent.xyz/mcp"
+      "placeholder": "http://localhost:3001/mcp"
     },
     "apiKey": {
       "label": "API Key",

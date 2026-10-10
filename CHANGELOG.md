@@ -30,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Duplicate email guard**: `POST /api/tenants` returns HTTP 409 with a sign-in link if an active account already exists for the given email (prevents silent duplicate accounts).
 - **Unknown Google sign-in**: instead of a hard 403 error page, signing in with a Google account that has no local tenant now redirects to `/pricing?email=…&reason=no-account` with the email pre-filled and an explanatory banner.
 - Pricing page pre-selects the plan from `?plan=` URL param; landing page "Starter" and "Team" CTAs now link to `/pricing?plan=starter` / `/pricing?plan=team` instead of a waitlist email.
-- Migrated production domain from `msg2agent.home.gianlucamazza.it` to the former public apex. Dashboard remains path-based at `/app/` under the apex.
-- **Breaking (DID identity)**: gateway AgentCard DID changes from `did:wba:msg2agent.home.gianlucamazza.it:agent:gateway` to a DID on the former public apex. Consumers of `/.well-known/agent.json` must update their peer registries.
+- Migrated production domain from the former home-lab subdomain to the former public apex. Dashboard remains path-based at `/app/` under the apex.
+- **Breaking (DID identity)**: gateway AgentCard DID changes from a DID on the former home-lab subdomain to a DID on the former public apex. Consumers of `/.well-known/agent.json` must update their peer registries.
 - Removed hardcoded domain from RFC 9728 metadata in relay and mcp-server — both now derive `resource` from `MSG2AGENT_OAUTH_AS_BASE_URL` at startup.
 
 ## [0.1.0] - 2026-05-06

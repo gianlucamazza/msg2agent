@@ -51,7 +51,7 @@ The plugin reads its MCP endpoint URL from (in order of priority):
 }
 ```
 
-Set `mcpUrl` to wherever the MCP server is listening, e.g. `http://192.168.1.103:3010/mcp`.
+Set `mcpUrl` to wherever the MCP server is listening, e.g. `http://<host-ip>:3010/mcp`.
 
 ## Available Tools
 
@@ -96,10 +96,10 @@ go build -o mcp-server ./cmd/mcp-server
 
 ### Docker Compose (self-host)
 
-See [`infrastructure/docker-compose.odroid.yml`](../../infrastructure/docker-compose.odroid.yml) for a compose stack with relay, MCP server, and dashboard.
+See [`infrastructure/docker-compose.selfhost.yml`](../../infrastructure/docker-compose.selfhost.yml) for a compose stack with relay, MCP server, and dashboard.
 
 ```bash
-docker compose -f infrastructure/docker-compose.odroid.yml up -d
+docker compose -f infrastructure/docker-compose.selfhost.yml up -d
 ```
 
 The MCP server will be available at `http://<host>:3010/mcp`.

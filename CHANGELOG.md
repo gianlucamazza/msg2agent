@@ -9,14 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Self-host defaults: contact addresses use `info@gianlucamazza.it`. SMTP From is required when email sending is enabled (no `noreply@msg2agent.xyz` default). HTTP 402 bodies use `MSG2AGENT_PUBLIC_BASE_URL` when set and omit the dashboard URL when unset. Example config, manifests, and the marketing site use `example.com` / localhost placeholders.
+- Former hosted product hostnames are not renewed after January 2027 and must not appear as defaults, emails, or links. Contact is `info@gianlucamazza.it`. Placeholders remain `example.com` / localhost.
+- Self-host defaults: contact addresses use `info@gianlucamazza.it`. SMTP From is required when email sending is enabled (no hardcoded `noreply@` default on a public apex). HTTP 402 bodies use `MSG2AGENT_PUBLIC_BASE_URL` when set and omit the dashboard URL when unset. Example config, manifests, and the marketing site use `example.com` / localhost placeholders.
 
 ### Added
 
 - **Self-serve paid signup**: Starter ($19/mo) and Team ($99/mo) plans are now selectable on the pricing page. Signup creates a Stripe Checkout session and returns `checkout_url`; `BillingStatus` flips to `active` when `checkout.session.completed` fires.
 - **Email verification**: after signup a magic-link is sent to the registered email (`/oauth/verify?token=…`). `Tenant.EmailVerifiedAt` is persisted on click. SMTP is configured via `MSG2AGENT_SMTP_*` env vars; missing config is a no-op (signup is never blocked).
 - **Post-checkout activation polling**: the dashboard SPA polls `GET /api/dashboard/me` every 5 s for up to 120 s after a Stripe redirect, showing "Activating your plan…" until `billing_status` becomes `active`.
-- **Enterprise CTA**: pricing page now shows a "Contact sales" link (`mailto:sales@msg2agent.xyz`) below the plan grid.
+- **Enterprise CTA**: pricing page now shows a "Contact sales" mailto link below the plan grid.
 - `pkg/email`: new package with `Sender` interface, `NopSender`, and `SMTPSender` backed by `MSG2AGENT_SMTP_*` env vars.
 - SQLite/Postgres migration v7: `tenants.email_verified_at` column and `email_verification_tokens` table.
 
@@ -29,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Duplicate email guard**: `POST /api/tenants` returns HTTP 409 with a sign-in link if an active account already exists for the given email (prevents silent duplicate accounts).
 - **Unknown Google sign-in**: instead of a hard 403 error page, signing in with a Google account that has no local tenant now redirects to `/pricing?email=…&reason=no-account` with the email pre-filled and an explanatory banner.
 - Pricing page pre-selects the plan from `?plan=` URL param; landing page "Starter" and "Team" CTAs now link to `/pricing?plan=starter` / `/pricing?plan=team` instead of a waitlist email.
-- Migrated production domain from `msg2agent.home.gianlucamazza.it` to `msg2agent.xyz`. Dashboard remains path-based at `/app/` under the apex.
-- **Breaking (DID identity)**: gateway AgentCard DID changes from `did:wba:msg2agent.home.gianlucamazza.it:agent:gateway` to `did:wba:msg2agent.xyz:agent:gateway`. Consumers of `/.well-known/agent.json` must update their peer registries.
+- Migrated production domain from `msg2agent.home.gianlucamazza.it` to the former public apex. Dashboard remains path-based at `/app/` under the apex.
+- **Breaking (DID identity)**: gateway AgentCard DID changes from `did:wba:msg2agent.home.gianlucamazza.it:agent:gateway` to a DID on the former public apex. Consumers of `/.well-known/agent.json` must update their peer registries.
 - Removed hardcoded domain from RFC 9728 metadata in relay and mcp-server — both now derive `resource` from `MSG2AGENT_OAUTH_AS_BASE_URL` at startup.
 
 ## [0.1.0] - 2026-05-06

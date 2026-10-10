@@ -3,12 +3,27 @@ package billing
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/gianlucamazza/msg2agent/pkg/telemetry"
 )
+
+// PublicBaseURLEnv is the public origin of this self-hosted instance
+// (e.g. https://relay.example.com). When set, 402 responses include a
+// dashboard URL under /app/. When unset, the URL is omitted.
+const PublicBaseURLEnv = "MSG2AGENT_PUBLIC_BASE_URL"
+
+func paymentRequiredMessage() string {
+	const prefix = "payment required: update your payment method"
+	base := strings.TrimRight(os.Getenv(PublicBaseURLEnv), "/")
+	if base == "" {
+		return prefix
+	}
+	return prefix + " at " + base + "/app/"
+}
 
 type contextKey string
 
@@ -126,7 +141,7 @@ func BearerMiddleware(store Store, jwtVal AccessTokenValidator, allowAnon bool) 
 			}
 
 			if tenant.BillingStatus == "incomplete" || tenant.BillingStatus == "past_due" {
-				http.Error(w, "payment required: update your payment method at https://msg2agent.xyz/app/", http.StatusPaymentRequired)
+				http.Error(w, paymentRequiredMessage(), http.StatusPaymentRequired)
 				return
 			}
 			if !tenant.IsActive() {
@@ -211,7 +226,7 @@ func APIKeyMiddleware(store Store, allowAnon bool) func(http.Handler) http.Handl
 				return
 			}
 			if tenant.BillingStatus == "incomplete" || tenant.BillingStatus == "past_due" {
-				http.Error(w, "payment required: update your payment method at https://msg2agent.xyz/app/", http.StatusPaymentRequired)
+				http.Error(w, paymentRequiredMessage(), http.StatusPaymentRequired)
 				return
 			}
 			if !tenant.IsActive() {

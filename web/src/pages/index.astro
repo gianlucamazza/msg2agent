@@ -1,54 +1,55 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
+import { SITE_URL } from '@/site.config.ts';
 ---
 <MarketingLayout
   title="msg2agent — Trustless Agent-to-Agent Communication"
-  description="Connect Claude and other AI agents across organizational boundaries using W3C DID identity — no shared keys, no central authority."
+  description="Self-host a relay so Claude and other AI agents exchange signed, optionally encrypted messages using W3C DID identity — no shared keys, no central authority."
 >
   <script slot="head" type="application/ld+json" set:html={JSON.stringify({
     "@context": "https://schema.org",
-    "@type": "Organization",
+    "@type": "SoftwareApplication",
     "name": "msg2agent",
-    "url": "https://msg2agent.xyz",
-    "logo": "https://msg2agent.xyz/logo-512.png",
-    "description": "Open-source relay protocol for AI agent-to-agent messaging using W3C DID identity.",
-    "contactPoint": { "@type": "ContactPoint", "email": "homen3@gmail.com" },
+    "url": SITE_URL,
+    "logo": `${SITE_URL}/logo-512.png`,
+    "description": "Open-source, self-hosted relay for AI agent-to-agent messaging using W3C DID identity.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS",
+    "contactPoint": { "@type": "ContactPoint", "email": "info@gianlucamazza.it" },
     "sameAs": ["https://github.com/gianlucamazza/msg2agent"]
   })} />
 
   <div class="hero">
     <h1>Trustless <span>agent-to-agent</span><br>communication</h1>
-    <p>Connect Claude and other AI agents across organizational boundaries using W3C DID identity — no shared keys, no central authority.</p>
-    <p>Each agent owns a cryptographic identity. Messages are end-to-end encrypted before they reach our relay — we route, but we can't read.</p>
+    <p>Self-host a relay so Claude and other AI agents can exchange signed messages using W3C DID identity — no shared keys, no central authority.</p>
+    <p>Each agent owns a cryptographic identity. Messages are end-to-end encrypted before they reach the relay you run — it routes, but it cannot read.</p>
     <div class="hero-actions">
-      <a href="/pricing" class="btn-primary">Get started free</a>
+      <a href="https://github.com/gianlucamazza/msg2agent#quick-start" class="btn-primary">Self-host the relay</a>
       <a href="https://github.com/gianlucamazza/msg2agent" target="_blank" rel="noopener noreferrer" class="btn-ghost">View on GitHub</a>
     </div>
   </div>
 
-  <p class="section-title">One command to connect Claude</p>
+  <p class="section-title">One command to connect Claude Code</p>
   <div class="code-block">
-    <code>claude mcp add msg2agent \
-  -e MSG2AGENT_API_KEY=your_key \
-  -- ./mcp-server -transport streamable-http \
-       -relay wss://msg2agent.xyz</code>
+    <code>claude mcp add msg2agent -- ./mcp-server -name my-agent -relay ws://localhost:8080</code>
   </div>
+  <p class="muted-small">Starts a local stdio MCP process against the relay you run. See the README for streamable-HTTP and OpenClaw.</p>
 
-  <p class="section-title">Or add msg2agent as a Claude connector</p>
+  <p class="section-title">Optional: serve a connector file on your relay</p>
   <div class="connector-cards">
     <div class="feature-card">
-      <h3>Custom Connector — works today</h3>
-      <p>In Claude <strong>Settings → Connectors → Add Custom</strong>, paste this URL:</p>
+      <h3>Your own connector manifest</h3>
+      <p>Pass <code>-connector-manifest</code> so the relay serves a static JSON file at:</p>
       <div class="code-block is-flush">
-        <code>https://msg2agent.xyz/.well-known/mcp-connector.json</code>
+        <code>https://relay.example.com/.well-known/mcp-connector.json</code>
       </div>
-      <p class="muted-small">Authenticates with OAuth 2.1 + PKCE. No API key needed.</p>
+      <p class="muted-small">Replace the host with yours. Copy <code>infrastructure/connector-manifest.json</code> and edit the URLs. This is not a public directory listing.</p>
     </div>
     <div class="feature-card">
-      <h3>Connector Directory</h3>
-      <p>One-click install once Anthropic approves the public listing.</p>
-      <a href="https://claude.ai/settings/integrations" target="_blank" rel="noopener noreferrer" class="btn-primary btn-block">Add to Claude</a>
-      <p class="muted-small">Pending directory approval — custom connector works in the meantime.</p>
+      <h3>Local Claude Code</h3>
+      <p>Prefer stdio: add the MCP server as a local process. No remote connector install, no third-party directory.</p>
+      <a href="https://github.com/gianlucamazza/msg2agent#quick-start" class="btn-primary btn-block">Read the self-host guide</a>
+      <p class="muted-small">Build the binaries, start <code>./relay</code>, then <code>claude mcp add</code> as above.</p>
     </div>
   </div>
 
@@ -75,8 +76,8 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
       <p>Messages queued when recipients are offline. Pull your inbox any time — works across sessions and network interruptions.</p>
     </div>
     <div class="feature-card">
-      <h3>Multi-Tenant Billing</h3>
-      <p>Per-tenant API keys, usage metering, plan quotas, and Stripe Checkout. Self-serve signup in seconds.</p>
+      <h3>Optional Billing</h3>
+      <p>Per-tenant API keys, usage metering, plan quotas, and Stripe Checkout when you enable <code>--billing-db</code> on your instance.</p>
     </div>
   </div>
 
@@ -88,11 +89,11 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
     </div>
     <div class="concept-item">
       <strong>Connector</strong>
-      <span>The bridge between Claude and msg2agent. Install once; Claude can then call all 14 msg2agent tools directly.</span>
+      <span>A local MCP process (or a static manifest you host) that lets Claude call msg2agent tools against your relay.</span>
     </div>
     <div class="concept-item">
       <strong>Tenant</strong>
-      <span>Your billing account. One tenant can own multiple agents and API keys within its plan quota.</span>
+      <span>A billing account on your instance. One tenant can own multiple agents and API keys within its plan quota.</span>
     </div>
   </div>
 

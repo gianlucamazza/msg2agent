@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Self-host defaults: contact addresses use `info@gianlucamazza.it`. SMTP From is required when email sending is enabled (no `noreply@msg2agent.xyz` default). HTTP 402 bodies use `MSG2AGENT_PUBLIC_BASE_URL` when set and omit the dashboard URL when unset. Example config, manifests, and the marketing site use `example.com` / localhost placeholders.
+
 ### Added
 
 - **Self-serve paid signup**: Starter ($19/mo) and Team ($99/mo) plans are now selectable on the pricing page. Signup creates a Stripe Checkout session and returns `checkout_url`; `BillingStatus` flips to `active` when `checkout.session.completed` fires.

@@ -185,3 +185,81 @@ func TestAPIKeyMiddleware_unknownKey(t *testing.T) {
 		t.Errorf("unknown key: status = %d, want 401", rec.Code)
 	}
 }
+
+func TestPaymentRequiredMessage_omitsURLWhenUnset(t *testing.T) {
+	t.Setenv(PublicBaseURLEnv, "")
+	got := paymentRequiredMessage()
+	if got != "payment required: update your payment method" {
+		t.Errorf("unset base URL: got %q", got)
+	}
+	if strings.Contains(got, "http") {
+		t.Errorf("unset base URL should omit any URL, got %q", got)
+	}
+}
+
+func TestPaymentRequiredMessage_includesURLWhenSet(t *testing.T) {
+	t.Setenv(PublicBaseURLEnv, "https://relay.example.com")
+	got := paymentRequiredMessage()
+	want := "payment required: update your payment method at https://relay.example.com/app/"
+	if got != want {
+		t.Errorf("set base URL: got %q, want %q", got, want)
+	}
+}
+
+func TestPaymentRequiredMessage_trimsTrailingSlash(t *testing.T) {
+	t.Setenv(PublicBaseURLEnv, "https://relay.example.com/")
+	got := paymentRequiredMessage()
+	if strings.Contains(got, "//app/") {
+		t.Errorf("trailing slash should be trimmed, got %q", got)
+	}
+	if !strings.Contains(got, "https://relay.example.com/app/") {
+		t.Errorf("got %q, want URL ending in /app/", got)
+	}
+}
+
+func TestAPIKeyMiddleware_pastDue_omitsURLWhenUnset(t *testing.T) {
+	t.Setenv(PublicBaseURLEnv, "")
+	store, tenant, plaintext := newTestStore(t)
+	tenant.BillingStatus = "past_due"
+
+	mw := APIKeyMiddleware(store, false)
+	h := mw(http.HandlerFunc(okHandler))
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "payment required: update your payment method") {
+		t.Errorf("body %q missing payment-required text", body)
+	}
+	if strings.Contains(body, "http") {
+		t.Errorf("unset public base URL should omit URL from 402 body, got %q", body)
+	}
+}
+
+func TestAPIKeyMiddleware_pastDue_includesURLWhenSet(t *testing.T) {
+	t.Setenv(PublicBaseURLEnv, "https://relay.example.com")
+	store, tenant, plaintext := newTestStore(t)
+	tenant.BillingStatus = "incomplete"
+
+	mw := APIKeyMiddleware(store, false)
+	h := mw(http.HandlerFunc(okHandler))
+
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.Header.Set("Authorization", "Bearer "+plaintext)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want 402", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "https://relay.example.com/app/") {
+		t.Errorf("body %q missing configured dashboard URL", body)
+	}
+}

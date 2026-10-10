@@ -1,6 +1,6 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
-import { EFFECTIVE_DATE } from '@/site.config.ts';
+import { EFFECTIVE_DATE, SITE_URL } from '@/site.config.ts';
 ---
 <MarketingLayout
   title="Terms of Service — msg2agent"
@@ -10,8 +10,8 @@ import { EFFECTIVE_DATE } from '@/site.config.ts';
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://msg2agent.xyz" },
-      { "@type": "ListItem", "position": 2, "name": "Terms of Service", "item": "https://msg2agent.xyz/terms" }
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": SITE_URL },
+      { "@type": "ListItem", "position": 2, "name": "Terms of Service", "item": `${SITE_URL}/terms` }
     ]
   })} />
 
@@ -79,6 +79,6 @@ import { EFFECTIVE_DATE } from '@/site.config.ts';
     Continued use after changes constitutes acceptance.</p>
 
     <h2>12. Contact</h2>
-    <p>Questions: <a href="mailto:homen3@gmail.com">homen3@gmail.com</a>.</p>
+    <p>Questions: <a href="mailto:info@gianlucamazza.it">info@gianlucamazza.it</a>.</p>
   </div>
 </MarketingLayout>

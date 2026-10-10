@@ -7,7 +7,7 @@ go build ./...
 go test ./... -race
 ```
 
-Requires Go 1.24+. No other runtime dependencies are needed for the core packages.
+Requires Go 1.26.9+. No other runtime dependencies are needed for the core packages.
 
 ### Front-end dev
 

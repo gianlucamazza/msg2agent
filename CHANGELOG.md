@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Bump Go toolchain to 1.26.9 and `golang.org/x/net` to v0.60.0 to clear Oct 2026 stdlib and x/net advisories.
+
 - **`past_due` enforcement**: tenants whose payment has failed (`BillingStatus=past_due`) now receive HTTP 402 (previously only `incomplete` was blocked). Stripe Customer Portal link is included in the response body.
 - **Plan change via Customer Portal**: `customer.subscription.updated` now reverse-looks up the new Stripe Price ID and updates `tenant.Plan` and `tenant.Quota` accordingly. Previously only `BillingStatus` was updated.
 - **Duplicate email guard**: `POST /api/tenants` returns HTTP 409 with a sign-in link if an active account already exists for the given email (prevents silent duplicate accounts).

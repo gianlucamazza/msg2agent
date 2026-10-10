@@ -139,7 +139,7 @@ docker-compose*.yml  # Docker Compose configurations
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.26.9+
 - Docker (optional, for containerized deployment)
 
 ## Contributing

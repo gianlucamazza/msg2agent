@@ -39,7 +39,7 @@ steps:
       - golangci-lint run --timeout=15m ./...
 
   - name: vuln
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
@@ -49,7 +49,7 @@ steps:
       - govulncheck ./...
 
   - name: test
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     environment:
       CGO_ENABLED: "1"
     volumes:
@@ -112,7 +112,7 @@ steps:
       - golangci-lint run --timeout=15m ./...
 
   - name: vuln
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     volumes:
       - name: gomodcache
         path: /root/go/pkg/mod
@@ -122,7 +122,7 @@ steps:
       - govulncheck ./...
 
   - name: test
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     environment:
       CGO_ENABLED: "1"
     volumes:
@@ -287,7 +287,7 @@ steps:
       - golangci-lint run --timeout=15m ./...
 
   - name: test
-    image: golang:1.25-alpine
+    image: golang:1.26-alpine
     environment:
       CGO_ENABLED: "1"
     volumes:

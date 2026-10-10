@@ -6,7 +6,7 @@ There is no standalone `./agent` binary in this repo — agents on the network a
 
 ## Prerequisites
 
-- Go 1.24 or later
+- Go 1.26.9 or later
 - Git
 
 Optional:

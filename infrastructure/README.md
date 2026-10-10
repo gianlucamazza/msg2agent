@@ -1,6 +1,6 @@
 # msg2agent Infrastructure
 
-Self-host Compose files for a home-lab msg2agent stack (odroid example).
+Self-host Compose files for a home-lab msg2agent stack (self-host example).
 
 ## Architecture
 
@@ -24,14 +24,14 @@ Three services managed by Docker Compose:
 ```bash
 cp .env.example .env
 # Edit .env with your values (Stripe keys, OAuth2, service token)
-docker compose -f infrastructure/docker-compose.odroid.yml up -d
+docker compose -f infrastructure/docker-compose.selfhost.yml up -d
 ```
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.odroid.yml` | Compose stack — source of truth, deployed by Drone CI |
+| `docker-compose.selfhost.yml` | Compose stack — source of truth, deployed by Drone CI |
 | `agentcard-msg2agent.json` | A2A AgentCard served at `/.well-known/agent.json` |
 | `connector-manifest.json` | Optional JSON the relay can serve via `-connector-manifest` |
 | `grafana/billing-dashboard.json` | Grafana dashboard for billing metrics |
@@ -49,7 +49,7 @@ via `--agent-card`, and the connector file at
 
 ## Environment Variables
 
-See `docker-compose.odroid.yml` for the full list. Required secrets (passed via `.env`):
+See `docker-compose.selfhost.yml` for the full list. Required secrets (passed via `.env`):
 
 | Variable | Description |
 |----------|-------------|

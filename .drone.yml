@@ -137,8 +137,10 @@ steps:
     image: plugins/docker
     settings:
       daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-relay
+      registry:
+        from_secret: REGISTRY
+      repo:
+        from_secret: REGISTRY_REPO_RELAY
       dockerfile: Dockerfile
       target: relay
       tags:
@@ -160,8 +162,10 @@ steps:
     image: plugins/docker
     settings:
       daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server
+      registry:
+        from_secret: REGISTRY
+      repo:
+        from_secret: REGISTRY_REPO_MCP
       dockerfile: Dockerfile
       target: mcp-server
       tags:
@@ -183,8 +187,10 @@ steps:
     image: plugins/docker
     settings:
       daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin
+      registry:
+        from_secret: REGISTRY
+      repo:
+        from_secret: REGISTRY_REPO_BILLING_ADMIN
       dockerfile: Dockerfile
       target: billing-admin
       tags:
@@ -206,8 +212,10 @@ steps:
     image: plugins/docker
     settings:
       daemon_off: true
-      registry: registry.home.gianlucamazza.it
-      repo: registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard
+      registry:
+        from_secret: REGISTRY
+      repo:
+        from_secret: REGISTRY_REPO_DASHBOARD
       dockerfile: Dockerfile
       target: dashboard
       tags:
@@ -228,22 +236,32 @@ steps:
   - name: deploy
     image: docker:cli
     environment:
+      REGISTRY:
+        from_secret: REGISTRY
       REGISTRY_USERNAME:
         from_secret: REGISTRY_USERNAME
       REGISTRY_PASSWORD:
         from_secret: REGISTRY_PASSWORD
+      REGISTRY_REPO_RELAY:
+        from_secret: REGISTRY_REPO_RELAY
+      REGISTRY_REPO_MCP:
+        from_secret: REGISTRY_REPO_MCP
+      REGISTRY_REPO_BILLING_ADMIN:
+        from_secret: REGISTRY_REPO_BILLING_ADMIN
+      REGISTRY_REPO_DASHBOARD:
+        from_secret: REGISTRY_REPO_DASHBOARD
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock
       - name: opt_services
         path: /opt/services
     commands:
-      - echo "$REGISTRY_PASSWORD" | docker login registry.home.gianlucamazza.it -u "$REGISTRY_USERNAME" --password-stdin
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-relay:${DRONE_COMMIT_SHA}
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-mcp-server:${DRONE_COMMIT_SHA}
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-billing-admin:${DRONE_COMMIT_SHA}
-      - docker pull registry.home.gianlucamazza.it/gmazza/msg2agent-dashboard:${DRONE_COMMIT_SHA}
-      - cp /drone/src/infrastructure/docker-compose.odroid.yml /opt/services/msg2agent/docker-compose.yml
+      - echo "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
+      - docker pull "$REGISTRY_REPO_RELAY:${DRONE_COMMIT_SHA}"
+      - docker pull "$REGISTRY_REPO_MCP:${DRONE_COMMIT_SHA}"
+      - docker pull "$REGISTRY_REPO_BILLING_ADMIN:${DRONE_COMMIT_SHA}"
+      - docker pull "$REGISTRY_REPO_DASHBOARD:${DRONE_COMMIT_SHA}"
+      - cp /drone/src/infrastructure/docker-compose.selfhost.yml /opt/services/msg2agent/docker-compose.yml
       - cp /drone/src/infrastructure/agentcard-msg2agent.json /opt/services/msg2agent/agentcard.json
       - cp /drone/src/infrastructure/connector-manifest.json /opt/services/msg2agent/connector-manifest.json
       - echo "MSG2AGENT_VERSION=${DRONE_COMMIT_SHA}" > /opt/services/msg2agent/.env.version

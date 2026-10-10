@@ -46,7 +46,7 @@ Both the dashboard and the MCP server mount the same `billing-data` volume. SQLi
 ## Starting the Dashboard
 
 ```bash
-docker compose -f infrastructure/docker-compose.odroid.yml up -d dashboard
+docker compose -f infrastructure/docker-compose.selfhost.yml up -d dashboard
 ```
 
 Health check: `curl http://localhost:8082/health` → `ok`

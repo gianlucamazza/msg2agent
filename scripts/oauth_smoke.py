@@ -3,11 +3,11 @@
 oauth_smoke.py — End-to-end OAuth 2.1 PKCE smoke test for msg2agent.
 
 Usage:
-    # Against production (requires MSG2AGENT_TEST_TENANT_ID set in .env for headless flow):
-    python3 scripts/oauth_smoke.py --base-url https://msg2agent.xyz
-
-    # Against local dev relay:
+    # Against a local relay (default):
     python3 scripts/oauth_smoke.py --base-url http://localhost:8080 --tenant-id <id>
+
+    # Against another self-hosted relay:
+    python3 scripts/oauth_smoke.py --base-url https://relay.example.com
 
 The script performs the full PKCE round-trip:
   1. POST /oauth/register   → client_id
@@ -35,7 +35,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE_URL = "https://msg2agent.xyz"
+BASE_URL = "http://localhost:8080"
 MCP_URL = BASE_URL + "/mcp"
 
 

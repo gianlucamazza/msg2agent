@@ -1,4 +1,6 @@
 ---
+import { SITE_URL } from '@/site.config.ts';
+
 interface Props {
   title: string;
   description?: string;
@@ -8,7 +10,7 @@ interface Props {
 const {
   title,
   description = 'msg2agent — the agent messaging relay',
-  ogImage = 'https://msg2agent.xyz/logo-512.png',
+  ogImage = `${SITE_URL}/logo-512.png`,
 } = Astro.props;
 
 // Strip .html suffix and normalize /index.html → / for canonical URLs.

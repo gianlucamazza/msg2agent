@@ -2,4 +2,4 @@ User-agent: *
 Disallow: /app/
 Allow: /
 
-Sitemap: https://msg2agent.xyz/sitemap-index.xml
+Sitemap: https://relay.example.com/sitemap-index.xml

@@ -8,7 +8,7 @@ LB_NAME="msg2agent-lb"
 
 if [ -z "$DOMAIN" ] || [ -z "$PROJECT_ID" ]; then
 	echo "Usage: $0 <DOMAIN_NAME> <PROJECT_ID>"
-	echo "Example: $0 msg2agent.xyz message2agent"
+	echo "Example: $0 relay.example.com my-gcp-project"
 	exit 1
 fi
 

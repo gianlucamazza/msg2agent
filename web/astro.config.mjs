@@ -5,7 +5,7 @@ import mdx from '@astrojs/mdx';
 
 export default defineConfig({
   output: 'static',
-  site: 'https://msg2agent.xyz',
+  site: 'https://relay.example.com',
   integrations: [
     preact({ compat: false }),
     mdx(),

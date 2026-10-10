@@ -251,7 +251,7 @@ export default function register(api: {
         to: Type.String({
           description:
             "Full DID of the recipient agent " +
-            "(e.g. did:wba:msg2agent.xyz:agent:bob)",
+            "(e.g. did:wba:example.com:agent:bob)",
         }),
         method: Type.String({
           description: "JSON-RPC method to invoke on the target (e.g. ping, echo, message/send)",

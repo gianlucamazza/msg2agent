@@ -13,7 +13,7 @@ import (
 // verifyEmailHandler handles GET /oauth/verify?token=<plain>.
 // It consumes the one-time token, marks the tenant's email as verified, and
 // redirects to the dashboard. dashBaseURL should be the dashboard origin
-// (e.g. "https://app.msg2agent.xyz").
+// (e.g. "https://app.example.com").
 func verifyEmailHandler(store billing.Store, relayBaseURL string, logger *slog.Logger) http.HandlerFunc {
 	// Derive the dashboard URL from the relay base URL by inserting "app." subdomain.
 	dashURL := relayBaseURL

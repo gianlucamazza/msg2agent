@@ -186,7 +186,7 @@ Key configuration options:
 | `-addr`      | `MSG2AGENT_RELAY_ADDR` | Relay listen address            |
 | `-log-level` | `MSG2AGENT_LOG_LEVEL`  | debug, info, warn, error        |
 
-See [Configuration Guide](operations/configuration.md) for all options.
+See [Configuration Guide](operations/configuration.md) for all options, including the [self-host public identity](operations/configuration.md#self-host-public-identity) variables (`MSG2AGENT_SMTP_FROM`, `MSG2AGENT_PUBLIC_BASE_URL`, `MSG2AGENT_OAUTH_AS_BASE_URL`).
 
 ## Next Steps
 

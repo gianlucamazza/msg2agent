@@ -36,10 +36,16 @@ docker compose -f infrastructure/docker-compose.odroid.yml up -d
 | `connector-manifest.json` | Optional JSON the relay can serve via `-connector-manifest` |
 | `grafana/billing-dashboard.json` | Grafana dashboard for billing metrics |
 
-## AgentCard
+## AgentCard and connector manifest
 
-`agentcard-msg2agent.json` declares the agent's DID, capabilities, and endpoint.
-The relay serves it at `https://<domain>/.well-known/agent.json` via the `--agent-card` flag.
+`agentcard-msg2agent.json` and `connector-manifest.json` are **templates**.
+They use `relay.example.com` placeholders — replace every URL and DID domain
+with the public host of your own relay before passing them to `--agent-card`
+or `--connector-manifest`. There is no hosted connector listing.
+
+The relay serves the AgentCard at `https://<your-domain>/.well-known/agent.json`
+via `--agent-card`, and the connector file at
+`/.well-known/mcp-connector.json` via `--connector-manifest`.
 
 ## Environment Variables
 

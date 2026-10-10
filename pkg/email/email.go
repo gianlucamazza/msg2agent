@@ -3,6 +3,7 @@
 package email
 
 import (
+	"errors"
 	"fmt"
 	"net/smtp"
 	"os"
@@ -29,11 +30,16 @@ type SMTPSender struct {
 }
 
 // NewSMTPSenderFromEnv builds an SMTPSender from environment variables.
-// Returns NopSender (with a log warning) if MSG2AGENT_SMTP_HOST is not set.
-func NewSMTPSenderFromEnv() Sender {
+// Returns NopSender if MSG2AGENT_SMTP_HOST is not set (email sending disabled).
+// Returns an error if SMTP is enabled but MSG2AGENT_SMTP_FROM is empty.
+func NewSMTPSenderFromEnv() (Sender, error) {
 	host := os.Getenv("MSG2AGENT_SMTP_HOST")
 	if host == "" {
-		return NopSender{}
+		return NopSender{}, nil
+	}
+	from := strings.TrimSpace(os.Getenv("MSG2AGENT_SMTP_FROM"))
+	if from == "" {
+		return nil, errors.New("email sending is enabled (MSG2AGENT_SMTP_HOST is set) but MSG2AGENT_SMTP_FROM is empty; set MSG2AGENT_SMTP_FROM to the sender address (e.g. noreply@example.com)")
 	}
 	port := 587
 	if p := os.Getenv("MSG2AGENT_SMTP_PORT"); p != "" {
@@ -41,17 +47,13 @@ func NewSMTPSenderFromEnv() Sender {
 			port = n
 		}
 	}
-	from := os.Getenv("MSG2AGENT_SMTP_FROM")
-	if from == "" {
-		from = "noreply@msg2agent.xyz"
-	}
 	user := os.Getenv("MSG2AGENT_SMTP_USER")
 	pass := os.Getenv("MSG2AGENT_SMTP_PASS")
 	var auth smtp.Auth
 	if user != "" {
 		auth = smtp.PlainAuth("", user, pass, host)
 	}
-	return &SMTPSender{host: host, port: port, auth: auth, from: from}
+	return &SMTPSender{host: host, port: port, auth: auth, from: from}, nil
 }
 
 // Send delivers an email with an HTML body and a plain-text fallback.

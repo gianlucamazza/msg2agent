@@ -127,7 +127,7 @@ When `invoice.payment_failed` fires, the tenant's `BillingStatus` is set to `pas
 HTTP 402 Payment Required
 ```
 
-The binary currently embeds a hardcoded dashboard URL in that response body (see `pkg/billing/middleware.go`). Point tenants at your own Stripe Customer Portal instead.
+The 402 body is `payment required: update your payment method`. When `MSG2AGENT_PUBLIC_BASE_URL` is set (e.g. `https://relay.example.com`), the body appends ` at <base>/app/`. When unset, the URL is omitted.
 
 Tenants resolve this by opening the Stripe Customer Portal (`GET /api/billing/portal`) and updating their payment method. Once Stripe retries and succeeds, `invoice.paid` / `customer.subscription.updated` flips `BillingStatus` back to `active`.
 
@@ -151,10 +151,12 @@ Post-signup magic-link verification requires an SMTP relay. Configure via:
 | `MSG2AGENT_SMTP_PORT` | No | SMTP port (default: `587`). |
 | `MSG2AGENT_SMTP_USER` | Yes | SMTP username. |
 | `MSG2AGENT_SMTP_PASS` | Yes | SMTP password / API key. |
-| `MSG2AGENT_SMTP_FROM` | No | Sender address. Set this to an address on your own domain. |
+| `MSG2AGENT_SMTP_FROM` | Yes (when SMTP is enabled) | Sender address (e.g. `noreply@example.com`). The relay exits at startup if `MSG2AGENT_SMTP_HOST` is set and this is empty. |
 
 If `MSG2AGENT_SMTP_HOST` is not set, email sending is silently skipped — signup continues normally but no verification link is sent.
 
 Recommended providers with a free tier for low-volume sending: SendGrid (100/day), Mailgun, Postmark.
 
 After configuring, verify SPF and DKIM records in DNS for the domain you send from.
+
+`MSG2AGENT_SMTP_FROM` is also listed with the other self-host identity variables in [Configuration](configuration.md#self-host-public-identity).

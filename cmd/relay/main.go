@@ -489,7 +489,12 @@ func main() {
 	}
 
 	// Email sender — optional; no-op if SMTP not configured.
-	emailSender := email.NewSMTPSenderFromEnv()
+	// Fail at startup when SMTP is enabled but MSG2AGENT_SMTP_FROM is unset.
+	emailSender, err := email.NewSMTPSenderFromEnv()
+	if err != nil {
+		logger.Error("email sender configuration invalid", "error", err)
+		os.Exit(1)
+	}
 
 	// Self-service signup endpoint (opt-in; requires billing store).
 	// Declared after Stripe setup so stripeClient is available for paid plans.

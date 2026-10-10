@@ -2,6 +2,28 @@
 
 This guide covers all configuration options for msg2agent components.
 
+## Self-host public identity
+
+msg2agent is self-host only. A public instance needs its own sender address,
+public origin, and OAuth issuer URL — there is no shared hosted default.
+
+| Variable | When required | Example |
+| -------- | ------------- | ------- |
+| `MSG2AGENT_SMTP_FROM` | **Required** when email sending is enabled (`MSG2AGENT_SMTP_HOST` is set). The relay exits at startup if SMTP is on and this is empty. | `noreply@example.com` |
+| `MSG2AGENT_PUBLIC_BASE_URL` | Optional. Public origin of this relay (no trailing slash). 402 payment-required bodies include `<base>/app/` when set, and omit the URL when unset. | `http://localhost:8080` or `https://relay.example.com` |
+| `MSG2AGENT_OAUTH_AS_BASE_URL` | Required to enable the built-in OAuth 2.1 Authorization Server (issuer, RFC 9728 `resource`, Google callback host). | `http://localhost:8080` or `https://relay.example.com` |
+
+Google OAuth authorized redirect URI must match the OAuth base:
+
+```text
+http://localhost:8080/oauth/google-callback
+https://relay.example.com/oauth/google-callback
+```
+
+Related SMTP variables (only when you send verification mail): `MSG2AGENT_SMTP_HOST`, `MSG2AGENT_SMTP_PORT` (default `587`), `MSG2AGENT_SMTP_USER`, `MSG2AGENT_SMTP_PASS`.
+
+See [`.env.example`](../../.env.example) for a commented template.
+
 ## Relay Configuration
 
 ### Command Line Flags

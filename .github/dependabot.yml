@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: "weekly"
     groups:
+      opentelemetry:
+        applies-to: security-updates
+        patterns:
+          - "go.opentelemetry.io/otel*"
       minor-patch:
         update-types: ["minor", "patch"]
   - package-ecosystem: "github-actions"
@@ -15,3 +19,16 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # Security updates only (limit 0 disables version updates): keep astro and @astrojs/* in lockstep
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      astro:
+        applies-to: security-updates
+        patterns:
+          - "astro"
+          - "@astrojs/*"

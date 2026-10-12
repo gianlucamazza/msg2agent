@@ -1,5 +1,4 @@
 import { accessToken } from "./tokens.js";
-import { tryRefresh } from "./oauth.js";
 
 export class ApiError extends Error {
   constructor(
@@ -59,10 +58,15 @@ export async function api<T = unknown>(
   if (tok) headers["Authorization"] = "Bearer " + tok;
 
   let r = await fetch(path, { ...opts, headers });
-  if (r.status === 401 && (await tryRefresh())) {
-    const newTok = accessToken.get();
-    if (newTok) headers["Authorization"] = "Bearer " + newTok;
-    r = await fetch(path, { ...opts, headers });
+  // Lazy-load OAuth so public pages can import fetchPublicConfig without
+  // evaluating browser-only location.origin during Astro prerender.
+  if (r.status === 401) {
+    const { tryRefresh } = await import("./oauth.js");
+    if (await tryRefresh()) {
+      const newTok = accessToken.get();
+      if (newTok) headers["Authorization"] = "Bearer " + newTok;
+      r = await fetch(path, { ...opts, headers });
+    }
   }
   if (!r.ok) {
     const body = await r.json().catch(() => ({ error: r.statusText }));

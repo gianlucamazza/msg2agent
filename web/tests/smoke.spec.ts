@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test("landing page renders with JSON-LD Organization", async ({ page }) => {
+test("landing page renders with JSON-LD SoftwareApplication", async ({ page }) => {
   const jsErrors: Error[] = [];
   page.on("pageerror", (err) => jsErrors.push(err));
 
@@ -10,7 +10,7 @@ test("landing page renders with JSON-LD Organization", async ({ page }) => {
   const jsonLd = page.locator('script[type="application/ld+json"]').first();
   const raw = await jsonLd.innerHTML();
   const data = JSON.parse(raw);
-  expect(data["@type"]).toBe("Organization");
+  expect(data["@type"]).toBe("SoftwareApplication");
 
   // No unhandled JS exceptions (network 404s from backend APIs are expected in preview).
   expect(jsErrors).toHaveLength(0);

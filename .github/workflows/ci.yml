@@ -23,6 +23,22 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # Prefetch the module graph so golangci-lint typecheck does not fail
+      # the job on a single GOPROXY stream error (readonly mode still fetches
+      # zips on a cold cache).
+      - name: Download modules
+        run: |
+          for attempt in 1 2 3 4; do
+            if go mod download; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "go mod download failed after ${attempt} attempts" >&2
+              exit 1
+            fi
+            sleep $((2 ** attempt))
+          done
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

@@ -89,6 +89,54 @@ func TestWrapSandbox(t *testing.T) {
 	}
 }
 
+func TestWrapSandboxFollowsHostUsrMerge(t *testing.T) {
+	s := strings.Join(wrapSandbox([]string{"true"}, sandboxSpec{Tool: "codex", Cwd: "/w", Home: "/h"}), " ")
+	for _, p := range configuredUsrMergeRoots() {
+		if !isSymlink(p) {
+			if exists(p) && !strings.Contains(s, "--ro-bind "+p+" "+p) {
+				t.Errorf("real root %s not bound in %s", p, s)
+			}
+			continue
+		}
+		target, err := os.Readlink(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "--symlink " + target + " " + p
+		if !strings.Contains(s, want) {
+			t.Errorf("missing host usrmerge %q in %s", want, s)
+		}
+	}
+	// The pre-Ubuntu-26 hardcoding mapped /lib64 -> usr/lib. On current hosts that
+	// hides the ELF interpreter; the jail must not emit that pair if the host differs.
+	if isSymlink("/lib64") {
+		if target, err := os.Readlink("/lib64"); err == nil && target != "usr/lib" && strings.Contains(s, "--symlink usr/lib /lib64") {
+			t.Errorf("stale /lib64 -> usr/lib mapping on host target %s: %s", target, s)
+		}
+	}
+}
+
+func TestUsrMergeRootsConfigurable(t *testing.T) {
+	t.Setenv("MSG2AGENT_SANDBOX_USR_MERGE", " /bin , /lib64 ")
+	got := configuredUsrMergeRoots()
+	if len(got) != 2 || got[0] != "/bin" || got[1] != "/lib64" {
+		t.Fatalf("env override: %q", got)
+	}
+}
+
+func TestBwrapPathConfigurable(t *testing.T) {
+	t.Setenv("MSG2AGENT_BWRAP", "/no/such/bwrap")
+	if bwrapPath() != "" {
+		t.Fatal("missing override must not fall back to PATH")
+	}
+	if p, err := exec.LookPath("bwrap"); err == nil {
+		t.Setenv("MSG2AGENT_BWRAP", p)
+		if bwrapPath() != p {
+			t.Fatalf("got %q want %q", bwrapPath(), p)
+		}
+	}
+}
+
 func TestExecutorArgs(t *testing.T) {
 	e := systemdExecutor{Slice: "agents.slice", RuntimeMax: 16 * time.Minute}
 	a := e.args("a2a-1", "/w", []string{"bwrap", "--", "codex"}, []string{"HOME=/h"})
@@ -118,10 +166,15 @@ func TestConfigNormalize(t *testing.T) {
 }
 
 // TestJailEnforcement is the model-independent oracle: a shell inside the real bwrap jail
-// tries what a misbehaving worker would. Skipped where unprivileged userns is unavailable.
+// tries what a misbehaving worker would.
+//
+// Gated on sandboxUnavailableReason (the constructed jail must exec a binary). A --ro-bind
+// / / probe is not enough and was green on Ubuntu 26 while this test failed with
+// `bwrap: execvp sh: No such file or directory` after ubuntu-latest moved (2026-10-19).
+// The skip still runs the oracle wherever bubblewrap + userns + a usable root layout exist.
 func TestJailEnforcement(t *testing.T) {
-	if !sandboxAvailable() {
-		t.Skip("bwrap/userns unavailable")
+	if reason := sandboxUnavailableReason(); reason != "" {
+		t.Skip(reason)
 	}
 	home := t.TempDir() // stands in for $HOME: a secret outside the allow-list must be masked
 	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
@@ -164,9 +217,10 @@ func TestJailEnforcement(t *testing.T) {
 
 // TestJailOverlayMasksServerPassword: inside the jail neither copy of the shared
 // opencode.service password is readable (else a worker could drive the unjailed server).
+// Same capability gate as TestJailEnforcement: skip only when the real jail cannot exec.
 func TestJailOverlayMasksServerPassword(t *testing.T) {
-	if !sandboxAvailable() {
-		t.Skip("bwrap/userns unavailable")
+	if reason := sandboxUnavailableReason(); reason != "" {
+		t.Skip(reason)
 	}
 	home := t.TempDir()
 	targets := []string{".config/opencode/service.json", ".local/state/opencode/service.json"}

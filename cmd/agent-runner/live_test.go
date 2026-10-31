@@ -17,8 +17,8 @@ func TestLiveJail(t *testing.T) {
 	if os.Getenv("A2A_LIVE") != "1" {
 		t.Skip("set A2A_LIVE=1 to run against the real CLIs")
 	}
-	if !sandboxAvailable() {
-		t.Fatal("bwrap unavailable")
+	if reason := sandboxUnavailableReason(); reason != "" {
+		t.Fatal(reason)
 	}
 	home, _ := os.UserHomeDir()
 	names := []string{"claude", "codex", "grok", "opencode"}

@@ -61,6 +61,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # TestJailEnforcement / TestJailOverlayMasksServerPassword need a real bwrap
+      # jail. ubuntu-latest gained one around the Ubuntu 26 rollout (2026-10-19);
+      # install explicitly so the oracle still runs if a runner image drops the package.
+      # The tests skip with sandboxUnavailableReason when userns is denied.
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Run unit tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./pkg/... ./cmd/...
 

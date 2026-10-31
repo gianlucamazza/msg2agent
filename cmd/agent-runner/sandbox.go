@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // Port of vibemonitor orchestration/sandbox.py (ADR-006): a bubblewrap jail that is the
@@ -12,8 +13,13 @@ import (
 // the network is shared because the CLI must reach its model API.
 
 var (
-	sysRO     = []string{"/usr", "/etc", "/opt"}
-	mergedUsr = [][2]string{{"/bin", "usr/bin"}, {"/lib", "usr/lib"}, {"/lib64", "usr/lib"}, {"/sbin", "usr/bin"}}
+	sysRO = []string{"/usr", "/etc", "/opt"}
+	// usrmergeRoots are the compatibility paths Debian/Ubuntu/Fedora point into /usr.
+	// Targets are read from the host: a hardcoded /lib64 -> usr/lib (true on some
+	// older trees, never on Ubuntu 24/26) hides /lib64/ld-linux-x86-64.so.2 and
+	// every exec inside the jail fails with ENOENT. Override with MSG2AGENT_SANDBOX_USR_MERGE
+	// (comma-separated paths) on layouts that need extra roots.
+	usrmergeRoots = []string{"/bin", "/lib", "/lib64", "/sbin"}
 	// Tool runtimes and config the CLI reads (binaries, node modules, fnm, git identity).
 	// Narrower than vibemonitor's whole ~/.local: keyrings and this runner's own state
 	// (other tasks' results) stay masked.
@@ -32,13 +38,77 @@ type sandboxSpec struct {
 	ExtraRO  []string          // extra $HOME-relative paths bound read-only
 }
 
-// sandboxAvailable probes that bwrap exists and unprivileged user namespaces work.
-func sandboxAvailable() bool {
+// bwrapPath is the bubblewrap binary. MSG2AGENT_BWRAP overrides PATH lookup
+// (nix, custom prefixes). Empty means the binary is not usable.
+func bwrapPath() string {
+	if p := strings.TrimSpace(os.Getenv("MSG2AGENT_BWRAP")); p != "" {
+		if _, err := os.Stat(p); err == nil { // #nosec G703 -- operator-set MSG2AGENT_BWRAP, not request input
+			return p
+		}
+		return ""
+	}
 	path, err := exec.LookPath("bwrap")
 	if err != nil {
-		return false
+		return ""
 	}
-	return exec.Command(path, "--ro-bind", "/", "/", "--unshare-all", "--", "true").Run() == nil // #nosec G204 -- resolved bwrap path, constant args
+	return path
+}
+
+func configuredUsrMergeRoots() []string {
+	if v := strings.TrimSpace(os.Getenv("MSG2AGENT_SANDBOX_USR_MERGE")); v != "" {
+		var roots []string
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				roots = append(roots, p)
+			}
+		}
+		if len(roots) > 0 {
+			return roots
+		}
+	}
+	return usrmergeRoots
+}
+
+// appendCompatRoot recreates one host root inside the jail: a usrmerge symlink
+// keeps the host target; a real directory is bound read-only (Alpine, older RHEL).
+func appendCompatRoot(a []string, p string) []string {
+	if isSymlink(p) {
+		target, err := os.Readlink(p)
+		if err != nil || target == "" {
+			return a
+		}
+		return append(a, "--symlink", target, p)
+	}
+	if exists(p) {
+		return append(a, "--ro-bind", p, p)
+	}
+	return a
+}
+
+// sandboxUnavailableReason is empty when the jail we actually construct can exec
+// a binary. A --ro-bind / / probe is not enough: that preserves host usrmerge
+// symlinks and can succeed on hosts where wrapSandbox's root cannot run anything.
+// Tests skip with this string; the runner fail-closes on a non-empty reason.
+func sandboxUnavailableReason() string {
+	if bwrapPath() == "" {
+		return "bwrap not on PATH (set MSG2AGENT_BWRAP to a bubblewrap binary)"
+	}
+	dir, err := os.MkdirTemp("", "jail-probe-")
+	if err != nil {
+		return "cannot create jail probe directory: " + err.Error()
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	truePath := "/usr/bin/true"
+	if !exists(truePath) {
+		truePath = "true"
+	}
+	argv := wrapSandbox([]string{truePath}, sandboxSpec{Tool: "codex", Cwd: dir, Home: dir})
+	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204 -- resolved bwrap path, constructed jail args
+	cmd.Env = []string{"PATH=/usr/bin:/bin"}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "bwrap jail cannot exec (userns denied or root layout unusable): " + strings.TrimSpace(string(out)+" "+err.Error())
+	}
+	return ""
 }
 
 func exists(p string) bool { _, err := os.Lstat(p); return err == nil }
@@ -50,16 +120,18 @@ func isSymlink(p string) bool {
 
 // wrapSandbox returns argv prefixed with the bwrap jail described by s.
 func wrapSandbox(argv []string, s sandboxSpec) []string {
-	a := []string{"bwrap", "--unshare-all", "--share-net", "--die-with-parent", "--new-session"}
+	bin := bwrapPath()
+	if bin == "" {
+		bin = "bwrap"
+	}
+	a := []string{bin, "--unshare-all", "--share-net", "--die-with-parent", "--new-session"}
 	for _, d := range sysRO {
 		if exists(d) {
 			a = append(a, "--ro-bind", d, d)
 		}
 	}
-	for _, l := range mergedUsr {
-		if isSymlink(l[0]) {
-			a = append(a, "--symlink", l[1], l[0])
-		}
+	for _, p := range configuredUsrMergeRoots() {
+		a = appendCompatRoot(a, p)
 	}
 	a = append(a, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
 	a = append(a, "--tmpfs", s.Home, "--tmpfs", "/run")

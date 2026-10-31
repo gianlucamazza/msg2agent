@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -46,8 +45,10 @@ func run(cfgPath string, logger *slog.Logger) error {
 			return err
 		}
 	}
-	if *cfg.Sandbox && !sandboxAvailable() {
-		return errors.New("bwrap sandbox unavailable: refusing to run workers unjailed (fail closed)")
+	if *cfg.Sandbox {
+		if reason := sandboxUnavailableReason(); reason != "" {
+			return fmt.Errorf("bwrap sandbox unavailable (%s): refusing to run workers unjailed (fail closed)", reason)
+		}
 	}
 	if !*cfg.Sandbox {
 		logger.Warn("SANDBOX DISABLED by config: workers run with tool flags only")

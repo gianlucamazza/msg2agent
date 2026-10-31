@@ -42,7 +42,7 @@ type sandboxSpec struct {
 // (nix, custom prefixes). Empty means the binary is not usable.
 func bwrapPath() string {
 	if p := strings.TrimSpace(os.Getenv("MSG2AGENT_BWRAP")); p != "" {
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(p); err == nil { // #nosec G703 -- operator-set MSG2AGENT_BWRAP, not request input
 			return p
 		}
 		return ""
@@ -97,7 +97,7 @@ func sandboxUnavailableReason() string {
 	if err != nil {
 		return "cannot create jail probe directory: " + err.Error()
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	truePath := "/usr/bin/true"
 	if !exists(truePath) {
 		truePath = "true"
@@ -109,11 +109,6 @@ func sandboxUnavailableReason() string {
 		return "bwrap jail cannot exec (userns denied or root layout unusable): " + strings.TrimSpace(string(out)+" "+err.Error())
 	}
 	return ""
-}
-
-// sandboxAvailable probes that the constructed jail can run a binary.
-func sandboxAvailable() bool {
-	return sandboxUnavailableReason() == ""
 }
 
 func exists(p string) bool { _, err := os.Lstat(p); return err == nil }

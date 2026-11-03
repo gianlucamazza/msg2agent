@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/lestrrat-go/jwx/v2 v2.1.7
-	github.com/mark3labs/mcp-go v0.56.0
+	github.com/mark3labs/mcp-go v1.4.0
 	github.com/nuts-foundation/go-did v0.22.2
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stripe/stripe-go/v82 v82.5.1
